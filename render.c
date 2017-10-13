@@ -1,11 +1,5 @@
 #include "rt.h"
 
-#define BLACK (t_float3){0.0, 0.0, 0.0}
-#define RED (t_float3){1.0, 0.0, 0.0}
-#define GREEN (t_float3){0.0, 1.0, 0.0}
-#define BLUE (t_float3){0.0, 0.0, 1.0}
-#define WHITE (t_float3){1.0, 1.0, 1.0}
-
 //completely arbitrary values
 #define ka 0.5
 #define kd 2
@@ -199,27 +193,33 @@ int key_hook(int keycode, void *param)
 	return (1);
 }
 
-int main(void)
+int main(int ac, char **av)
 {
+
+	
+
 	t_scene *scene = calloc(1, sizeof(t_scene));
 
-	new_plane(scene, (t_float3){0, 0, 5}, (t_float3){0,0,-1}, (t_float3){5, 5, 0}, WHITE);
-	new_plane(scene, (t_float3){-5, 0, 0}, (t_float3){1, 0, 0}, (t_float3){0, 5, 5}, WHITE);
-	new_plane(scene, (t_float3){5, 0, 0}, (t_float3){-1, 0, 0}, (t_float3){0, 5, 5}, WHITE);
-	new_plane(scene, (t_float3){0, 5, 0}, (t_float3){0, -1, 0}, (t_float3){5, 0, 5}, WHITE);
-	new_plane(scene, (t_float3){0, -5, 0}, (t_float3){0, 1, 0}, (t_float3){5, 0, 5}, WHITE);
+	if (ac != 1)
+		load_file(scene, ac, av);
 
-	new_sphere(scene, -2, -4, 0, 1, GREEN);
-	new_sphere(scene, 3, -3, 2, 2, RED);
+	// new_plane(scene, (t_float3){0, 0, 5}, (t_float3){0,0,-1}, (t_float3){5, 5, 0}, WHITE);
+	// new_plane(scene, (t_float3){-5, 0, 0}, (t_float3){1, 0, 0}, (t_float3){0, 5, 5}, WHITE);
+	// new_plane(scene, (t_float3){5, 0, 0}, (t_float3){-1, 0, 0}, (t_float3){0, 5, 5}, WHITE);
+	// new_plane(scene, (t_float3){0, 5, 0}, (t_float3){0, -1, 0}, (t_float3){5, 0, 5}, WHITE);
+	// new_plane(scene, (t_float3){0, -5, 0}, (t_float3){0, 1, 0}, (t_float3){5, 0, 5}, WHITE);
 
-	new_triangle(scene, (t_float3){-1, 0, 3}, (t_float3){1, 0, 3}, (t_float3){0, 2, 3}, BLUE);
+	// new_sphere(scene, -2, -4, 0, 1, GREEN);
+	// new_sphere(scene, 3, -3, 2, 2, RED);
 
-	scene->camera = (t_plane){	(t_float3){0, 0, -15},
+	// new_triangle(scene, (t_float3){-1, 0, 3}, (t_float3){1, 0, 3}, (t_float3){0, 2, 3}, BLUE);
+
+	scene->camera = (t_plane){	(t_float3){0, 0, -200},
 								(t_float3){0, 0, 1},
 								1.0,
 								1.0};
 
-	scene->light = (t_float3){3, 4.5, 0};
+	scene->light = (t_float3){0, 60, -50};
 
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
@@ -232,7 +232,7 @@ int main(void)
 	t_param *param = calloc(1, sizeof(t_param));
 	*param = (t_param){mlx, win, img, xdim, ydim, scene};
 
-	mlx_loop_hook(mlx, loop_hook, param);
+	//mlx_loop_hook(mlx, loop_hook, param);
 	
 	mlx_key_hook(win, key_hook, param);
 	mlx_loop(mlx);

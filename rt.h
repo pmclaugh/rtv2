@@ -18,6 +18,12 @@
 
 #define ERROR 1e-4
 
+#define BLACK (t_float3){0.0, 0.0, 0.0}
+#define RED (t_float3){1.0, 0.0, 0.0}
+#define GREEN (t_float3){0.0, 1.0, 0.0}
+#define BLUE (t_float3){0.0, 0.0, 1.0}
+#define WHITE (t_float3){1.0, 1.0, 1.0}
+
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 
 typedef struct s_float3
