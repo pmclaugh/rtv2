@@ -114,3 +114,8 @@ t_float3 vec_rev(const t_float3 v)
 {
 	return (t_float3){v.x * -1.0, v.y * -1.0, v.z * -1.0};
 }
+
+t_float3 vec_inv(const t_float3 v)
+{
+	return (t_float3){1.0 / v.x, 1.0 / v.y, 1.0 / v.z};
+}

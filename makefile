@@ -1,7 +1,7 @@
 NAME = raytrace
 
-SRCS = mlx_stuff.c object.c render.c vec.c obj_import.c
-OBJS = mlx_stuff.o object.o render.o vec.o obj_import.o mlx/libmlx.a
+SRCS = mlx_stuff.c object.c render.c vec.c obj_import.c bvh.c
+OBJS = mlx_stuff.o object.o render.o vec.o obj_import.o bvh.o mlx/libmlx.a
 
 FLAGS = -m64 -O3 -flto -march=native -funroll-loops
 

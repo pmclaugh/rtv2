@@ -26,30 +26,15 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 	// returns 1/0 for hit/miss, stores resulting bounced ray in out.
 
 	t_float3 closest;
-	t_float3 result;
 	float closest_dist = FLT_MAX;
-	t_object *object = scene->objects;
 	t_object *closest_object = NULL;
-	while (object)
-	{
-		if (intersect_object(ray, object, &result))
-		{
-			float d = dist(result, ray->origin);
-			if (d < closest_dist)
-			{
-				closest_object = object;
-				closest_dist = d;
-				closest = result;
-			}
-		}
-		object = object->next;
-	}
-
-
+	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist);
+	//hit_nearest_debug(ray, scene, &closest_object, &closest_dist);
 	//printf("hit decided\n");
 	if (closest_object == NULL)
 		return 0; //nothing was hit
 	//printf("hit something\n");
+	closest = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
 	if (!do_shade)
 	{
 		ray->origin = closest;
@@ -174,8 +159,8 @@ int loop_hook(void *param)
 	draw_pixels(p->img, p->x, p->y, pixels);
 	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
 	free(pixels);
-	// p->scene.camera.center = angle_axis_rot(rot_angle, UNIT_Y, p->scene.camera.center);
-	// p->scene.camera.normal = angle_axis_rot(rot_angle, UNIT_Y, p->scene.camera.normal);
+	// p->scene->camera.center = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.center);
+	// p->scene->camera.normal = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.normal);
 	p->scene->light = angle_axis_rot(rot_angle, UNIT_Y, p->scene->light);
 	return (1);
 }
@@ -196,43 +181,45 @@ int key_hook(int keycode, void *param)
 int main(int ac, char **av)
 {
 
-	
-
 	t_scene *scene = calloc(1, sizeof(t_scene));
 
 	if (ac != 1)
 		load_file(scene, ac, av);
 
-	// new_plane(scene, (t_float3){0, 0, 5}, (t_float3){0,0,-1}, (t_float3){5, 5, 0}, WHITE);
-	// new_plane(scene, (t_float3){-5, 0, 0}, (t_float3){1, 0, 0}, (t_float3){0, 5, 5}, WHITE);
-	// new_plane(scene, (t_float3){5, 0, 0}, (t_float3){-1, 0, 0}, (t_float3){0, 5, 5}, WHITE);
-	// new_plane(scene, (t_float3){0, 5, 0}, (t_float3){0, -1, 0}, (t_float3){5, 0, 5}, WHITE);
-	// new_plane(scene, (t_float3){0, -5, 0}, (t_float3){0, 1, 0}, (t_float3){5, 0, 5}, WHITE);
+	
+	new_plane(scene, (t_float3){0, 0, 100}, (t_float3){0, 0, -1}, (t_float3){100, 100, 0}, WHITE);
+	new_plane(scene, (t_float3){-100, 0, 0}, (t_float3){1, 0, 0}, (t_float3){0, 100, 100}, WHITE);
+	new_plane(scene, (t_float3){100, 0, 0}, (t_float3){-1, 0, 0}, (t_float3){0, 100, 100}, WHITE);
+	new_plane(scene, (t_float3){0, 100, 0}, (t_float3){0, -1, 0}, (t_float3){100, 0, 100}, WHITE);
+	new_plane(scene, (t_float3){0, -100, 0}, (t_float3){0, 1, 0}, (t_float3){100, 0, 100}, WHITE);
 
 	// new_sphere(scene, -2, -4, 0, 1, GREEN);
 	// new_sphere(scene, 3, -3, 2, 2, RED);
 
 	// new_triangle(scene, (t_float3){-1, 0, 3}, (t_float3){1, 0, 3}, (t_float3){0, 2, 3}, BLUE);
 
-	scene->camera = (t_plane){	(t_float3){0, 0, -200},
+	make_bvh(scene);
+
+	scene->camera = (t_plane){	(t_float3){0, 0, -300},
 								(t_float3){0, 0, 1},
 								1.0,
 								1.0};
 
-	scene->light = (t_float3){0, 60, -50};
+	scene->light = (t_float3){70, 90, 0};
 
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
 	void *img = mlx_new_image(mlx, xdim, ydim);
 
 	t_float3 *pixels = simple_render(scene, xdim, ydim);
+
 	draw_pixels(img, xdim, ydim, pixels);
 	mlx_put_image_to_window(mlx, win, img, 0, 0);
 
 	t_param *param = calloc(1, sizeof(t_param));
 	*param = (t_param){mlx, win, img, xdim, ydim, scene};
 
-	//mlx_loop_hook(mlx, loop_hook, param);
+	mlx_loop_hook(mlx, loop_hook, param);
 	
 	mlx_key_hook(win, key_hook, param);
 	mlx_loop(mlx);
@@ -240,14 +227,9 @@ int main(int ac, char **av)
 }
 
 /*
-to do list:
-	intersect_plane
-	intersect_cylinder
-	recursive RT
-		color blending
-	recursive RT will prompt the understanding I need to move to MC-GI
-	t_camera
-	t_material
-	possibly enum material
-	continue optimizing vec.c
+optimization insights:
+need to improve bvh creation so it doesn't go so deep
+optimize intersect_box
+vector functions seem to be pretty fast.
+intersect plane is really bad too, i might just want to make planes into 2 triangles lol
 */

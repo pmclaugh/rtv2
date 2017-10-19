@@ -66,12 +66,28 @@ typedef struct s_ray
 	t_float3 color;
 }				t_ray;
 
+typedef struct s_box
+{
+	t_float3 max;
+	t_float3 min;
+	t_float3 mid;
+	uint64_t morton;
+	struct s_box *children;
+	int children_count;
+	t_object *object;
+}				t_box;
+
 typedef struct s_scene
 {
 	t_plane camera;
 	t_float3 light;
 	t_object *objects;
+	t_box *bvh;
+	t_box *bvh_debug;
+	int box_count;
 }				t_scene;
+
+
 
 int hit(t_ray *ray, const t_scene *scene, int do_shade);
 void draw_pixels(void *img, int xres, int yres, t_float3 *pixels);
@@ -79,6 +95,8 @@ void draw_pixels(void *img, int xres, int yres, t_float3 *pixels);
 void print_vec(const t_float3 vec);
 void print_3x3(const t_3x3 mat);
 void print_ray(const t_ray ray);
+void print_object(const t_object *object);
+
 float vec_mag(const t_float3 vec);
 t_float3 unit_vec(const t_float3 vec);
 float dot(const t_float3 a, const t_float3 b);
@@ -92,8 +110,9 @@ t_3x3 rotation_matrix(const t_float3 a, const t_float3 b);
 t_float3 bounce(const t_float3 in, const t_float3 norm);
 float dist(const t_float3 a, const t_float3 b);
 t_float3 vec_rev(t_float3 v);
+t_float3 vec_inv(const t_float3 v);
 
-int intersect_object(const t_ray *ray, const t_object *object, t_float3 *hit);
+int intersect_object(const t_ray *ray, const t_object *object, float *d);
 t_float3 norm_object(const t_object *object, const t_ray *ray);
 
 void new_sphere(t_scene *scene, float x, float y, float z, float r, t_float3 color);
@@ -102,4 +121,10 @@ void new_cylinder(t_scene *scene, t_float3 center, t_float3 radius, t_float3 ext
 void new_triangle(t_scene *scene, t_float3 center, t_float3 normal, t_float3 corner, t_float3 color);
 
 
-int intersect_triangle(const t_ray *ray, const t_object *triangle, t_float3 *hit);
+int intersect_triangle(const t_ray *ray, const t_object *triangle, float *d);
+
+void make_bvh(t_scene *scene);
+void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d);
+void hit_nearest_debug(const t_ray *ray, const t_scene *scene, t_object **hit, float *d);
+
+void load_file(t_scene *scene, int ac, char **av);

@@ -1,5 +1,15 @@
 #include "rt.h"
 
+void print_object(const t_object *object)
+{
+	printf("=====obj=====\n");
+	printf("type: %d\n", object->shape);
+	print_vec(object->position);
+	print_vec(object->normal);
+	print_vec(object->corner);
+	print_vec(object->color);
+}
+
 void new_sphere(t_scene *scene, float x, float y, float z, float r, t_float3 color)
 {
 	t_object *sphere = calloc(1, sizeof(t_object));
@@ -52,7 +62,7 @@ void new_triangle(t_scene *scene, t_float3 vertex0, t_float3 vertex1, t_float3 v
 }
 
 //Source: https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
-int intersect_sphere(const t_ray *ray, const t_object *sphere, t_float3 *hit)
+int intersect_sphere(const t_ray *ray, const t_object *sphere, float *t)
 {
 	const t_float3 o_min_c = vec_sub(ray->origin, sphere->position);
 
@@ -80,12 +90,12 @@ int intersect_sphere(const t_ray *ray, const t_object *sphere, t_float3 *hit)
 		else
 			return (0);
 	}
-	if (hit)
-		*hit = vec_add(ray->origin, vec_scale(ray->direction, d));
+	if (t)
+		*t = d;
 	return (1);
 }
 
-int intersect_plane(const t_ray *ray, const t_object *plane, t_float3 *hit)
+int intersect_plane(const t_ray *ray, const t_object *plane, float *d)
 {
 	float a = dot(vec_sub(plane->position, ray->origin), plane->normal);
 	float b = dot(ray->direction, plane->normal);
@@ -102,14 +112,14 @@ int intersect_plane(const t_ray *ray, const t_object *plane, t_float3 *hit)
 		fabs(intersection.y) <= fabs(bound.y) + ERROR &&
 		fabs(intersection.z) <= fabs(bound.z) + ERROR)
 			{
-				*hit = intersection;
+				*d = t;
 				return (1);
 			}
 	else
 		return (0);
 }
 
-int intersect_triangle(const t_ray *ray, const t_object *triangle, t_float3 *hit)
+int intersect_triangle(const t_ray *ray, const t_object *triangle, float *d)
 {
 	//variable name change
 	const t_float3 v0 = triangle->position;
@@ -137,24 +147,24 @@ int intersect_triangle(const t_ray *ray, const t_object *triangle, t_float3 *hit
 	float t = f * dot(edge2, q);
 	if (t > ERROR)
 	{
-		*hit = vec_add(ray->origin, vec_scale(ray->direction, t));
+		*d = t;
 		return (1);
 	}
 	else
 		return (0);
 }
 
-int intersect_object(const t_ray *ray, const t_object *object, t_float3 *hit)
+int intersect_object(const t_ray *ray, const t_object *object, float *d)
 {
 	enum type shape = object->shape;
 	if (shape == SPHERE)
-		return (intersect_sphere(ray, object, hit));
+		return (intersect_sphere(ray, object, d));
 	else if (shape == PLANE)
-		return (intersect_plane(ray, object, hit));
+		return (intersect_plane(ray, object, d));
 	// else if (shape == CYLINDER)
 	// 	return (intersect_cylinder(ray, object, hit));
 	else if (shape == TRIANGLE)
-		return (intersect_triangle(ray, object, hit));
+		return (intersect_triangle(ray, object, d));
 	else
 		return (0);
 }
