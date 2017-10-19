@@ -12,7 +12,11 @@ t_float3 clear_shot(const t_float3 point, const t_float3 N, const t_scene *scene
 {
 	//is there a clear shot from this point to the light? (note need to move point slightly off surface)
 	t_float3 offset = vec_add(point, vec_scale(N, ERROR));
-	t_ray L = (t_ray){offset, unit_vec(vec_sub(scene->light, point)), (t_float3){1,1,1}};
+	t_ray L;
+	L.origin = offset;
+	L.direction = unit_vec(vec_sub(scene->light, point));
+	L.color = WHITE;
+	L.inv_dir = vec_inv(L.direction);
 	if (hit(&L, scene, 0) && dist(L.origin, point) < dist(point, scene->light))
 		return (t_float3){0, 0, 0};
 	else
@@ -59,7 +63,8 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 	//jank normalization
 	illumination /= (ka + kd + ks);
 
-	*ray = (t_ray){closest, bounce(ray->direction, N), vec_scale(closest_object->color, illumination)};
+	t_float3 dir = bounce(ray->direction, N);
+	*ray = (t_ray){closest, dir, vec_scale(closest_object->color, illumination), vec_inv(dir)};
 	return (1);
 }
 
@@ -98,7 +103,7 @@ t_ray *rays_from_camera(t_plane camera, int xres, int yres)
 		t_float3 from = origin;
 		for (int x = 0; x < xres; x++)
 		{
-			rays[y * xres + x] = (t_ray){focus, unit_vec(vec_sub(focus, from)), (t_float3){1,1,1}};
+			rays[y * xres + x] = (t_ray){focus, unit_vec(vec_sub(focus, from)), WHITE, vec_inv(unit_vec(vec_sub(focus, from)))};
 			from = vec_add(from, delta_x);
 		}
 		origin = vec_add(origin, delta_y);

@@ -64,6 +64,7 @@ typedef struct s_ray
 	t_float3 origin;
 	t_float3 direction;
 	t_float3 color;
+	t_float3 inv_dir;
 }				t_ray;
 
 typedef struct s_box

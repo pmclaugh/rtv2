@@ -45,8 +45,8 @@ int morton_digit(uint64_t code, int depth)
 
 int intersect_box(const t_ray *ray, const t_box *box, float *t)
 {
-	float tmin = (box->min.x - ray->origin.x) / ray->direction.x;
-	float tmax = (box->max.x - ray->origin.x) / ray->direction.x;
+	float tmin = (box->min.x - ray->origin.x) * ray->inv_dir.x;
+	float tmax = (box->max.x - ray->origin.x) * ray->inv_dir.x;
 	float temp;
 
 	if (tmin > tmax)
@@ -56,8 +56,8 @@ int intersect_box(const t_ray *ray, const t_box *box, float *t)
 		tmax = temp;
 	}
 
-	float tymin = (box->min.y - ray->origin.y) / ray->direction.y;
-	float tymax = (box->max.y - ray->origin.y) / ray->direction.y;
+	float tymin = (box->min.y - ray->origin.y) * ray->inv_dir.y;
+	float tymax = (box->max.y - ray->origin.y) * ray->inv_dir.y;
 
 	if (tymin > tymax)
 	{
@@ -73,8 +73,8 @@ int intersect_box(const t_ray *ray, const t_box *box, float *t)
 	if (tymax < tmax)
 		tmax = tymax;
 
-	float tzmin = (box->min.z - ray->origin.z) / ray->direction.z;
-	float tzmax = (box->max.z - ray->origin.z) / ray->direction.z;
+	float tzmin = (box->min.z - ray->origin.z) * ray->inv_dir.z;
+	float tzmax = (box->max.z - ray->origin.z) * ray->inv_dir.z;
 
 	if (tzmin > tzmax)
 	{
@@ -292,6 +292,12 @@ void tree_down(t_box *boxes, int box_count, t_box *parent, t_box *work_array, in
 	}
 	parent->children_count = child_ind + 1;
 	parent->children = children;
+
+	if (parent->children_count == 1)
+	{
+		*parent = children[0];
+		free(children);
+	}
 }
 
 void make_bvh(t_scene *scene)
