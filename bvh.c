@@ -298,6 +298,12 @@ void tree_down(t_box *boxes, int box_count, t_box *parent, t_box *work_array, in
 		*parent = children[0];
 		free(children);
 	}
+	// if (depth < 10)
+	// {
+	// 	printf("depth %d box_count %d\n", depth, box_count);
+	// 	print_box(parent);
+	// 	getchar();
+	// }
 }
 
 void make_bvh(t_scene *scene)
@@ -337,9 +343,10 @@ void hit_nearest_debug(const t_ray *ray, const t_scene *scene, t_object **hit, f
 	}
 }
 
-void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d)
+void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d, int *tests)
 {
 	float this_d = 0.0;
+	*tests += 1;
 	if (box->object)
 	{
 		if (intersect_object(ray, box->object, &this_d))
@@ -352,6 +359,6 @@ void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d)
 	else if (intersect_box(ray, box, NULL))
 	{
 		for (int i = 0; i < box->children_count; i++)
-			hit_nearest(ray, &box->children[i], hit, d);
+			hit_nearest(ray, &box->children[i], hit, d, tests);
 	}
 }

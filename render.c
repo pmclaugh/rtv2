@@ -22,6 +22,7 @@ t_float3 clear_shot(const t_float3 point, const t_float3 N, const t_scene *scene
 	else
 		return L.direction;
 }
+int g_tests;
 
 int hit(t_ray *ray, const t_scene *scene, int do_shade)
 {
@@ -32,7 +33,9 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 	t_float3 closest;
 	float closest_dist = FLT_MAX;
 	t_object *closest_object = NULL;
-	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist);
+	int tests = 0;
+	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist, &tests);
+	g_tests += tests;
 	//hit_nearest_debug(ray, scene, &closest_object, &closest_dist);
 	//printf("hit decided\n");
 	if (closest_object == NULL)
@@ -212,29 +215,28 @@ int main(int ac, char **av)
 
 	scene->light = (t_float3){70, 90, 0};
 
-	void *mlx = mlx_init();
-	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
-	void *img = mlx_new_image(mlx, xdim, ydim);
-
+	// void *mlx = mlx_init();
+	// void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
+	// void *img = mlx_new_image(mlx, xdim, ydim);
+	g_tests = 0;
 	t_float3 *pixels = simple_render(scene, xdim, ydim);
+	printf("average %f tests per ray\n", (float)g_tests / (float)1000000);
+	// draw_pixels(img, xdim, ydim, pixels);
+	// mlx_put_image_to_window(mlx, win, img, 0, 0);
 
-	draw_pixels(img, xdim, ydim, pixels);
-	mlx_put_image_to_window(mlx, win, img, 0, 0);
+	// t_param *param = calloc(1, sizeof(t_param));
+	// *param = (t_param){mlx, win, img, xdim, ydim, scene};
 
-	t_param *param = calloc(1, sizeof(t_param));
-	*param = (t_param){mlx, win, img, xdim, ydim, scene};
-
-	mlx_loop_hook(mlx, loop_hook, param);
+	// mlx_loop_hook(mlx, loop_hook, param);
 	
-	mlx_key_hook(win, key_hook, param);
-	mlx_loop(mlx);
+	// mlx_key_hook(win, key_hook, param);
+	// mlx_loop(mlx);
 
 }
 
 /*
-optimization insights:
-need to improve bvh creation so it doesn't go so deep
-optimize intersect_box
-vector functions seem to be pretty fast.
-intersect plane is really bad too, i might just want to make planes into 2 triangles lol
+	TODO
+	bvh metrics
+	cleanup and helper functions for obj_import (scale position etc)
+	test with more objects!
 */

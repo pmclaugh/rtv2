@@ -125,7 +125,7 @@ void new_triangle(t_scene *scene, t_float3 center, t_float3 normal, t_float3 cor
 int intersect_triangle(const t_ray *ray, const t_object *triangle, float *d);
 
 void make_bvh(t_scene *scene);
-void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d);
+void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d, int *tests);
 void hit_nearest_debug(const t_ray *ray, const t_scene *scene, t_object **hit, float *d);
 
 void load_file(t_scene *scene, int ac, char **av);
