@@ -70,10 +70,14 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 	float diffuse = kd * dot(L, N);
 	float specular = pow(ks * dot(V, R), 10);
 
+	if (diffuse < 0)
+		printf("diffuse wtf\n");
+
 	float illumination = ambient + diffuse + specular;
 
 	//jank normalization
 	illumination /= (ka + kd + ks);
+	illumination = fmin(1.0, illumination);
 
 	t_float3 dir = bounce(ray->direction, N);
 	*ray = (t_ray){closest, dir, vec_scale(closest_object->color, illumination), vec_inv(dir)};
@@ -127,10 +131,23 @@ t_ray *rays_from_camera(t_plane camera, int xres, int yres)
 t_float3 trace(t_ray *ray, const t_scene *scene)
 {
 	//this will be recursive and more complicated but for now isn't
+
+	int test_track = g_tests;
+	
 	if (hit(ray, scene, 1))
-		return ray->color;
+	{
+		if (g_tests - test_track > 2000)
+			return RED;
+		else
+			return ray->color;
+	}
 	else
-		return BLACK;
+	{
+		if (g_tests - test_track > 2000)
+			return RED;
+		else
+			return BLACK;
+	}
 }
 
 t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
@@ -202,10 +219,10 @@ int main(int ac, char **av)
 
 	t_import import;
 
-	import = load_file(ac, av);
-	unit_scale(import, (t_float3){0,0,0});
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av);
+	// unit_scale(import, (t_float3){0, 0, 0});
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
 	// import = load_file(ac, av);
 	// unit_scale(import, (t_float3){1, 0, 0});
@@ -249,19 +266,23 @@ int main(int ac, char **av)
 	// new_plane(scene, (t_float3){0, 100, 0}, (t_float3){0, -1, 0}, (t_float3){100, 0, 100}, WHITE);
 	// new_plane(scene, (t_float3){0, -100, 0}, (t_float3){0, 1, 0}, (t_float3){100, 0, 100}, WHITE);
 
+	for (int i = 1; i < 10; i++)
+		for (int j = 1; j < 10; j++)
+			for (int k = 1; k < 10; k++)
+				new_sphere(scene, i * 2, j * 2, k * 2, 1, BLUE);
 	// new_sphere(scene, -2, -4, 0, 1, GREEN);
-	//new_sphere(scene, 0, 0, 0, 0.5, RED);
+	// new_sphere(scene, 0, 0, 0, 0.5, RED);
 
 	// new_triangle(scene, (t_float3){-1, 0, 3}, (t_float3){1, 0, 3}, (t_float3){0, 2, 3}, BLUE);
 
 	make_bvh(scene);
 
-	scene->camera = (t_plane){	(t_float3){0, 0, -6},
+	scene->camera = (t_plane){	(t_float3){10, 10, -30},
 								(t_float3){0, 0, 1},
 								1.0,
 								1.0};
 
-	scene->light = (t_float3){10, 10, 0};
+	scene->light = (t_float3){0, 80, -30};
 
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
@@ -284,10 +305,3 @@ int main(int ac, char **av)
 	mlx_loop(mlx);
 
 }
-
-/*
-	TODO
-	bvh metrics
-	cleanup and helper functions for obj_import (scale position etc)
-	test with more objects!
-*/

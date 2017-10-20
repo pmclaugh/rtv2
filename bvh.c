@@ -46,82 +46,65 @@ int morton_digit(uint64_t code, int depth)
 	return (int)code;
 }
 
+void print_box(const t_box *box)
+{
+	printf("===========\n");
+	printf("Box is %p\n", box);
+	if (box)
+	{
+		printf("min, mid, max\n");
+		print_vec(box->min);
+		print_vec(box->mid);
+		print_vec(box->max);
+		printf("children is %p\nchildren_count is %d\nobject is %p\n",
+				box->children, box->children_count, box->object);
+		if (box->object)
+			print_object(box->object);
+	}
+	printf("===========\n");
+}
+
 int intersect_box(const t_ray *ray, const t_box *box, float *t)
 {
-	float tmin = (box->min.x - ray->origin.x) * ray->inv_dir.x;
-	float tmax = (box->max.x - ray->origin.x) * ray->inv_dir.x;
-	float temp;
+	float tx0 = (box->min.x - ray->origin.x) / ray->direction.x;
+	float tx1 = (box->max.x - ray->origin.x) / ray->direction.x;
+	float tmin = fmin(tx0, tx1);
+	float tmax = fmax(tx0, tx1);
 
-	if (tmin > tmax)
-	{
-		temp = tmin;
-		tmin = tmax;
-		tmax = temp;
-	}
-
-	float tymin = (box->min.y - ray->origin.y) * ray->inv_dir.y;
-	float tymax = (box->max.y - ray->origin.y) * ray->inv_dir.y;
-
-	if (tymin > tymax)
-	{
-		temp = tymin;
-		tymin = tymax;
-		tymax = temp;
-	}
+	float ty0 = (box->min.y - ray->origin.y) / ray->direction.y;
+	float ty1 = (box->max.y - ray->origin.y) / ray->direction.y;
+	float tymin = fmin(ty0, ty1);
+	float tymax = fmax(ty0, ty1);
 
 	if ((tmin > tymax) || (tymin > tmax))
 		return (0);
-	if (tymin > tmin)
-		tmin = tymin;
-	if (tymax < tmax)
-		tmax = tymax;
 
-	float tzmin = (box->min.z - ray->origin.z) * ray->inv_dir.z;
-	float tzmax = (box->max.z - ray->origin.z) * ray->inv_dir.z;
+	tmin = fmax(tymin, tmin);
+	tmax = fmin(tymax, tmax);
 
-	if (tzmin > tzmax)
-	{
-		temp = tzmin;
-		tzmin = tzmax;
-		tzmax = temp;
-	}
+	float tz0 = (box->min.z - ray->origin.z) / ray->direction.z;
+	float tz1 = (box->max.z - ray->origin.z) / ray->direction.z;
+	float tzmin = fmin(tz0, tz1);
+	float tzmax = fmax(tz0, tz1);
 
-	if (tmin > tzmax || tzmin > tmax)
+	if ((tmin > tzmax) || (tzmin > tmax))
 		return (0);
 
-	if (tzmin > tmin) 
-        tmin = tzmin; 
-    if (tzmax < tmax) 
-        tmax = tzmax;
-    //printf("hit, tmin %f tmax %f\n", tmin, tmax);
-    if (t)
-    {
-    	if (tmin < ERROR && tmax < ERROR)
-    		return (0);
-    	if (tmin < ERROR)
-    		*t = tmax;
-    	else
-    		*t = tmin;
-    }
+    tmin = fmax(tzmin, tmin);
+	tmax = fmin(tzmax, tmax);
+	if (t)
+		*t = tmin;
 	return (1);
 }
 
 float min3(float a, float b, float c)
 {
-	if (a > b)
-		a = b;
-	if (a > c)
-		a = c;
-	return a;
+	return fmin(fmin(a, b), c);
 }
 
 float max3(float a, float b, float c)
 {
-	if (a < b)
-		a = b;
-	if (a < c)
-		a = c;
-	return a;
+	return fmax(fmax(a, b), c);
 }
 
 t_box AABB_from_triangle(t_object *triangle)
@@ -202,26 +185,21 @@ t_box BB_from_boxes(t_box *boxes, int count)
 	float max_x = FLT_MIN;
 	float max_y = FLT_MIN;
 	float max_z = FLT_MIN;
+
 	float min_x = FLT_MAX;
 	float min_y = FLT_MAX;
 	float min_z = FLT_MAX;
 
 	for (int i = 0; i < count; i++)
 	{
-		if (boxes[i].min.x < min_x)
-			min_x = boxes[i].min.x;
-		if (boxes[i].max.x > max_x)
-			max_x = boxes[i].max.x;
+		min_x = fmin(boxes[i].min.x, min_x);
+		max_x = fmax(boxes[i].max.x, max_x);
 
-		if (boxes[i].min.y < min_y)
-			min_y = boxes[i].min.y;
-		if (boxes[i].max.y > max_y)
-			max_y = boxes[i].max.y;
+		min_y = fmin(boxes[i].min.y, min_y);
+		max_y = fmax(boxes[i].max.y, max_y);
 
-		if (boxes[i].min.z < min_z)
-			min_z = boxes[i].min.z;
-		if (boxes[i].max.z > max_z)
-			max_z = boxes[i].max.z;
+		min_z = fmin(boxes[i].min.z, min_z);
+		max_z = fmax(boxes[i].max.z, max_z);
 	}
 
 	t_box box;
@@ -233,24 +211,6 @@ t_box BB_from_boxes(t_box *boxes, int count)
 	box.children_count = 0;
 	box.object = NULL;
 	return box;
-}
-
-void print_box(t_box *box)
-{
-	printf("===========\n");
-	printf("Box is %p\n", box);
-	if (box)
-	{
-		printf("min, mid, max\n");
-		print_vec(box->min);
-		print_vec(box->mid);
-		print_vec(box->max);
-		printf("children is %p\nchildren_count is %d\nobject is %p\n",
-				box->children, box->children_count, box->object);
-		if (box->object)
-			print_object(box->object);
-	}
-	printf("===========\n");
 }
 
 int g_boxcount = 0;
@@ -272,12 +232,6 @@ void tree_down(t_box *boxes, int box_count, t_box *parent, t_box *work_array, in
 	bzero(indexes, 8 * sizeof(int));
 	for (int i = 0; i < box_count; i++)
 		counts[morton_digit(boxes[i].morton, depth)]++;
-	if (depth == 2)
-	{
-		for (int i =0 ; i < 8; i++)
-			printf("counts[%d] is %d\n", i, counts[i]);
-	}
-
 	for (int i = 1; i < 8; i++)
 		indexes[i] = indexes[i - 1] + counts[i - 1];
 	for (int i = 0; i < box_count; i++)
@@ -301,19 +255,15 @@ void tree_down(t_box *boxes, int box_count, t_box *parent, t_box *work_array, in
 		}
 		else
 		{
-			g_boxcount++;
 			children[child_ind] = BB_from_boxes(&boxes[start], counts[i]);
 			tree_down(&boxes[start], counts[i], &children[child_ind], work_array, depth + 1);
 		}
+		g_boxcount++;
 		child_ind++;
 		start += counts[i];
 	}
 	parent->children_count = child_ind;
 	parent->children = children;
-	if (depth == 2)
-	{
-		printf("child count %d\n\n", child_ind);
-	}
 }
 
 void sort_check(t_box *boxes, int count)
@@ -331,6 +281,8 @@ void analyze_bvh(t_box *root, int depth)
 {
 	printf("===========\n");
 	printf("box at depth %d\n", depth);
+	print_vec(root->min);
+	print_vec(root->max);
 	printf("area of box is %f\n", vec_mag(vec_sub(root->max, root->min)));
 	if (root->children_count)
 		printf("%d children\n", root->children_count);
@@ -352,6 +304,7 @@ void make_bvh(t_scene *scene)
 		boxes[i] = AABB_from_obj(obj);
 	t_box *root = malloc(sizeof(t_box));
 	*root = BB_from_boxes(boxes, count);
+	print_box(root);
 	for (int i = 0; i < count; i++)
 		boxes[i].morton = mortonize(boxes[i].mid, root);
 	t_box *work_array = malloc(count * sizeof(t_box));
@@ -362,21 +315,6 @@ void make_bvh(t_scene *scene)
 	printf("max depth %d boxcount %d\n", g_maxdepth, g_boxcount);
 	free(boxes);
 	free(work_array);
-}
-
-void hit_nearest_debug(const t_ray *ray, const t_scene *scene, t_object **hit, float *d)
-{
-	float this_d = 0.0;
-	for (int i = 0; i < scene->box_count; i++)
-	{
-		if (intersect_box(ray, &scene->bvh_debug[i], NULL))
-			if (intersect_object(ray, scene->bvh_debug[i].object, &this_d))
-				if (this_d < *d)
-				{
-					*d = this_d;
-					*hit = scene->bvh_debug[i].object;
-				}
-	}
 }
 
 void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d, int *tests)

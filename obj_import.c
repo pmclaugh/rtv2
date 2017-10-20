@@ -15,24 +15,23 @@ t_object *new_simple_triangle(t_float3 vertex0, t_float3 vertex1, t_float3 verte
 
 void unit_scale(t_import import, t_float3 offset)
 {
-	//takes imported model (linked list of triangles)
-	//and scales and translates it so it's bounded by a 1x1x1 cube centered at the origin.
-
 	//find largest dimension
 	t_float3 ranges = vec_sub(import.max, import.min);
 	float scale = max3(ranges.x, ranges.y, ranges.z);
 	scale = 1.0 / scale;
 	t_object *obj = import.head;
 
-	//for testing
+	//for testing the negative problem
+	offset = vec_scale(offset, -1.0);
+
 	while (obj)
 	{
 		obj->position = vec_scale(vec_sub(obj->position, import.min), scale);
 		obj->normal = vec_scale(vec_sub(obj->normal, import.min), scale);
 		obj->corner = vec_scale(vec_sub(obj->corner, import.min), scale);
-		obj->position = vec_sub(obj->position, offset);
-		obj->normal = vec_sub(obj->normal, offset);
-		obj->corner = vec_sub(obj->corner, offset);
+		obj->position = vec_add(obj->position, offset);
+		obj->normal = vec_add(obj->normal, offset);
+		obj->corner = vec_add(obj->corner, offset);
 		obj = obj->next;
 	}
 }
@@ -85,7 +84,7 @@ t_import load_file(int ac, char **av)
 				max.y = y;
 			if (z < min.z)
 				min.z = z;
-			if (z < max.z)
+			if (z > max.z)
 				max.z = z;
 		}
 		if (type[0] == 'f')

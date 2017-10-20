@@ -16,7 +16,7 @@
 #define UNIT_Y (t_float3){0, 1, 0}
 #define UNIT_Z (t_float3){0, 0, 1}
 
-#define ERROR 1e-4
+#define ERROR 1e-6
 
 #define BLACK (t_float3){0.0, 0.0, 0.0}
 #define RED (t_float3){1.0, 0.0, 0.0}
@@ -135,7 +135,7 @@ int intersect_triangle(const t_ray *ray, const t_object *triangle, float *d);
 
 void make_bvh(t_scene *scene);
 void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d, int *tests);
-void hit_nearest_debug(const t_ray *ray, const t_scene *scene, t_object **hit, float *d);
+void hit_nearest_debug(const t_ray *ray, const t_box *box, t_object **hit, float *d);
 
 t_import load_file(int ac, char **av);
 void unit_scale(t_import import, t_float3 offset);
