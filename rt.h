@@ -88,6 +88,14 @@ typedef struct s_scene
 	int box_count;
 }				t_scene;
 
+typedef struct s_import
+{
+	t_object *head;
+	t_object *tail;
+	int obj_count;
+	t_float3 min;
+	t_float3 max;
+}				t_import;
 
 
 int hit(t_ray *ray, const t_scene *scene, int do_shade);
@@ -128,4 +136,8 @@ void make_bvh(t_scene *scene);
 void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d, int *tests);
 void hit_nearest_debug(const t_ray *ray, const t_scene *scene, t_object **hit, float *d);
 
-void load_file(t_scene *scene, int ac, char **av);
+t_import load_file(int ac, char **av);
+void unit_scale(t_import import);
+
+float max3(float a, float b, float c);
+float min3(float a, float b, float c);

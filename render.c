@@ -191,46 +191,51 @@ int main(int ac, char **av)
 
 	t_scene *scene = calloc(1, sizeof(t_scene));
 
+	t_import import;
 	if (ac != 1)
-		load_file(scene, ac, av);
+		import = load_file(ac, av);
 
+	unit_scale(import);
+	printf("unit scale done\n");
+	import.tail->next = scene->objects;
+	scene->objects = import.head;
 	
-	new_plane(scene, (t_float3){0, 0, 100}, (t_float3){0, 0, -1}, (t_float3){100, 100, 0}, WHITE);
-	new_plane(scene, (t_float3){-100, 0, 0}, (t_float3){1, 0, 0}, (t_float3){0, 100, 100}, WHITE);
-	new_plane(scene, (t_float3){100, 0, 0}, (t_float3){-1, 0, 0}, (t_float3){0, 100, 100}, WHITE);
-	new_plane(scene, (t_float3){0, 100, 0}, (t_float3){0, -1, 0}, (t_float3){100, 0, 100}, WHITE);
-	new_plane(scene, (t_float3){0, -100, 0}, (t_float3){0, 1, 0}, (t_float3){100, 0, 100}, WHITE);
+	// new_plane(scene, (t_float3){0, 0, 100}, (t_float3){0, 0, -1}, (t_float3){100, 100, 0}, WHITE);
+	// new_plane(scene, (t_float3){-100, 0, 0}, (t_float3){1, 0, 0}, (t_float3){0, 100, 100}, WHITE);
+	// new_plane(scene, (t_float3){100, 0, 0}, (t_float3){-1, 0, 0}, (t_float3){0, 100, 100}, WHITE);
+	// new_plane(scene, (t_float3){0, 100, 0}, (t_float3){0, -1, 0}, (t_float3){100, 0, 100}, WHITE);
+	// new_plane(scene, (t_float3){0, -100, 0}, (t_float3){0, 1, 0}, (t_float3){100, 0, 100}, WHITE);
 
 	// new_sphere(scene, -2, -4, 0, 1, GREEN);
-	// new_sphere(scene, 3, -3, 2, 2, RED);
+	new_sphere(scene, 0, 0, 0, 0.5, RED);
 
 	// new_triangle(scene, (t_float3){-1, 0, 3}, (t_float3){1, 0, 3}, (t_float3){0, 2, 3}, BLUE);
 
 	make_bvh(scene);
 
-	scene->camera = (t_plane){	(t_float3){0, 0, -300},
+	scene->camera = (t_plane){	(t_float3){0, 0, -5},
 								(t_float3){0, 0, 1},
 								1.0,
 								1.0};
 
 	scene->light = (t_float3){70, 90, 0};
 
-	// void *mlx = mlx_init();
-	// void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
-	// void *img = mlx_new_image(mlx, xdim, ydim);
+	void *mlx = mlx_init();
+	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
+	void *img = mlx_new_image(mlx, xdim, ydim);
 	g_tests = 0;
 	t_float3 *pixels = simple_render(scene, xdim, ydim);
 	printf("average %f tests per ray\n", (float)g_tests / (float)1000000);
-	// draw_pixels(img, xdim, ydim, pixels);
-	// mlx_put_image_to_window(mlx, win, img, 0, 0);
+	draw_pixels(img, xdim, ydim, pixels);
+	mlx_put_image_to_window(mlx, win, img, 0, 0);
 
-	// t_param *param = calloc(1, sizeof(t_param));
-	// *param = (t_param){mlx, win, img, xdim, ydim, scene};
+	t_param *param = calloc(1, sizeof(t_param));
+	*param = (t_param){mlx, win, img, xdim, ydim, scene};
 
-	// mlx_loop_hook(mlx, loop_hook, param);
+	mlx_loop_hook(mlx, loop_hook, param);
 	
-	// mlx_key_hook(win, key_hook, param);
-	// mlx_loop(mlx);
+	mlx_key_hook(win, key_hook, param);
+	mlx_loop(mlx);
 
 }
 
