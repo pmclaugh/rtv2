@@ -21,6 +21,8 @@ uint64_t mortonEncode_magicbits(const unsigned int x, const unsigned int y, cons
 
 uint64_t morton64(float x, float y, float z)
 {
+	if (max3(x,y,z) > 1 || min3(x,y,z) < 0)
+		printf("scaling is bad!\n");
 	//printf("x %f y %f z %f\n", x, y, z);
 	//x, y, z are in [0, 1]. multiply by 2^21 to get 21 bits, confine to [0, 2^21 - 1]
     x = fmin(fmax(x * 2097152.0f, 0.0f), 2097151.0f);
@@ -31,9 +33,10 @@ uint64_t morton64(float x, float y, float z)
 
 uint64_t mortonize(t_float3 pos, t_box *bounds)
 {
-    return morton64((pos.x - bounds->min.x) / (bounds->max.x - bounds->min.x), 
-    				(pos.y - bounds->min.y) / (bounds->max.y - bounds->min.y), 
-    				(pos.z - bounds->min.z) / (bounds->max.z - bounds->min.z));
+	t_float3 ranges = vec_sub(bounds->max, bounds->min);
+    return morton64((pos.x - bounds->min.x) / (ranges.x), 
+    				(pos.y - bounds->min.y) / (ranges.y), 
+    				(pos.z - bounds->min.z) / (ranges.z));
 }
 
 int morton_digit(uint64_t code, int depth)
@@ -129,13 +132,13 @@ t_box AABB_from_triangle(t_object *triangle)
 	const t_float3 v1 = triangle->normal;
 	const t_float3 v2 = triangle->corner;
 
-	box.min.x = min3(v0.x, v1.x, v2.x);
-	box.min.y = min3(v0.y, v1.y, v2.y);
-	box.min.z = min3(v0.z, v1.z, v2.z);
+	box.min.x = min3(v0.x, v1.x, v2.x) - ERROR;
+	box.min.y = min3(v0.y, v1.y, v2.y) - ERROR;
+	box.min.z = min3(v0.z, v1.z, v2.z) - ERROR;
 
-	box.max.x = max3(v0.x, v1.x, v2.x);
-	box.max.y = max3(v0.y, v1.y, v2.y);
-	box.max.z = max3(v0.z, v1.z, v2.z);
+	box.max.x = max3(v0.x, v1.x, v2.x) + ERROR;
+	box.max.y = max3(v0.y, v1.y, v2.y) + ERROR;
+	box.max.z = max3(v0.z, v1.z, v2.z) + ERROR;
 
 	box.mid = (t_float3){	(box.max.x + box.min.x) / 2,
 							(box.max.y + box.min.y) / 2,
@@ -250,15 +253,18 @@ void print_box(t_box *box)
 	printf("===========\n");
 }
 
+int g_boxcount = 0;
+int g_maxdepth = 0;
 void tree_down(t_box *boxes, int box_count, t_box *parent, t_box *work_array, int depth)
 {
-
+	if (depth > g_maxdepth)
+		g_maxdepth = depth;
 	if (depth > 30)
 	{
+		printf("deep cancel\n");
 		parent->children_count = 0;
 		return;
 	}
-	*parent = BB_from_boxes(boxes, box_count);
 
 	int counts[8];
 	int indexes[8];
@@ -266,6 +272,12 @@ void tree_down(t_box *boxes, int box_count, t_box *parent, t_box *work_array, in
 	bzero(indexes, 8 * sizeof(int));
 	for (int i = 0; i < box_count; i++)
 		counts[morton_digit(boxes[i].morton, depth)]++;
+	if (depth == 2)
+	{
+		for (int i =0 ; i < 8; i++)
+			printf("counts[%d] is %d\n", i, counts[i]);
+	}
+
 	for (int i = 1; i < 8; i++)
 		indexes[i] = indexes[i - 1] + counts[i - 1];
 	for (int i = 0; i < box_count; i++)
@@ -280,30 +292,52 @@ void tree_down(t_box *boxes, int box_count, t_box *parent, t_box *work_array, in
 	{
 		if (counts[i] == 0)
 			continue ;
-		if (counts[i] == 1)
+		else if (counts[i] == 1)
 			children[child_ind] = boxes[start];
+		else if (counts[i] == 2 && vec_equ(boxes[0].mid, boxes[1].mid))
+		{
+			printf("dupe cancel\n");
+			children[child_ind] = boxes[start];
+		}
 		else
 		{
+			g_boxcount++;
 			children[child_ind] = BB_from_boxes(&boxes[start], counts[i]);
 			tree_down(&boxes[start], counts[i], &children[child_ind], work_array, depth + 1);
 		}
 		child_ind++;
 		start += counts[i];
 	}
-	parent->children_count = child_ind + 1;
+	parent->children_count = child_ind;
 	parent->children = children;
-
-	if (parent->children_count == 1)
+	if (depth == 2)
 	{
-		*parent = children[0];
-		free(children);
+		printf("child count %d\n\n", child_ind);
 	}
-	// if (depth < 10)
-	// {
-	// 	printf("depth %d box_count %d\n", depth, box_count);
-	// 	print_box(parent);
-	// 	getchar();
-	// }
+}
+
+void sort_check(t_box *boxes, int count)
+{
+	//NB this isn't actually the best test since the objects don't get fully sorted.
+	for (int i = 0; i < count - 1; i++)
+		if (boxes[i].morton > boxes[i + 1].morton)
+		{
+			printf("FAIL at %d, %d\n", i, i+1);
+			printf("%llu %llu\n", boxes[i].morton , boxes[i + 1].morton);
+		}
+}
+
+void analyze_bvh(t_box *root, int depth)
+{
+	printf("===========\n");
+	printf("box at depth %d\n", depth);
+	printf("area of box is %f\n", vec_mag(vec_sub(root->max, root->min)));
+	if (root->children_count)
+		printf("%d children\n", root->children_count);
+	else
+		printf("leaf node, %p\n", root->object);
+	for (int i = 0; i < root->children_count; i++)
+		analyze_bvh(&root->children[i], depth + 1);
 }
 
 void make_bvh(t_scene *scene)
@@ -322,8 +356,10 @@ void make_bvh(t_scene *scene)
 		boxes[i].morton = mortonize(boxes[i].mid, root);
 	t_box *work_array = malloc(count * sizeof(t_box));
 	tree_down(boxes, count, root, work_array, 0);
-
+	//sort_check(boxes,count);
+	//analyze_bvh(root, 0);
 	scene->bvh = root;
+	printf("max depth %d boxcount %d\n", g_maxdepth, g_boxcount);
 	free(boxes);
 	free(work_array);
 }

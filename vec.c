@@ -119,3 +119,12 @@ t_float3 vec_inv(const t_float3 v)
 {
 	return (t_float3){1.0 / v.x, 1.0 / v.y, 1.0 / v.z};
 }
+
+int vec_equ(const t_float3 a, const t_float3 b)
+{
+	if (a.x == b.x)
+		if (a.y == b.y)
+			if (a.z == b.z)
+				return (1);
+	return (0);
+}

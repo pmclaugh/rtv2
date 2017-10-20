@@ -120,6 +120,7 @@ t_float3 bounce(const t_float3 in, const t_float3 norm);
 float dist(const t_float3 a, const t_float3 b);
 t_float3 vec_rev(t_float3 v);
 t_float3 vec_inv(const t_float3 v);
+int vec_equ(const t_float3 a, const t_float3 b);
 
 int intersect_object(const t_ray *ray, const t_object *object, float *d);
 t_float3 norm_object(const t_object *object, const t_ray *ray);
@@ -137,7 +138,7 @@ void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d, i
 void hit_nearest_debug(const t_ray *ray, const t_scene *scene, t_object **hit, float *d);
 
 t_import load_file(int ac, char **av);
-void unit_scale(t_import import);
+void unit_scale(t_import import, t_float3 offset);
 
 float max3(float a, float b, float c);
 float min3(float a, float b, float c);

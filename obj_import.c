@@ -13,7 +13,7 @@ t_object *new_simple_triangle(t_float3 vertex0, t_float3 vertex1, t_float3 verte
 	return triangle;
 }
 
-void unit_scale(t_import import)
+void unit_scale(t_import import, t_float3 offset)
 {
 	//takes imported model (linked list of triangles)
 	//and scales and translates it so it's bounded by a 1x1x1 cube centered at the origin.
@@ -23,21 +23,19 @@ void unit_scale(t_import import)
 	float scale = max3(ranges.x, ranges.y, ranges.z);
 	scale = 1.0 / scale;
 	t_object *obj = import.head;
+
+	//for testing
 	while (obj)
 	{
 		obj->position = vec_scale(vec_sub(obj->position, import.min), scale);
 		obj->normal = vec_scale(vec_sub(obj->normal, import.min), scale);
 		obj->corner = vec_scale(vec_sub(obj->corner, import.min), scale);
+		obj->position = vec_sub(obj->position, offset);
+		obj->normal = vec_sub(obj->normal, offset);
+		obj->corner = vec_sub(obj->corner, offset);
 		obj = obj->next;
 	}
 }
-
-// void rotate_import(t_import import, t_float3 axis, float degrees)
-// {
-// 	//rotate the collection about given axis
-
-// 	t_obj
-// }
 
 t_import load_file(int ac, char **av)
 {
