@@ -56,7 +56,6 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 		ray->origin = closest;
 		return (1);
 	}
-	ray->origin = closest;
 	//normal at collision point
 	t_float3 N = norm_object(closest_object, ray);
 	//vector to light source (0,0,0 if no line)
@@ -71,7 +70,7 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 	float specular = pow(ks * dot(V, R), 10);
 
 	if (diffuse < 0)
-		printf("diffuse wtf\n");
+		printf("diffuse wtf: %f\n", diffuse);
 
 	float illumination = ambient + diffuse + specular;
 
@@ -219,10 +218,10 @@ int main(int ac, char **av)
 
 	t_import import;
 
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){0, 0, 0});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
+	import = load_file(ac, av);
+	unit_scale(import, (t_float3){1, 1, 0});
+	import.tail->next = scene->objects;
+	scene->objects = import.head;
 
 	// import = load_file(ac, av);
 	// unit_scale(import, (t_float3){1, 0, 0});
@@ -266,10 +265,10 @@ int main(int ac, char **av)
 	// new_plane(scene, (t_float3){0, 100, 0}, (t_float3){0, -1, 0}, (t_float3){100, 0, 100}, WHITE);
 	// new_plane(scene, (t_float3){0, -100, 0}, (t_float3){0, 1, 0}, (t_float3){100, 0, 100}, WHITE);
 
-	for (int i = 1; i < 10; i++)
-		for (int j = 1; j < 10; j++)
-			for (int k = 1; k < 10; k++)
-				new_sphere(scene, i * 2, j * 2, k * 2, 1, BLUE);
+	// for (int i = 1; i < 10; i++)
+	// 	for (int j = 1; j < 10; j++)
+	// 		for (int k = 1; k < 10; k++)
+	// 			new_sphere(scene, i * 2, j * 2, k * 2, 1, BLUE);
 	// new_sphere(scene, -2, -4, 0, 1, GREEN);
 	// new_sphere(scene, 0, 0, 0, 0.5, RED);
 
@@ -277,12 +276,12 @@ int main(int ac, char **av)
 
 	make_bvh(scene);
 
-	scene->camera = (t_plane){	(t_float3){10, 10, -30},
+	scene->camera = (t_plane){	(t_float3){0, 0, -4},
 								(t_float3){0, 0, 1},
 								1.0,
 								1.0};
 
-	scene->light = (t_float3){0, 80, -30};
+	scene->light = (t_float3){4, 8, 0};
 
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");

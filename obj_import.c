@@ -76,15 +76,15 @@ t_import load_file(int ac, char **av)
 			verts[v++] = (t_float3){x, y, z};
 			if (x < min.x)
 				min.x = x;
-			if (x > max.x)
+			else if (x > max.x)
 				max.x = x;
 			if (y < min.y)
 				min.y = y;
-			if (y > max.y)
+			else if (y > max.y)
 				max.y = y;
 			if (z < min.z)
 				min.z = z;
-			if (z > max.z)
+			else if (z > max.z)
 				max.z = z;
 		}
 		if (type[0] == 'f')

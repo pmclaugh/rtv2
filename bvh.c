@@ -66,13 +66,13 @@ void print_box(const t_box *box)
 
 int intersect_box(const t_ray *ray, const t_box *box, float *t)
 {
-	float tx0 = (box->min.x - ray->origin.x) / ray->direction.x;
-	float tx1 = (box->max.x - ray->origin.x) / ray->direction.x;
+	float tx0 = (box->min.x - ray->origin.x) * ray->inv_dir.x;
+	float tx1 = (box->max.x - ray->origin.x) * ray->inv_dir.x;
 	float tmin = fmin(tx0, tx1);
 	float tmax = fmax(tx0, tx1);
 
-	float ty0 = (box->min.y - ray->origin.y) / ray->direction.y;
-	float ty1 = (box->max.y - ray->origin.y) / ray->direction.y;
+	float ty0 = (box->min.y - ray->origin.y) * ray->inv_dir.y;
+	float ty1 = (box->max.y - ray->origin.y) * ray->inv_dir.y;
 	float tymin = fmin(ty0, ty1);
 	float tymax = fmax(ty0, ty1);
 
@@ -82,8 +82,8 @@ int intersect_box(const t_ray *ray, const t_box *box, float *t)
 	tmin = fmax(tymin, tmin);
 	tmax = fmin(tymax, tmax);
 
-	float tz0 = (box->min.z - ray->origin.z) / ray->direction.z;
-	float tz1 = (box->max.z - ray->origin.z) / ray->direction.z;
+	float tz0 = (box->min.z - ray->origin.z) * ray->inv_dir.z;
+	float tz1 = (box->max.z - ray->origin.z) * ray->inv_dir.z;
 	float tzmin = fmin(tz0, tz1);
 	float tzmax = fmax(tz0, tz1);
 
@@ -93,7 +93,14 @@ int intersect_box(const t_ray *ray, const t_box *box, float *t)
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
 	if (t)
-		*t = tmin;
+	{
+		if (tmin > ERROR)
+			*t = tmin;
+		else if (tmax > ERROR)
+			*t = tmax;
+		else
+			return (0);
+	}
 	return (1);
 }
 
