@@ -22,10 +22,6 @@ t_float3 clear_shot(const t_float3 point, const t_float3 N, const t_scene *scene
 	else
 		return L.direction;
 }
-int g_tests = 0;
-int g_singles = 0;
-int g_nonsingle = 0;
-int g_max_tests = 0;
 
 int hit(t_ray *ray, const t_scene *scene, int do_shade)
 {
@@ -36,15 +32,7 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 	t_float3 closest;
 	float closest_dist = FLT_MAX;
 	t_object *closest_object = NULL;
-	int tests = 0;
-	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist, &tests);
-	g_tests += tests;
-	if (tests == 1)
-		g_singles++;
-	else
-		g_nonsingle += tests;
-	if (tests > g_max_tests)
-		g_max_tests = tests;
+	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist);
 	//hit_nearest_debug(ray, scene, &closest_object, &closest_dist);
 	//printf("hit decided\n");
 	if (closest_object == NULL)
@@ -58,6 +46,7 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 	}
 	//normal at collision point
 	t_float3 N = norm_object(closest_object, ray);
+
 	//vector to light source (0,0,0 if no line)
 	t_float3 L = clear_shot(closest, N, scene);
 	//vector to camera
@@ -70,13 +59,20 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 	float specular = pow(ks * dot(V, R), 10);
 
 	if (diffuse < 0)
+	{
 		printf("diffuse wtf: %f\n", diffuse);
+		print_ray(*ray);
+		print_vec(L);
+		print_vec(N);
+	}
 
 	float illumination = ambient + diffuse + specular;
 
 	//jank normalization
 	illumination /= (ka + kd + ks);
 	illumination = fmin(1.0, illumination);
+	//temporary fix for confusing diffuse issue
+	illumination = fmax (0.0, illumination);
 
 	t_float3 dir = bounce(ray->direction, N);
 	*ray = (t_ray){closest, dir, vec_scale(closest_object->color, illumination), vec_inv(dir)};
@@ -130,22 +126,14 @@ t_ray *rays_from_camera(t_plane camera, int xres, int yres)
 t_float3 trace(t_ray *ray, const t_scene *scene)
 {
 	//this will be recursive and more complicated but for now isn't
-
-	int test_track = g_tests;
 	
 	if (hit(ray, scene, 1))
 	{
-		if (g_tests - test_track > 2000)
-			return RED;
-		else
-			return ray->color;
+		return ray->color;
 	}
 	else
 	{
-		if (g_tests - test_track > 2000)
-			return RED;
-		else
-			return BLACK;
+		return BLACK;
 	}
 }
 
@@ -219,44 +207,44 @@ int main(int ac, char **av)
 	t_import import;
 
 	import = load_file(ac, av);
+	unit_scale(import, (t_float3){0, 0, 0});
+	import.tail->next = scene->objects;
+	scene->objects = import.head;
+
+	import = load_file(ac, av);
+	unit_scale(import, (t_float3){1, 0, 0});
+	import.tail->next = scene->objects;
+	scene->objects = import.head;
+
+	import = load_file(ac, av);
 	unit_scale(import, (t_float3){1, 1, 0});
 	import.tail->next = scene->objects;
 	scene->objects = import.head;
 
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){1, 0, 0});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
+	import = load_file(ac, av);
+	unit_scale(import, (t_float3){1, 1, 1});
+	import.tail->next = scene->objects;
+	scene->objects = import.head;
 
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){1, 1, 0});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
+	import = load_file(ac, av);
+	unit_scale(import, (t_float3){0, 1, 0});
+	import.tail->next = scene->objects;
+	scene->objects = import.head;
 
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){1, 1, 1});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
+	import = load_file(ac, av);
+	unit_scale(import, (t_float3){0, 1, 1});
+	import.tail->next = scene->objects;
+	scene->objects = import.head;
 
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){0, 1, 0});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
+	import = load_file(ac, av);
+	unit_scale(import, (t_float3){0, 0, 1});
+	import.tail->next = scene->objects;
+	scene->objects = import.head;
 
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){0, 1, 1});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){0, 0, 1});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){1, 0, 1});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
+	import = load_file(ac, av);
+	unit_scale(import, (t_float3){1, 0, 1});
+	import.tail->next = scene->objects;
+	scene->objects = import.head;
 
 	
 	// new_plane(scene, (t_float3){0, 0, 100}, (t_float3){0, 0, -1}, (t_float3){100, 100, 0}, WHITE);
@@ -270,11 +258,13 @@ int main(int ac, char **av)
 	// 		for (int k = 1; k < 10; k++)
 	// 			new_sphere(scene, i * 2, j * 2, k * 2, 1, BLUE);
 	// new_sphere(scene, -2, -4, 0, 1, GREEN);
-	// new_sphere(scene, 0, 0, 0, 0.5, RED);
+	//new_sphere(scene, -1, -1, 0, 1, RED);
 
 	// new_triangle(scene, (t_float3){-1, 0, 3}, (t_float3){1, 0, 3}, (t_float3){0, 2, 3}, BLUE);
 
 	make_bvh(scene);
+
+
 
 	scene->camera = (t_plane){	(t_float3){0, 0, -4},
 								(t_float3){0, 0, 1},
@@ -286,19 +276,15 @@ int main(int ac, char **av)
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
 	void *img = mlx_new_image(mlx, xdim, ydim);
-	g_tests = 0;
 	t_float3 *pixels = simple_render(scene, xdim, ydim);
-	printf("average %f tests per ray\n", (float)g_tests / 1000000.0);
-	printf("%d single test rays (ie complete misses)\n", g_singles);
-	printf("average of nonsingles is %f\n", (float)g_nonsingle / (float)(1000000 - g_singles));
-	printf("heaviest ray was %d tests\n", g_max_tests);
 	draw_pixels(img, xdim, ydim, pixels);
 	mlx_put_image_to_window(mlx, win, img, 0, 0);
 
+	printf("%d %d\n", INT_MIN, INT_MAX);
 	t_param *param = calloc(1, sizeof(t_param));
 	*param = (t_param){mlx, win, img, xdim, ydim, scene};
 
-	//mlx_loop_hook(mlx, loop_hook, param);
+	mlx_loop_hook(mlx, loop_hook, param);
 	
 	mlx_key_hook(win, key_hook, param);
 	mlx_loop(mlx);

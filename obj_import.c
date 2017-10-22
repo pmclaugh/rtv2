@@ -66,7 +66,8 @@ t_import load_file(int ac, char **av)
 	t_object *list = NULL;
 	t_object *tail = NULL;
 	t_float3 min = (t_float3){FLT_MAX, FLT_MAX, FLT_MAX};
-	t_float3 max = (t_float3){FLT_MIN, FLT_MIN, FLT_MIN};
+	t_float3 max = (t_float3){-1.0 * FLT_MAX, -1.0 * FLT_MAX, -1.0 *FLT_MAX};
+
 	while(1)
 	{
 		if (fscanf(fp, "%s %f %f %f", type, &x, &y, &z) != 4)
@@ -96,6 +97,9 @@ t_import load_file(int ac, char **av)
 			list = this;
 		}
 	}
+	printf("obj min max\n");
+	print_vec(min);
+	print_vec(max);
 	printf("model loaded.\n");
 	free(verts);
 	return (t_import){list, tail, faces, min, max};

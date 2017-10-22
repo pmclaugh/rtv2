@@ -178,7 +178,7 @@ t_float3 norm_triangle(const t_object *triangle, const t_float3 dir)
 	t_float3 edge1 = vec_sub(v1, v0);
 	t_float3 edge2 = vec_sub(v2, v0);
 	t_float3 N = unit_vec(cross(edge1, edge2));
-	if (dot(dir, N) < ERROR)
+	if (dot(dir, N) < 0)
 		return N;
 	else
 		return vec_rev(N);

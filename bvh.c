@@ -76,7 +76,7 @@ int intersect_box(const t_ray *ray, const t_box *box, float *t)
 	float tymin = fmin(ty0, ty1);
 	float tymax = fmax(ty0, ty1);
 
-	if ((tmin > tymax) || (tymin > tmax))
+	if ((tmin >= tymax) || (tymin >= tmax))
 		return (0);
 
 	tmin = fmax(tymin, tmin);
@@ -87,19 +87,19 @@ int intersect_box(const t_ray *ray, const t_box *box, float *t)
 	float tzmin = fmin(tz0, tz1);
 	float tzmax = fmax(tz0, tz1);
 
-	if ((tmin > tzmax) || (tzmin > tmax))
+	if ((tmin >= tzmax) || (tzmin >= tmax))
 		return (0);
 
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
+	if (tmin < ERROR && tmax < ERROR)
+		return (0);
 	if (t)
 	{
 		if (tmin > ERROR)
 			*t = tmin;
-		else if (tmax > ERROR)
-			*t = tmax;
 		else
-			return (0);
+			*t = tmax;
 	}
 	return (1);
 }
@@ -189,9 +189,9 @@ int box_cmp(const void *a, const void *b)
 
 t_box BB_from_boxes(t_box *boxes, int count)
 {
-	float max_x = FLT_MIN;
-	float max_y = FLT_MIN;
-	float max_z = FLT_MIN;
+	float max_x = -1.0 * FLT_MAX;
+	float max_y = -1.0 * FLT_MAX;
+	float max_z = -1.0 * FLT_MAX;
 
 	float min_x = FLT_MAX;
 	float min_y = FLT_MAX;
@@ -316,18 +316,16 @@ void make_bvh(t_scene *scene)
 		boxes[i].morton = mortonize(boxes[i].mid, root);
 	t_box *work_array = malloc(count * sizeof(t_box));
 	tree_down(boxes, count, root, work_array, 0);
-	//sort_check(boxes,count);
-	//analyze_bvh(root, 0);
+
 	scene->bvh = root;
 	printf("max depth %d boxcount %d\n", g_maxdepth, g_boxcount);
 	free(boxes);
 	free(work_array);
 }
 
-void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d, int *tests)
+void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d)
 {
 	float this_d = 0.0;
-	*tests += 1;
 	if (box->object)
 	{
 		if (intersect_object(ray, box->object, &this_d))
@@ -340,6 +338,6 @@ void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d, i
 	else if (intersect_box(ray, box, NULL))
 	{
 		for (int i = 0; i < box->children_count; i++)
-			hit_nearest(ray, &box->children[i], hit, d, tests);
+			hit_nearest(ray, &box->children[i], hit, d);
 	}
 }
