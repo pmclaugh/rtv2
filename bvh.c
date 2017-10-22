@@ -162,10 +162,14 @@ t_box AABB_from_plane(t_object *plane)
 	t_box box;
 	box.mid = plane->position;
 	box.max = vec_add(plane->position, plane->corner);
+	box.max.x += 1;
+	box.max.y += 1;
+	box.max.z += 1;
 	box.min = vec_sub(plane->position, plane->corner);
 	box.object = plane;
 	box.children_count = 0;
 	box.children = NULL;
+	print_box(&box);
 	return box;
 }
 
@@ -311,7 +315,6 @@ void make_bvh(t_scene *scene)
 		boxes[i] = AABB_from_obj(obj);
 	t_box *root = malloc(sizeof(t_box));
 	*root = BB_from_boxes(boxes, count);
-	print_box(root);
 	for (int i = 0; i < count; i++)
 		boxes[i].morton = mortonize(boxes[i].mid, root);
 	t_box *work_array = malloc(count * sizeof(t_box));

@@ -33,20 +33,16 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 	float closest_dist = FLT_MAX;
 	t_object *closest_object = NULL;
 	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist);
-	//hit_nearest_debug(ray, scene, &closest_object, &closest_dist);
-	//printf("hit decided\n");
+
 	if (closest_object == NULL)
-		return 0; //nothing was hit
-	//printf("hit something\n");
+		return 0;
+
 	closest = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
+	ray->origin = closest;
 	if (!do_shade)
-	{
-		ray->origin = closest;
 		return (1);
-	}
 	//normal at collision point
 	t_float3 N = norm_object(closest_object, ray);
-
 	//vector to light source (0,0,0 if no line)
 	t_float3 L = clear_shot(closest, N, scene);
 	//vector to camera
@@ -58,24 +54,13 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 	float diffuse = kd * dot(L, N);
 	float specular = pow(ks * dot(V, R), 10);
 
-	if (diffuse < 0)
-	{
-		printf("diffuse wtf: %f\n", diffuse);
-		print_ray(*ray);
-		print_vec(L);
-		print_vec(N);
-	}
-
 	float illumination = ambient + diffuse + specular;
 
-	//jank normalization
 	illumination /= (ka + kd + ks);
-	illumination = fmin(1.0, illumination);
-	//temporary fix for confusing diffuse issue
-	illumination = fmax (0.0, illumination);
 
 	t_float3 dir = bounce(ray->direction, N);
 	*ray = (t_ray){closest, dir, vec_scale(closest_object->color, illumination), vec_inv(dir)};
+
 	return (1);
 }
 
@@ -180,8 +165,8 @@ int loop_hook(void *param)
 	draw_pixels(p->img, p->x, p->y, pixels);
 	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
 	free(pixels);
-	// p->scene->camera.center = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.center);
-	// p->scene->camera.normal = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.normal);
+	//p->scene->camera.center = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.center);
+	//p->scene->camera.normal = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.normal);
 	p->scene->light = angle_axis_rot(rot_angle, UNIT_Y, p->scene->light);
 	return (1);
 }
@@ -206,45 +191,45 @@ int main(int ac, char **av)
 
 	t_import import;
 
-	import = load_file(ac, av);
-	unit_scale(import, (t_float3){0, 0, 0});
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av);
+	// unit_scale(import, (t_float3){0, 0, 0});
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
-	import = load_file(ac, av);
-	unit_scale(import, (t_float3){1, 0, 0});
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av);
+	// unit_scale(import, (t_float3){1, 0, 0});
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
-	import = load_file(ac, av);
-	unit_scale(import, (t_float3){1, 1, 0});
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av);
+	// unit_scale(import, (t_float3){1, 1, 0});
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
-	import = load_file(ac, av);
-	unit_scale(import, (t_float3){1, 1, 1});
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av);
+	// unit_scale(import, (t_float3){1, 1, 1});
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
-	import = load_file(ac, av);
-	unit_scale(import, (t_float3){0, 1, 0});
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av);
+	// unit_scale(import, (t_float3){0, 1, 0});
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
-	import = load_file(ac, av);
-	unit_scale(import, (t_float3){0, 1, 1});
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av);
+	// unit_scale(import, (t_float3){0, 1, 1});
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
-	import = load_file(ac, av);
-	unit_scale(import, (t_float3){0, 0, 1});
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av);
+	// unit_scale(import, (t_float3){0, 0, 1});
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
-	import = load_file(ac, av);
-	unit_scale(import, (t_float3){1, 0, 1});
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av);
+	// unit_scale(import, (t_float3){1, 0, 1});
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
 	
 	// new_plane(scene, (t_float3){0, 0, 100}, (t_float3){0, 0, -1}, (t_float3){100, 100, 0}, WHITE);
@@ -253,10 +238,10 @@ int main(int ac, char **av)
 	// new_plane(scene, (t_float3){0, 100, 0}, (t_float3){0, -1, 0}, (t_float3){100, 0, 100}, WHITE);
 	// new_plane(scene, (t_float3){0, -100, 0}, (t_float3){0, 1, 0}, (t_float3){100, 0, 100}, WHITE);
 
-	// for (int i = 1; i < 10; i++)
-	// 	for (int j = 1; j < 10; j++)
-	// 		for (int k = 1; k < 10; k++)
-	// 			new_sphere(scene, i * 2, j * 2, k * 2, 1, BLUE);
+	for (int i = 1; i < 10; i++)
+		for (int j = 1; j < 10; j++)
+			for (int k = 1; k < 10; k++)
+				new_sphere(scene, i * 5, j * 5, k * 5, 3, BLUE);
 	// new_sphere(scene, -2, -4, 0, 1, GREEN);
 	//new_sphere(scene, -1, -1, 0, 1, RED);
 
@@ -266,12 +251,12 @@ int main(int ac, char **av)
 
 
 
-	scene->camera = (t_plane){	(t_float3){0, 0, -4},
+	scene->camera = (t_plane){	(t_float3){6, 6, -30},
 								(t_float3){0, 0, 1},
 								1.0,
 								1.0};
 
-	scene->light = (t_float3){4, 8, 0};
+	scene->light = (t_float3){0, 8, -10};
 
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
@@ -280,11 +265,10 @@ int main(int ac, char **av)
 	draw_pixels(img, xdim, ydim, pixels);
 	mlx_put_image_to_window(mlx, win, img, 0, 0);
 
-	printf("%d %d\n", INT_MIN, INT_MAX);
 	t_param *param = calloc(1, sizeof(t_param));
 	*param = (t_param){mlx, win, img, xdim, ydim, scene};
 
-	mlx_loop_hook(mlx, loop_hook, param);
+	//mlx_loop_hook(mlx, loop_hook, param);
 	
 	mlx_key_hook(win, key_hook, param);
 	mlx_loop(mlx);
