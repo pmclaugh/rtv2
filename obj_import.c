@@ -9,6 +9,7 @@ t_object *new_simple_triangle(t_float3 vertex0, t_float3 vertex1, t_float3 verte
 	triangle->normal = vertex1;
 	triangle->corner = vertex2;
 	triangle->color = color;
+	triangle->emission = 0.0;
 
 	return triangle;
 }

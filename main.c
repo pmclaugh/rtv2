@@ -23,9 +23,9 @@ int loop_hook(void *param)
 	draw_pixels(p->img, p->x, p->y, pixels);
 	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
 	free(pixels);
-	// p->scene->camera.center = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.center);
-	// p->scene->camera.normal = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.normal);
-	p->scene->light = angle_axis_rot(rot_angle, UNIT_Y, p->scene->light);
+	p->scene->camera.center = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.center);
+	p->scene->camera.normal = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.normal);
+	//p->scene->light = angle_axis_rot(rot_angle, UNIT_Y, p->scene->light);
 	return (1);
 }
 
@@ -49,10 +49,10 @@ int main(int ac, char **av)
 
 	t_import import;
 
-	import = load_file(ac, av);
-	unit_scale(import, (t_float3){1, 1, -1});
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av);
+	// unit_scale(import, (t_float3){1, 1, -1});
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 	
 	new_plane(scene, (t_float3){0, 0, 0}, (t_float3){2, 0, 0}, (t_float3){2, 2, 0}, WHITE);
 	new_plane(scene, (t_float3){0, 0, 0}, (t_float3){0, 0, -2}, (t_float3){2, 0, -2}, WHITE);
@@ -60,22 +60,17 @@ int main(int ac, char **av)
 	new_plane(scene, (t_float3){0, 2, 0}, (t_float3){0, 2, -2}, (t_float3){2, 2, -2}, WHITE);
 	new_plane(scene, (t_float3){2, 0, 0}, (t_float3){2, 0, -2}, (t_float3){2, 2, -2}, WHITE);
 
+	//new_triangle(scene, (t_float3){0,0,0}, (t_float3){1,0,0}, (t_float3){0,1,0}, WHITE);
 
-	// new_sphere(scene, 0, 0, 0, 1, BLUE);
-	// new_sphere(scene, 3, 0, 0, 1, RED);
-
-	// new_triangle(scene, (t_float3){-1, 0, 3}, (t_float3){1, 0, 3}, (t_float3){0, 2, 3}, BLUE);
+	new_sphere(scene, 1, 1, -1, 0.5, WHITE);
+	scene->objects->emission = 1.0;
 
 	make_bvh(scene);
-
-
 
 	scene->camera = (t_camera){	(t_float3){1, 1, -5},
 								(t_float3){0, 0, 1},
 								1.0,
 								1.0};
-
-	scene->light = (t_float3){0, 8, -10};
 
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");

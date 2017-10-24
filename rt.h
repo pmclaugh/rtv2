@@ -56,6 +56,7 @@ typedef struct s_object
 	t_float3 normal;
 	t_float3 corner;
 	t_float3 color;
+	float emission;
 	struct s_object *next;
 }				t_object;
 
@@ -81,7 +82,7 @@ typedef struct s_box
 typedef struct s_scene
 {
 	t_camera camera;
-	t_float3 light;
+	//t_float3 light;
 	t_object *objects;
 	t_box *bvh;
 	t_box *bvh_debug;

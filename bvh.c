@@ -154,6 +154,7 @@ t_box AABB_from_sphere(t_object *sphere)
 	box.object = sphere;
 	box.children_count = 0;
 	box.children = NULL;
+	print_box(&box);
 	return box;					
 }
 
