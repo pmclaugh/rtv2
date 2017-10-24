@@ -9,7 +9,7 @@ t_object *new_simple_triangle(t_float3 vertex0, t_float3 vertex1, t_float3 verte
 	triangle->normal = vertex1;
 	triangle->corner = vertex2;
 	triangle->color = color;
-	triangle->emission = 0.0;
+	triangle->emission = 1.0;
 
 	return triangle;
 }
@@ -91,7 +91,7 @@ t_import load_file(int ac, char **av)
 		}
 		if (type[0] == 'f')
 		{
-			t_object *this = new_simple_triangle(verts[(int)x - 1], verts[(int)y - 1], verts[(int)z - 1], GREEN);
+			t_object *this = new_simple_triangle(verts[(int)x - 1], verts[(int)y - 1], verts[(int)z - 1], WHITE);
 			this->next = list;
 			if (list == NULL)
 				tail = this;

@@ -145,3 +145,6 @@ float max3(float a, float b, float c);
 float min3(float a, float b, float c);
 
 t_float3 *simple_render(const t_scene *scene, const int xres, const int yres);
+
+float rand_unit();
+t_float3 hemisphere();

@@ -12,11 +12,11 @@
 #define H_FOV M_PI_2 * 60.0 / 90.0 	//60 degrees. eventually this will be dynamic with aspect
 									// V_FOV is implicit with aspect of view-plane
 
-t_ray *rays_from_camera(t_camera camera, int xres, int yres)
+t_ray **rays_from_camera(t_camera camera, int xres, int yres, int spp)
 {
 	//xres and yres will likely end up in some struct.
 
-	t_ray *rays = calloc(xres * yres, sizeof(t_ray));
+	t_ray **rays = calloc(xres * yres, sizeof(t_ray *));
 
 	//determine a focus point in front of the view-plane
 	//such that the edge-focus-edge vertex has angle H_FOV
@@ -44,7 +44,13 @@ t_ray *rays_from_camera(t_camera camera, int xres, int yres)
 		t_float3 from = origin;
 		for (int x = 0; x < xres; x++)
 		{
-			rays[y * xres + x] = (t_ray){focus, unit_vec(vec_sub(focus, from)), BLACK, vec_inv(unit_vec(vec_sub(focus, from)))};
+			rays[y * xres + x] = malloc(spp * sizeof(t_ray));
+			for (int s = 0; s < spp; s++)
+			{
+				t_float3 fuzzed = vec_add(from, vec_scale(delta_x, rand_unit() - 0.5));
+				fuzzed = vec_add(fuzzed, vec_scale(delta_y, rand_unit() - 0.5));
+				rays[y * xres + x][s] = (t_ray){focus, unit_vec(vec_sub(focus, fuzzed)), BLACK, vec_inv(unit_vec(vec_sub(focus, fuzzed)))};
+			}
 			from = vec_add(from, delta_x);
 		}
 		origin = vec_add(origin, delta_y);
@@ -53,7 +59,7 @@ t_ray *rays_from_camera(t_camera camera, int xres, int yres)
 	return (rays);
 }
 
-#define REFLECTIVE 0.5
+#define REFLECTIVE 0.9
 #define DIFFUSE 0.8
 
 void trace(t_ray *ray, const t_scene *scene, int depth)
@@ -78,30 +84,15 @@ void trace(t_ray *ray, const t_scene *scene, int depth)
 	t_float3 intersection = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
 	ray->origin = intersection;
 	t_float3 N = norm_object(closest_object, ray);
-
-	// // Diffuse BRDF - choose an outgoing direction with hemisphere sampling.
-	// if(intersection.object->type == 1) {
-	// 	Vec rotX, rotY;
-	// 	ons(N, rotX, rotY);
-	// 	Vec sampledDir = hemisphere(RND2,RND2);
-	// 	Vec rotatedDir;
-	// 	rotatedDir.x = Vec(rotX.x, rotY.x, N.x).dot(sampledDir);
-	// 	rotatedDir.y = Vec(rotX.y, rotY.y, N.y).dot(sampledDir);
-	// 	rotatedDir.z = Vec(rotX.z, rotY.z, N.z).dot(sampledDir);
-	// 	ray.d = rotatedDir;	// already normalized
-	// 	double cost=ray.d.dot(N);
-	// 	Vec tmp;
-	// 	trace(ray,scene,depth+1,tmp,params,hal,hal2);
-	// 	clr = clr + (tmp.mult(intersection.object->cl)) * cost * 0.1 * rrFactor;
-	// }
 	
 	ray->direction = bounce(ray->direction, N);
 	ray->inv_dir = vec_inv(ray->direction);
 
 	float emission = closest_object->emission;
-	trace(ray, scene, depth + 1);
+	if (emission == 0.0)
+		trace(ray, scene, depth + 1);
 	
-	ray->color = vec_add(ray->color, (t_float3){emission, emission, emission});
+	ray->color = vec_add(ray->color, vec_scale(closest_object->color, emission));
 	ray->color = vec_scale(ray->color, REFLECTIVE);
 	ray->color.x = fmax(0.0, fmin(1.0, ray->color.x));
 	ray->color.y = fmax(0.0, fmin(1.0, ray->color.y));
@@ -112,19 +103,21 @@ t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 {
 	clock_t start, end;
 	start = clock();
-	int spp = 100;
+	int spp = 16;
 	t_float3 *pixels = calloc(xres * yres, sizeof(t_float3));
-	t_ray *rays = rays_from_camera(scene->camera, xres, yres);
+	t_ray **rays = rays_from_camera(scene->camera, xres, yres, spp);
 	for (int y = 0; y < yres; y++)
 		for (int x = 0; x < xres; x++)
 			for (int s = 0; s < spp; s++)
 			{
-				trace(&(rays[y * xres + x]), scene, 0);
-				pixels[y * xres + x] = vec_scale(rays[y * xres + x].color, 1 / (float)spp);
+				trace(&(rays[y * xres + x][s]), scene, 0);
+				pixels[y * xres + x] = vec_add(pixels[y * xres + x], vec_scale(rays[y * xres + x][s].color, 1 / (float)spp));
 			}
 	end = clock();
 	double cpu_time = ((double) (end - start)) / CLOCKS_PER_SEC;
 	printf("trace time %lf sec, %lf FPS\n", cpu_time, 1.0 / cpu_time);
+	for (int i = 0; i < xres * yres; i++)
+		free(rays[i]);
 	free(rays);
 	return pixels;
 }
