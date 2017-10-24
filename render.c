@@ -53,76 +53,11 @@ t_ray *rays_from_camera(t_camera camera, int xres, int yres)
 	return (rays);
 }
 
-// typedef struct s_ray
-// {
-// 	t_float3 origin;
-// 	t_float3 direction;
-// 	t_float3 color;
-// 	t_float3 inv_dir;
-// }				t_ray;
-
-// //using a point light for simplicity for now
-// t_float3 clear_shot(const t_float3 point, const t_float3 N, const t_scene *scene)
-// {
-// 	//is there a clear shot from this point to the light? (note need to move point slightly off surface)
-// 	t_float3 offset = vec_add(point, vec_scale(N, ERROR));
-// 	t_ray L;
-// 	L.origin = offset;
-// 	L.direction = unit_vec(vec_sub(scene->light, point));
-// 	L.color = WHITE;
-// 	L.inv_dir = vec_inv(L.direction);
-// 	if (hit(&L, scene, 0) && dist(L.origin, point) < dist(point, scene->light))
-// 		return (t_float3){0, 0, 0};
-// 	else
-// 		return L.direction;
-// }
-
-// int hit(t_ray *ray, const t_scene *scene, int do_shade)
-// {
-// 	//printf("hit start\n");
-// 	// the goal of hit() is to check against all objects in the scene for intersection with Ray.
-// 	// returns 1/0 for hit/miss, stores resulting bounced ray in out.
-
-// 	t_float3 closest;
-// 	float closest_dist = FLT_MAX;
-// 	t_object *closest_object = NULL;
-// 	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist);
-
-// 	if (closest_object == NULL)
-// 		return 0;
-
-// 	closest = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
-// 	ray->origin = closest;
-// 	if (!do_shade)
-// 		return (1);
-// 	//normal at collision point
-// 	t_float3 N = norm_object(closest_object, ray);
-// 	//vector to light source (0,0,0 if no line)
-// 	t_float3 L = clear_shot(closest, N, scene);
-// 	//vector to camera
-// 	t_float3 V = vec_rev(ray->direction);
-// 	//reflected light ray
-// 	t_float3 R = bounce(vec_rev(L), N);
-
-// 	float ambient = Ia * ka;
-// 	float diffuse = kd * dot(L, N);
-// 	float specular = pow(ks * dot(V, R), 10);
-
-// 	float illumination = ambient + diffuse + specular;
-
-// 	illumination /= (ka + kd + ks);
-
-// 	t_float3 dir = bounce(ray->direction, N);
-// 	*ray = (t_ray){closest, dir, vec_scale(closest_object->color, illumination), vec_inv(dir)};
-
-// 	return (1);
-// }
-
-#define reflective 0.7
+#define REFLECTIVE 0.95
 
 void trace(t_ray *ray, const t_scene *scene, int depth)
 {
-	if (depth > 30)
+	if (depth > 10)
 	{
 		ray->color = BLACK;
 		return ;
@@ -137,20 +72,24 @@ void trace(t_ray *ray, const t_scene *scene, int depth)
 		ray->color = BLACK;
 		return;
 	}
-	//printf("hit a thing\n");
 
 
 	t_float3 intersection = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
-	//normal at collision point
 	ray->origin = intersection;
 	t_float3 N = norm_object(closest_object, ray);
 	
 	ray->direction = bounce(ray->direction, N);
 	ray->inv_dir = vec_inv(ray->direction);
 
-	trace(ray, scene, depth + 1);
 	float emission = closest_object->emission;
+	if (emission == 0.0)
+		trace(ray, scene, depth + 1);
+	
 	ray->color = vec_add(ray->color, (t_float3){emission, emission, emission});
+	ray->color = vec_scale(ray->color, REFLECTIVE);
+	ray->color.x = fmax(0.0, fmin(1.0, ray->color.x));
+	ray->color.y = fmax(0.0, fmin(1.0, ray->color.y));
+	ray->color.z = fmax(0.0, fmin(1.0, ray->color.z));
 }
 
 t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)

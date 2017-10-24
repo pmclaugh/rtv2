@@ -154,7 +154,6 @@ t_box AABB_from_sphere(t_object *sphere)
 	box.object = sphere;
 	box.children_count = 0;
 	box.children = NULL;
-	print_box(&box);
 	return box;					
 }
 
@@ -327,6 +326,7 @@ void make_bvh(t_scene *scene)
 
 	scene->bvh = root;
 	printf("max depth %d boxcount %d\n", g_maxdepth, g_boxcount);
+	print_box(root);
 	free(boxes);
 	free(work_array);
 }
