@@ -7,6 +7,60 @@
 
 #define Ia 1
 
+
+
+#define H_FOV M_PI_2 * 60.0 / 90.0 	//60 degrees. eventually this will be dynamic with aspect
+									// V_FOV is implicit with aspect of view-plane
+
+t_ray *rays_from_camera(t_camera camera, int xres, int yres)
+{
+	//xres and yres will likely end up in some struct.
+
+	t_ray *rays = calloc(xres * yres, sizeof(t_ray));
+
+	//determine a focus point in front of the view-plane
+	//such that the edge-focus-edge vertex has angle H_FOV
+	float d = (camera.width / 2.0) / tan(H_FOV / 2.0);
+	t_float3 focus = vec_add(camera.center, vec_scale(camera.normal, d));
+
+	//now i need unit vectors on the plane
+	t_3x3 camera_matrix = rotation_matrix(UNIT_Z, camera.normal);
+	t_float3 camera_x, camera_y;
+	camera_x = mat_vec_mult(camera_matrix, UNIT_X);
+	camera_y = mat_vec_mult(camera_matrix, UNIT_Y);
+
+	//pixel deltas
+	t_float3 delta_x, delta_y;
+	delta_x = vec_scale(camera_x, camera.width / (float)xres);
+	delta_y = vec_scale(camera_y, camera.height / (float)yres);
+
+	//start at bottom corner (the plane's "origin")
+	t_float3 origin = camera.center;
+	origin = vec_sub(origin, vec_scale(camera_x, camera.width / 2.0));
+	origin = vec_sub(origin, vec_scale(camera_y, camera.height / 2.0));
+
+	for (int y = 0; y < yres; y++)
+	{
+		t_float3 from = origin;
+		for (int x = 0; x < xres; x++)
+		{
+			rays[y * xres + x] = (t_ray){focus, unit_vec(vec_sub(focus, from)), WHITE, vec_inv(unit_vec(vec_sub(focus, from)))};
+			from = vec_add(from, delta_x);
+		}
+		origin = vec_add(origin, delta_y);
+	}
+
+	return (rays);
+}
+
+// typedef struct s_ray
+// {
+// 	t_float3 origin;
+// 	t_float3 direction;
+// 	t_float3 color;
+// 	t_float3 inv_dir;
+// }				t_ray;
+
 //using a point light for simplicity for now
 t_float3 clear_shot(const t_float3 point, const t_float3 N, const t_scene *scene)
 {
@@ -64,48 +118,29 @@ int hit(t_ray *ray, const t_scene *scene, int do_shade)
 	return (1);
 }
 
-#define H_FOV M_PI_2 * 60.0 / 90.0 	//60 degrees. eventually this will be dynamic with aspect
-									// V_FOV is implicit with aspect of view-plane
-
-t_ray *rays_from_camera(t_plane camera, int xres, int yres)
+void new_hit(t_ray *ray, const t_scene *scene, int depth)
 {
-	//xres and yres will likely end up in some struct.
-
-	t_ray *rays = calloc(xres * yres, sizeof(t_ray));
-
-	//determine a focus point in front of the view-plane
-	//such that the edge-focus-edge vertex has angle H_FOV
-	float d = (camera.width / 2.0) / tan(H_FOV / 2.0);
-	t_float3 focus = vec_add(camera.center, vec_scale(camera.normal, d));
-
-	//now i need unit vectors on the plane
-	t_3x3 camera_matrix = rotation_matrix(UNIT_Z, camera.normal);
-	t_float3 camera_x, camera_y;
-	camera_x = mat_vec_mult(camera_matrix, UNIT_X);
-	camera_y = mat_vec_mult(camera_matrix, UNIT_Y);
-
-	//pixel deltas
-	t_float3 delta_x, delta_y;
-	delta_x = vec_scale(camera_x, camera.width / (float)xres);
-	delta_y = vec_scale(camera_y, camera.height / (float)yres);
-
-	//start at bottom corner (the plane's "origin")
-	t_float3 origin = camera.center;
-	origin = vec_sub(origin, vec_scale(camera_x, camera.width / 2.0));
-	origin = vec_sub(origin, vec_scale(camera_y, camera.height / 2.0));
-
-	for (int y = 0; y < yres; y++)
+	if (depth > 10)
 	{
-		t_float3 from = origin;
-		for (int x = 0; x < xres; x++)
-		{
-			rays[y * xres + x] = (t_ray){focus, unit_vec(vec_sub(focus, from)), WHITE, vec_inv(unit_vec(vec_sub(focus, from)))};
-			from = vec_add(from, delta_x);
-		}
-		origin = vec_add(origin, delta_y);
+		ray->color = BLACK;
+		return ;
 	}
 
-	return (rays);
+	float closest_dist = FLT_MAX;
+	t_object *closest_object = NULL;
+	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist);
+
+	if (closest_object == NULL)
+	{
+		ray->color = BLACK;
+		return;
+	}
+
+	t_float3 intersection = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
+	//normal at collision point
+	t_float3 N = norm_object(closest_object, ray);
+	ray->origin = vec_add(intersection, vec_scale(N, ERROR));
+
 }
 
 t_float3 trace(t_ray *ray, const t_scene *scene)
@@ -142,135 +177,12 @@ t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 	return pixels;
 }
 
-#define xdim 1000
-#define ydim 1000
-
-typedef struct s_param
-{
-	void *mlx;
-	void *win;
-	void *img;
-	int x;
-	int y;
-	t_scene *scene;
-}				t_param;
-
-#define rot_angle M_PI_2 * 4.0 / 90.0
-
-int loop_hook(void *param)
-{
-	t_param *p = (t_param *)param;
-
-	t_float3 *pixels = simple_render(p->scene, p->x, p->y);
-	draw_pixels(p->img, p->x, p->y, pixels);
-	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
-	free(pixels);
-	//p->scene->camera.center = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.center);
-	//p->scene->camera.normal = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.normal);
-	p->scene->light = angle_axis_rot(rot_angle, UNIT_Y, p->scene->light);
-	return (1);
-}
-
-int key_hook(int keycode, void *param)
-{
-	t_param *p = (t_param *)param;
-
-	if (keycode == 12)
-	{
-		mlx_destroy_image(p->mlx, p->img);
-		mlx_destroy_window(p->mlx, p->win);
-		exit(0);
-	}
-	return (1);
-}
-
-int main(int ac, char **av)
-{
-
-	t_scene *scene = calloc(1, sizeof(t_scene));
-
-	t_import import;
-
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){0, 0, 0});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){1, 0, 0});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){1, 1, 0});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){1, 1, 1});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){0, 1, 0});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){0, 1, 1});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){0, 0, 1});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){1, 0, 1});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	
-	// new_plane(scene, (t_float3){0, 0, 100}, (t_float3){0, 0, -1}, (t_float3){100, 100, 0}, WHITE);
-	// new_plane(scene, (t_float3){-100, 0, 0}, (t_float3){1, 0, 0}, (t_float3){0, 100, 100}, WHITE);
-	// new_plane(scene, (t_float3){100, 0, 0}, (t_float3){-1, 0, 0}, (t_float3){0, 100, 100}, WHITE);
-	// new_plane(scene, (t_float3){0, 100, 0}, (t_float3){0, -1, 0}, (t_float3){100, 0, 100}, WHITE);
-	// new_plane(scene, (t_float3){0, -100, 0}, (t_float3){0, 1, 0}, (t_float3){100, 0, 100}, WHITE);
-
-	for (int i = 1; i < 10; i++)
-		for (int j = 1; j < 10; j++)
-			for (int k = 1; k < 10; k++)
-				new_sphere(scene, i * 5, j * 5, k * 5, 3, BLUE);
-	// new_sphere(scene, -2, -4, 0, 1, GREEN);
-	//new_sphere(scene, -1, -1, 0, 1, RED);
-
-	// new_triangle(scene, (t_float3){-1, 0, 3}, (t_float3){1, 0, 3}, (t_float3){0, 2, 3}, BLUE);
-
-	make_bvh(scene);
-
-
-
-	scene->camera = (t_plane){	(t_float3){6, 6, -30},
-								(t_float3){0, 0, 1},
-								1.0,
-								1.0};
-
-	scene->light = (t_float3){0, 8, -10};
-
-	void *mlx = mlx_init();
-	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
-	void *img = mlx_new_image(mlx, xdim, ydim);
-	t_float3 *pixels = simple_render(scene, xdim, ydim);
-	draw_pixels(img, xdim, ydim, pixels);
-	mlx_put_image_to_window(mlx, win, img, 0, 0);
-
-	t_param *param = calloc(1, sizeof(t_param));
-	*param = (t_param){mlx, win, img, xdim, ydim, scene};
-
-	//mlx_loop_hook(mlx, loop_hook, param);
-	
-	mlx_key_hook(win, key_hook, param);
-	mlx_loop(mlx);
-
-}
+/*
+notes:
+	should fix planes and spheres asap
+		-I should do this before making major changes it's going to get way harder to fix later
+	next milestone:
+		lights are solid objects
+		rewrite trace/hit for recursive
+		better implementation of color
+*/

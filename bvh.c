@@ -159,13 +159,12 @@ t_box AABB_from_sphere(t_object *sphere)
 
 t_box AABB_from_plane(t_object *plane)
 {
+	printf("AABB_from_plane\n");
 	t_box box;
+	box.max = plane->corner;
 	box.mid = plane->position;
-	box.max = vec_add(plane->position, plane->corner);
-	box.max.x += 1;
-	box.max.y += 1;
-	box.max.z += 1;
-	box.min = vec_sub(plane->position, plane->corner);
+	box.min = vec_add(plane->position, vec_sub(plane->position, plane->corner));
+
 	box.object = plane;
 	box.children_count = 0;
 	box.children = NULL;
@@ -214,6 +213,7 @@ t_box BB_from_boxes(t_box *boxes, int count)
 	}
 
 	t_box box;
+
 	box.min = (t_float3){min_x, min_y, min_z};
 	box.max = (t_float3){max_x, max_y, max_z};
 	box.mid = (t_float3){	(box.max.x + box.min.x) / 2,
@@ -258,11 +258,15 @@ void tree_down(t_box *boxes, int box_count, t_box *parent, t_box *work_array, in
 		if (counts[i] == 0)
 			continue ;
 		else if (counts[i] == 1)
+		{
 			children[child_ind] = boxes[start];
+
+		}
 		else if (counts[i] == 2 && vec_equ(boxes[0].mid, boxes[1].mid))
 		{
-			printf("dupe cancel\n");
-			children[child_ind] = boxes[start];
+			printf("dupe fudge\n");
+			children[child_ind++] = boxes[start];
+			children[child_ind] = boxes[start + 1];
 		}
 		else
 		{

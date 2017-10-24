@@ -40,14 +40,14 @@ typedef struct s_3x3
 	t_float3 row3;
 }				t_3x3;
 
-typedef struct s_plane
+typedef struct s_camera
 {
 	//keep this and turn it into t_camera
 	t_float3 center;
 	t_float3 normal;
 	float width;
 	float height; 
-}				t_plane;
+}				t_camera;
 
 typedef struct s_object
 {
@@ -80,7 +80,7 @@ typedef struct s_box
 
 typedef struct s_scene
 {
-	t_plane camera;
+	t_camera camera;
 	t_float3 light;
 	t_object *objects;
 	t_box *bvh;
@@ -142,3 +142,5 @@ void unit_scale(t_import import, t_float3 offset);
 
 float max3(float a, float b, float c);
 float min3(float a, float b, float c);
+
+t_float3 *simple_render(const t_scene *scene, const int xres, const int yres);

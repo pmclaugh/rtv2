@@ -22,7 +22,7 @@ void unit_scale(t_import import, t_float3 offset)
 	t_object *obj = import.head;
 
 	//for testing the negative problem
-	offset = vec_scale(offset, -1.0);
+	//offset = vec_scale(offset, -1.0);
 
 	while (obj)
 	{

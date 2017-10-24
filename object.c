@@ -22,17 +22,10 @@ void new_sphere(t_scene *scene, float x, float y, float z, float r, t_float3 col
 	scene->objects = sphere;
 }
 
-void new_plane(t_scene *scene, t_float3 center, t_float3 normal, t_float3 corner, t_float3 color)
+void new_plane(t_scene *scene, t_float3 corner_A, t_float3 corner_B, t_float3 corner_C, t_float3 color)
 {
-	t_object *plane = calloc(1, sizeof(t_object));
-	plane->shape = PLANE;
-	plane->position = center;
-	plane->normal = normal;
-	plane->corner = corner;
-	plane->color = color;
-
-	plane->next = scene->objects;
-	scene->objects = plane;
+	new_triangle(scene, corner_A, corner_B, corner_C, color);
+	new_triangle(scene, corner_A, vec_sub(corner_C, vec_sub(corner_B, corner_A)), corner_C, color);
 }
 
 void new_cylinder(t_scene *scene, t_float3 center, t_float3 radius, t_float3 extent, t_float3 color)
@@ -108,9 +101,9 @@ int intersect_plane(const t_ray *ray, const t_object *plane, float *d)
 	//above intersects an infinite plane, now we take bounds into consideration
 	t_float3 bound = vec_sub(plane->position, plane->corner);
 	
-	if (fabs(intersection.x) <= fabs(bound.x) + ERROR &&
-		fabs(intersection.y) <= fabs(bound.y) + ERROR &&
-		fabs(intersection.z) <= fabs(bound.z) + ERROR)
+	if (fabs(intersection.x - plane->position.x) <= fabs(bound.x) + ERROR &&
+		fabs(intersection.y - plane->position.y) <= fabs(bound.y) + ERROR &&
+		fabs(intersection.z - plane->position.z) <= fabs(bound.z) + ERROR)
 			{
 				*d = t;
 				return (1);
