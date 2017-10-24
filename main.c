@@ -49,14 +49,16 @@ int key_hook(int keycode, void *param)
 int main(int ac, char **av)
 {
 
+	srand(time(NULL));
+
 	t_scene *scene = calloc(1, sizeof(t_scene));
 
-	t_import import;
+	// t_import import;
 
-	import = load_file(ac, av);
-	unit_scale(import, (t_float3){1, 1, 0});
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av);
+	// unit_scale(import, (t_float3){1, 1, 0});
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
 	t_float3 left_bot_back = (t_float3){-1 * ROOMSIZE / 2, -1 * ROOMSIZE / 2, -1 *ROOMSIZE / 2};
 	t_float3 left_bot_front = (t_float3){-1 * ROOMSIZE / 2, -1 * ROOMSIZE / 2, ROOMSIZE / 2};
@@ -68,18 +70,18 @@ int main(int ac, char **av)
 	t_float3 right_top_front = (t_float3){ROOMSIZE / 2, ROOMSIZE / 2, ROOMSIZE / 2};
 
 	new_plane(scene, left_bot_back, left_bot_front, left_top_front, WHITE); //left wall
-	//new_plane(scene, left_bot_back, right_bot_back, right_top_back, WHITE); // back wall
+	new_plane(scene, left_bot_back, right_bot_back, right_top_back, WHITE); // back wall
 	new_plane(scene, left_bot_back, left_bot_front, right_bot_front, WHITE); // floor
 	new_plane(scene, right_bot_back, right_bot_front, right_top_front, WHITE); //right wall
 	new_plane(scene, left_top_front, right_top_front, right_top_back, WHITE); //ceiling
 	new_plane(scene, left_bot_front, left_top_front, right_top_front, WHITE); //front wall
 
-	new_sphere(scene, 0, 4, 0, 0.5, WHITE);
+	new_sphere(scene, 0, 0, 0, 0.5, WHITE);
 	scene->objects->emission = 1.0;
 
 	make_bvh(scene);
 
-	scene->camera = (t_camera){	(t_float3){0, 0, -5},
+	scene->camera = (t_camera){	(t_float3){0, 0, -4},
 								(t_float3){0, 0, 1},
 								1.0,
 								1.0};

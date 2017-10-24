@@ -16,7 +16,7 @@
 #define UNIT_Y (t_float3){0, 1, 0}
 #define UNIT_Z (t_float3){0, 0, 1}
 
-#define ERROR 1e-6
+#define ERROR 1e-4
 
 #define BLACK (t_float3){0.0, 0.0, 0.0}
 #define RED (t_float3){1.0, 0.0, 0.0}

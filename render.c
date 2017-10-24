@@ -53,7 +53,8 @@ t_ray *rays_from_camera(t_camera camera, int xres, int yres)
 	return (rays);
 }
 
-#define REFLECTIVE 0.95
+#define REFLECTIVE 0.5
+#define DIFFUSE 0.8
 
 void trace(t_ray *ray, const t_scene *scene, int depth)
 {
@@ -77,13 +78,28 @@ void trace(t_ray *ray, const t_scene *scene, int depth)
 	t_float3 intersection = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
 	ray->origin = intersection;
 	t_float3 N = norm_object(closest_object, ray);
+
+	// // Diffuse BRDF - choose an outgoing direction with hemisphere sampling.
+	// if(intersection.object->type == 1) {
+	// 	Vec rotX, rotY;
+	// 	ons(N, rotX, rotY);
+	// 	Vec sampledDir = hemisphere(RND2,RND2);
+	// 	Vec rotatedDir;
+	// 	rotatedDir.x = Vec(rotX.x, rotY.x, N.x).dot(sampledDir);
+	// 	rotatedDir.y = Vec(rotX.y, rotY.y, N.y).dot(sampledDir);
+	// 	rotatedDir.z = Vec(rotX.z, rotY.z, N.z).dot(sampledDir);
+	// 	ray.d = rotatedDir;	// already normalized
+	// 	double cost=ray.d.dot(N);
+	// 	Vec tmp;
+	// 	trace(ray,scene,depth+1,tmp,params,hal,hal2);
+	// 	clr = clr + (tmp.mult(intersection.object->cl)) * cost * 0.1 * rrFactor;
+	// }
 	
 	ray->direction = bounce(ray->direction, N);
 	ray->inv_dir = vec_inv(ray->direction);
 
 	float emission = closest_object->emission;
-	if (emission == 0.0)
-		trace(ray, scene, depth + 1);
+	trace(ray, scene, depth + 1);
 	
 	ray->color = vec_add(ray->color, (t_float3){emission, emission, emission});
 	ray->color = vec_scale(ray->color, REFLECTIVE);
@@ -96,16 +112,16 @@ t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 {
 	clock_t start, end;
 	start = clock();
+	int spp = 100;
 	t_float3 *pixels = calloc(xres * yres, sizeof(t_float3));
 	t_ray *rays = rays_from_camera(scene->camera, xres, yres);
 	for (int y = 0; y < yres; y++)
 		for (int x = 0; x < xres; x++)
-		{
-			//printf("tracing\n");
-			trace(&(rays[y * xres + x]), scene, 0);
-			pixels[y * xres + x] = rays[y * xres + x].color;
-			//printf("traced\n");
-		}
+			for (int s = 0; s < spp; s++)
+			{
+				trace(&(rays[y * xres + x]), scene, 0);
+				pixels[y * xres + x] = vec_scale(rays[y * xres + x].color, 1 / (float)spp);
+			}
 	end = clock();
 	double cpu_time = ((double) (end - start)) / CLOCKS_PER_SEC;
 	printf("trace time %lf sec, %lf FPS\n", cpu_time, 1.0 / cpu_time);
@@ -115,10 +131,5 @@ t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 
 /*
 notes:
-	should fix planes and spheres asap
-		-I should do this before making major changes it's going to get way harder to fix later
-	next milestone:
-		lights are solid objects
-		rewrite trace/hit for recursive
-		better implementation of color
+	need to revise camera and ray generation stuff for MC, going to actually revert to simpler implementation to ensure it's right
 */
