@@ -7,7 +7,7 @@
 
 #define Ia 1
 
-
+#define FUZZ (rand_unit() - 0.5) / 400.0
 
 #define H_FOV M_PI_2 * 60.0 / 90.0 	//60 degrees. eventually this will be dynamic with aspect
 									// V_FOV is implicit with aspect of view-plane
@@ -47,7 +47,6 @@ void init_camera(t_camera *camera, int xres, int yres)
 	camera->origin = vec_sub(camera->origin, vec_scale(camera_y, camera->height / 2.0));
 }
 
-#define REFLECTIVE 1
 #define DIFFUSE 0.8
 
 void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
@@ -55,15 +54,14 @@ void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
 	// printf("now tracing ray:\n");
 	// print_ray(*ray);
 	float rrFactor = 1.0;
-	if (depth >= 10)
+	if(depth > 20)
+		return ; //this is mathematically bad, but good while testing
+	if (depth >= 5)
 	{
 		float stop_prob = 0.1;
 		if (rand_unit() <= stop_prob)
-		{
-			//printf("dead after %d bounces\n", depth);
 			return;
-		}
-		//rrFactor = 1.0 / (1.0 - stop_prob);
+		rrFactor = 1.0 / (1.0 - stop_prob);
 	}
 
 	float closest_dist = FLT_MAX;
@@ -71,59 +69,46 @@ void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
 	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist);
 
 	if (closest_object == NULL)
-	{
-		//printf("did not hit anything\n");
 		return;
-	}
-	//printf("travelled %2.2f distance and hit a thing\n", closest_dist);
-	//print_object(closest_object);
 
 	t_float3 intersection = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
 	ray->origin = intersection;
 	t_float3 N = norm_object(closest_object, ray);
-	ray->origin = vec_add(ray->origin, vec_scale(N, 5 * ERROR));
+	
 
 	float emission = closest_object->emission;
 	*color = vec_add(*color, (t_float3){emission * rrFactor, emission * rrFactor, emission * rrFactor});
 
-	// //diffuse reflection
-	// t_float3 hem_x, hem_y;
-	// orthonormal(N, &hem_x, &hem_y);
-	// t_float3 rand_dir = hemisphere();
-	// t_float3 rotated_dir;
-	// rotated_dir.x = dot(rand_dir, (t_float3){hem_x.x, hem_y.x, N.x});
-	// rotated_dir.y = dot(rand_dir, (t_float3){hem_x.y, hem_y.y, N.y});
-	// rotated_dir.z = dot(rand_dir, (t_float3){hem_x.z, hem_y.z, N.z});
-	// ray->direction = unit_vec(rotated_dir);
-	// ray->inv_dir = vec_inv(ray->direction);
-	// float cost = dot(ray->direction, N);
-	
-
-	ray->direction = bounce(ray->direction, N);
+	//diffuse reflection
+	t_float3 hem_x, hem_y;
+	orthonormal(N, &hem_x, &hem_y);
+	t_float3 rand_dir = hemisphere();
+	t_float3 rotated_dir;
+	rotated_dir.x = dot(rand_dir, (t_float3){hem_x.x, hem_y.x, N.x});
+	rotated_dir.y = dot(rand_dir, (t_float3){hem_x.y, hem_y.y, N.y});
+	rotated_dir.z = dot(rand_dir, (t_float3){hem_x.z, hem_y.z, N.z});
+	ray->direction = unit_vec(rotated_dir);
+	ray->inv_dir = vec_inv(ray->direction);
+	float cost = dot(ray->direction, N);
 
 	t_float3 tmp = BLACK;
 	trace(ray, &tmp, scene, depth + 1);
-	*color = vec_add(*color, vec_scale(tmp, rrFactor));
+	*color = vec_add(*color, vec_scale(vec_had(tmp, closest_object->color), cost * DIFFUSE * rrFactor));
 }
 
 t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 {
 	clock_t start, end;
 	start = clock();
-	int spp = 40;
+	int spp = 4000;
 	t_float3 *pixels = calloc(xres * yres, sizeof(t_float3));
-	print_vec(scene->camera.d_x);
-	print_vec(scene->camera.d_y);
-	print_vec(scene->camera.center);
-	print_vec(scene->camera.origin);
-	print_vec(scene->camera.focus);
 	for (int y = 0; y < yres; y++)
 	{
 		for (int x = 0; x < xres; x++)
 		{
 			for (int s = 0; s < spp; s++)
 			{
-				t_ray r = ray_from_camera(scene->camera, (float)x + rand_unit() - 0.5, (float)y + rand_unit() - 0.5);
+				t_ray r = ray_from_camera(scene->camera, (float)x + FUZZ, (float)y + FUZZ);
 				t_float3 c = BLACK;
 				trace(&r, &c, scene, 0);
 				pixels[y * xres + x] = vec_add(pixels[y * xres + x], vec_scale(c, 1.0 / (float)spp));
@@ -147,8 +132,3 @@ void debug_render(const t_scene *scene, int x, int xres, int y, int yres)
 	printf("done, output color is \n");
 	print_vec(c);
 }
-
-/*
-notes:
-	need to revise camera and ray generation stuff for MC, going to actually revert to simpler implementation to ensure it's right
-*/

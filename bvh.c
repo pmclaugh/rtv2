@@ -92,11 +92,11 @@ int intersect_box(const t_ray *ray, const t_box *box, float *t)
 
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
-	if (tmin < ERROR && tmax < ERROR)
+	if (tmin <= 0.0 && tmax <= 0.0)
 		return (0);
 	if (t)
 	{
-		if (tmin > ERROR)
+		if (tmin > 0.0)
 			*t = tmin;
 		else
 			*t = tmax;

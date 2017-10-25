@@ -1,7 +1,7 @@
 #include "rt.h"
 
-#define xdim 1000
-#define ydim 1000
+#define xdim 800
+#define ydim 800
 
 typedef struct s_param
 {
@@ -44,7 +44,7 @@ int key_hook(int keycode, void *param)
 	return (1);
 }
 
-#define ROOMSIZE 10.0
+#define ROOMSIZE 8.0
 
 int main(int ac, char **av)
 {
@@ -68,20 +68,20 @@ int main(int ac, char **av)
 	t_float3 right_top_back = (t_float3){ROOMSIZE / 2, ROOMSIZE / 2, -1 *ROOMSIZE / 2};
 	t_float3 right_top_front = (t_float3){ROOMSIZE / 2, ROOMSIZE / 2, ROOMSIZE / 2};
 
-	new_plane(scene, left_bot_back, left_bot_front, left_top_front, WHITE); //left wall
-	new_plane(scene, left_bot_back, right_bot_back, right_top_back, WHITE); // front wall
+	new_plane(scene, left_bot_back, left_bot_front, left_top_front, RED); //left wall
+	//new_plane(scene, left_bot_back, right_bot_back, right_top_back, WHITE); // front wall
 	new_plane(scene, left_bot_back, left_bot_front, right_bot_front, WHITE); // floor
-	new_plane(scene, right_bot_back, right_bot_front, right_top_front, WHITE); //right wall
-	new_plane(scene, left_top_front, right_top_front, right_top_back, WHITE); //ceiling
+	new_plane(scene, right_bot_back, right_bot_front, right_top_front, GREEN); //right wall
+	new_plane(scene, left_top_front, right_top_front, right_top_back, RED); //ceiling
 	new_plane(scene, left_bot_front, left_top_front, right_top_front, WHITE); //back wall
 
-	new_sphere(scene, 0, 0, 0, 0.5, WHITE);
+	new_sphere(scene, 0, 2, 0, 1.0, WHITE);
 
 	make_bvh(scene);
 
 
 	t_camera cam;
-	cam.center = (t_float3){0, 0, -4};
+	cam.center = (t_float3){0, 0, -8};
 	cam.normal = (t_float3){0, 0, 1};
 	cam.width = 1.0;
 	cam.height = 1.0;
