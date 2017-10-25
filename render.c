@@ -7,7 +7,7 @@
 
 #define Ia 1
 
-#define FUZZ (rand_unit() - 0.5) / 400.0
+#define FUZZ rand_unit() / 700.0
 
 #define H_FOV M_PI_2 * 60.0 / 90.0 	//60 degrees. eventually this will be dynamic with aspect
 									// V_FOV is implicit with aspect of view-plane
@@ -47,12 +47,10 @@ void init_camera(t_camera *camera, int xres, int yres)
 	camera->origin = vec_sub(camera->origin, vec_scale(camera_y, camera->height / 2.0));
 }
 
-#define DIFFUSE 0.8
+#define DIFFUSE 0.6
 
 void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
 {
-	// printf("now tracing ray:\n");
-	// print_ray(*ray);
 	float rrFactor = 1.0;
 	if(depth > 20)
 		return ; //this is mathematically bad, but good while testing
@@ -82,7 +80,7 @@ void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
 	//diffuse reflection
 	t_float3 hem_x, hem_y;
 	orthonormal(N, &hem_x, &hem_y);
-	t_float3 rand_dir = hemisphere();
+	t_float3 rand_dir = better_hemisphere(rand_unit(), rand_unit());
 	t_float3 rotated_dir;
 	rotated_dir.x = dot(rand_dir, (t_float3){hem_x.x, hem_y.x, N.x});
 	rotated_dir.y = dot(rand_dir, (t_float3){hem_x.y, hem_y.y, N.y});
@@ -100,12 +98,16 @@ t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 {
 	clock_t start, end;
 	start = clock();
-	int spp = 4000;
+	int spp = 20;
 	t_float3 *pixels = calloc(xres * yres, sizeof(t_float3));
+	
 	for (int y = 0; y < yres; y++)
 	{
 		for (int x = 0; x < xres; x++)
 		{
+			t_halton h1, h2;
+			h1 = setup_halton(0,2);
+			h2 = setup_halton(0,3);
 			for (int s = 0; s < spp; s++)
 			{
 				t_ray r = ray_from_camera(scene->camera, (float)x + FUZZ, (float)y + FUZZ);
@@ -117,18 +119,21 @@ t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 		if (y % 10 == 0)
 			printf("%.2f%% done\n", 100.0 * (float)y / (float)yres);
 	}
+	float lmax = 0.0;
+	float lsum = 0.0;
+	for (int i =0 ; i < yres * xres; i++)
+	{
+		float l = max3(pixels[i].x, pixels[i].y, pixels[i].z);
+		lsum += l;
+		if (l > lmax)
+			lmax = l;
+	}
+
+	printf("highest luminance was %f\n", lmax);
+	printf("avg luminance was %f\n", lsum / (float)(yres * xres));
 
 	end = clock();
 	double cpu_time = ((double) (end - start)) / CLOCKS_PER_SEC;
 	printf("trace time %lf sec, %lf FPS\n", cpu_time, 1.0 / cpu_time);
 	return pixels;
-}
-
-void debug_render(const t_scene *scene, int x, int xres, int y, int yres)
-{
-	t_ray r = ray_from_camera(scene->camera, (float)x, (float)y);
-	t_float3 c = BLACK;
-	trace(&r, &c, scene, 0);
-	printf("done, output color is \n");
-	print_vec(c);
 }

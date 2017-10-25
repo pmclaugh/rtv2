@@ -1,7 +1,7 @@
 #include "rt.h"
 
-#define xdim 800
-#define ydim 800
+#define xdim 600
+#define ydim 600
 
 typedef struct s_param
 {
@@ -52,12 +52,12 @@ int main(int ac, char **av)
 
 	t_scene *scene = calloc(1, sizeof(t_scene));
 
-	// t_import import;
+	t_import import;
 
-	// import = load_file(ac, av);
-	// unit_scale(import, (t_float3){0, 0, 0});
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
+	import = load_file(ac, av);
+	unit_scale(import, (t_float3){0, -3, 0}, 3);
+	import.tail->next = scene->objects;
+	scene->objects = import.head;
 
 	t_float3 left_bot_back = (t_float3){-1 * ROOMSIZE / 2, -1 * ROOMSIZE / 2, -1 *ROOMSIZE / 2};
 	t_float3 left_bot_front = (t_float3){-1 * ROOMSIZE / 2, -1 * ROOMSIZE / 2, ROOMSIZE / 2};
@@ -75,7 +75,7 @@ int main(int ac, char **av)
 	new_plane(scene, left_top_front, right_top_front, right_top_back, RED); //ceiling
 	new_plane(scene, left_bot_front, left_top_front, right_top_front, WHITE); //back wall
 
-	new_sphere(scene, 0, 2, 0, 1.0, WHITE);
+	new_sphere(scene, 0, 3, 0, 1.0, WHITE);
 
 	make_bvh(scene);
 
@@ -91,6 +91,7 @@ int main(int ac, char **av)
 	//debug_render(scene, 300, xdim, 300, ydim);
 
 	t_float3 *pixels = simple_render(scene, xdim, ydim);
+	printf("left render\n");
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
 	void *img = mlx_new_image(mlx, xdim, ydim);

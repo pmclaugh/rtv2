@@ -9,17 +9,17 @@ t_object *new_simple_triangle(t_float3 vertex0, t_float3 vertex1, t_float3 verte
 	triangle->normal = vertex1;
 	triangle->corner = vertex2;
 	triangle->color = color;
-	triangle->emission = 10000.0;
+	triangle->emission = 0.0;
 
 	return triangle;
 }
 
-void unit_scale(t_import import, t_float3 offset)
+void unit_scale(t_import import, t_float3 offset, float rescale)
 {
 	//find largest dimension
 	t_float3 ranges = vec_sub(import.max, import.min);
 	float scale = max3(ranges.x, ranges.y, ranges.z);
-	scale = 1.0 / scale;
+	scale = rescale / scale;
 	t_object *obj = import.head;
 
 	//for testing the negative problem
@@ -91,7 +91,7 @@ t_import load_file(int ac, char **av)
 		}
 		if (type[0] == 'f')
 		{
-			t_object *this = new_simple_triangle(verts[(int)x - 1], verts[(int)y - 1], verts[(int)z - 1], WHITE);
+			t_object *this = new_simple_triangle(verts[(int)x - 1], verts[(int)y - 1], verts[(int)z - 1], GREEN);
 			this->next = list;
 			if (list == NULL)
 				tail = this;

@@ -17,7 +17,7 @@ void new_sphere(t_scene *scene, float x, float y, float z, float r, t_float3 col
 	sphere->position = (t_float3){x, y, z};
 	sphere->normal = (t_float3){r, 0, 0};
 	sphere->color = color;
-	sphere->emission = 2000.0;
+	sphere->emission = 3000.0;
 
 	sphere->next = scene->objects;
 	scene->objects = sphere;

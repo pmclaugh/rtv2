@@ -101,6 +101,11 @@ typedef struct s_import
 	t_float3 max;
 }				t_import;
 
+typedef struct s_halton
+{
+	float value;
+	float inv_base;
+}				t_halton;
 
 int hit(t_ray *ray, const t_scene *scene, int do_shade);
 void draw_pixels(void *img, int xres, int yres, t_float3 *pixels);
@@ -144,7 +149,7 @@ void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d);
 void hit_nearest_debug(const t_ray *ray, const t_box *box, t_object **hit, float *d);
 
 t_import load_file(int ac, char **av);
-void unit_scale(t_import import, t_float3 offset);
+void unit_scale(t_import import, t_float3 offset, float rescale);
 
 float max3(float a, float b, float c);
 float min3(float a, float b, float c);
@@ -153,4 +158,7 @@ t_float3 *simple_render(const t_scene *scene, const int xres, const int yres);
 void init_camera(t_camera *camera, int xres, int yres);
 
 float rand_unit();
-t_float3 hemisphere();
+t_float3 hemisphere(float u1, float u2);
+t_float3 better_hemisphere(float u1, float u2);
+float next_hal(t_halton *hal);
+t_halton setup_halton(int i, int base);
