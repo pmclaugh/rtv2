@@ -10,13 +10,14 @@ typedef struct s_data_addr
 
 int color_to_int(t_float3 c)
 {
-	//c = unit_vec(c);
-	c = vec_scale(c, 255.0);
+	int R = (int)fmin(c.x, 255.0);
+	int G = (int)fmin(c.y, 255.0);
+	int B = (int)fmin(c.z, 255.0);
 	int color;
 	color = 0;
-	color += (int)c.x << 16;
-	color += (int)c.y << 8;
-	color += (int)c.z;
+	color += R << 16;
+	color += G << 8;
+	color += B;
 	return color;
 }
 

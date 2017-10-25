@@ -9,7 +9,7 @@ all: $(NAME)
 
 $(NAME): $(OBJS)
 	cc -o $(NAME) $(FLAGS) $(OBJS) -framework OpenGL -framework AppKit
-%.o: %.c
+%.o: %.c rt.h
 	gcc $(FLAGS) -c -o $@ $<
 mlx/libmlx.a:
 	make -C mlx

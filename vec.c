@@ -128,3 +128,23 @@ int vec_equ(const t_float3 a, const t_float3 b)
 				return (1);
 	return (0);
 }
+
+void orthonormal(t_float3 a, t_float3 *b, t_float3 *c)
+{
+	if (fabs(a.x) > fabs(a.y))
+	{
+		float invLen = 1.0 / sqrt(a.x * a.x + a.z * a.z);
+		*b = (t_float3){-1 * a.z * invLen, 0.0, a.x * invLen};
+	}
+	else
+	{
+		float invLen = 1.0 / sqrt(a.y * a.y + a.z * a.z);
+		*b = (t_float3){0.0, a.z * invLen, -1.0 * a.y * invLen};
+	}
+	*c = cross(a, *b);
+}
+
+t_float3 vec_had(const t_float3 a, const t_float3 b)
+{
+	return (t_float3){a.x * b.x, a.y * b.y, a.z * b.z};
+}

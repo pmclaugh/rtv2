@@ -122,13 +122,13 @@ t_box AABB_from_triangle(t_object *triangle)
 	const t_float3 v1 = triangle->normal;
 	const t_float3 v2 = triangle->corner;
 
-	box.min.x = min3(v0.x, v1.x, v2.x) - ERROR;
-	box.min.y = min3(v0.y, v1.y, v2.y) - ERROR;
-	box.min.z = min3(v0.z, v1.z, v2.z) - ERROR;
+	box.min.x = min3(v0.x, v1.x, v2.x);
+	box.min.y = min3(v0.y, v1.y, v2.y);
+	box.min.z = min3(v0.z, v1.z, v2.z);
 
-	box.max.x = max3(v0.x, v1.x, v2.x) + ERROR;
-	box.max.y = max3(v0.y, v1.y, v2.y) + ERROR;
-	box.max.z = max3(v0.z, v1.z, v2.z) + ERROR;
+	box.max.x = max3(v0.x, v1.x, v2.x);
+	box.max.y = max3(v0.y, v1.y, v2.y);
+	box.max.z = max3(v0.z, v1.z, v2.z);
 
 	box.mid = (t_float3){	(box.max.x + box.min.x) / 2,
 							(box.max.y + box.min.y) / 2,
@@ -264,7 +264,7 @@ void tree_down(t_box *boxes, int box_count, t_box *parent, t_box *work_array, in
 		}
 		else if (counts[i] == 2 && vec_equ(boxes[0].mid, boxes[1].mid))
 		{
-			printf("dupe fudge\n");
+			//printf("dupe fudge\n");
 			children[child_ind++] = boxes[start];
 			children[child_ind] = boxes[start + 1];
 		}
@@ -326,7 +326,7 @@ void make_bvh(t_scene *scene)
 
 	scene->bvh = root;
 	printf("max depth %d boxcount %d\n", g_maxdepth, g_boxcount);
-	print_box(root);
+	//print_box(root);
 	free(boxes);
 	free(work_array);
 }
