@@ -10,9 +10,10 @@ typedef struct s_data_addr
 
 int color_to_int(t_float3 c)
 {
-	int R = (int)fmax(fmin(c.x, 255.0), 0.0);
-	int G = (int)fmax(fmin(c.y, 255.0), 0.0);
-	int B = (int)fmax(fmin(c.z, 255.0), 0.0);
+	c = vec_scale(c, 255.0);
+	int R = fmax(0.0, fmin(c.x, 255.0));
+	int G = fmax(0.0, fmin(c.y, 255.0));
+	int B = fmax(0.0, fmin(c.z, 255.0));
 	int color;
 	color = 0;
 	color += R << 16;

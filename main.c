@@ -25,9 +25,6 @@ int loop_hook(void *param)
 	free(pixels);
 	p->scene->camera.center = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.center);
 	p->scene->camera.normal = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.normal);
-
-	// t_float3 offset = (t_float3){0,0,0.25};
-	// p->scene->camera.center = vec_add(p->scene->camera.center, offset);
 	return (1);
 }
 
@@ -44,7 +41,7 @@ int key_hook(int keycode, void *param)
 	return (1);
 }
 
-#define ROOMSIZE 8.0
+#define ROOMSIZE 10.0
 
 int main(int ac, char **av)
 {
@@ -54,8 +51,13 @@ int main(int ac, char **av)
 
 	t_import import;
 
-	import = load_file(ac, av);
+	import = load_file(ac, av, WHITE);
 	unit_scale(import, (t_float3){0, -3, 0}, 3);
+	import.tail->next = scene->objects;
+	scene->objects = import.head;
+
+	import = load_file(ac, av, WHITE);
+	unit_scale(import, (t_float3){-3, -3, 0}, 3);
 	import.tail->next = scene->objects;
 	scene->objects = import.head;
 
@@ -68,11 +70,11 @@ int main(int ac, char **av)
 	t_float3 right_top_back = (t_float3){ROOMSIZE / 2, ROOMSIZE / 2, -1 *ROOMSIZE / 2};
 	t_float3 right_top_front = (t_float3){ROOMSIZE / 2, ROOMSIZE / 2, ROOMSIZE / 2};
 
-	new_plane(scene, left_bot_back, left_bot_front, left_top_front, RED); //left wall
+	new_plane(scene, left_bot_back, left_bot_front, left_top_front, WHITE); //left wall
 	//new_plane(scene, left_bot_back, right_bot_back, right_top_back, WHITE); // front wall
 	new_plane(scene, left_bot_back, left_bot_front, right_bot_front, WHITE); // floor
-	new_plane(scene, right_bot_back, right_bot_front, right_top_front, GREEN); //right wall
-	new_plane(scene, left_top_front, right_top_front, right_top_back, RED); //ceiling
+	new_plane(scene, right_bot_back, right_bot_front, right_top_front, WHITE); //right wall
+	new_plane(scene, left_top_front, right_top_front, right_top_back, WHITE); //ceiling
 	new_plane(scene, left_bot_front, left_top_front, right_top_front, WHITE); //back wall
 
 	new_sphere(scene, 0, 3, 0, 1.0, WHITE);
@@ -81,7 +83,7 @@ int main(int ac, char **av)
 
 
 	t_camera cam;
-	cam.center = (t_float3){0, 0, -8};
+	cam.center = (t_float3){0, 0, -10};
 	cam.normal = (t_float3){0, 0, 1};
 	cam.width = 1.0;
 	cam.height = 1.0;

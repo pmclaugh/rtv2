@@ -2,7 +2,12 @@
 
 float rand_unit(void)
 {
-	return (float)rand()/(float)RAND_MAX;
+	return (float)rand() / (float)RAND_MAX;
+}
+
+float rand_unit_sin(void)
+{
+	return sin(M_PI * rand_unit());
 }
 
 t_float3 hemisphere(float u1, float u2)
@@ -26,29 +31,40 @@ t_float3 better_hemisphere(float u1, float u2)
 t_halton setup_halton(int i, int base)
 {
 	t_halton hal;
-	float f = 1.0 / (float)base;
+	double f = 1.0 / (double)base;
 	hal.inv_base = f;
 	hal.value = 0.0;
 	while(i > 0)
 	{
-		hal.value += f * (float)(i % base);
+		hal.value += f * (double)(i % base);
 		i /= base;
 		f *= hal.inv_base;
 	}
 	return hal;
 }
 
-float next_hal(t_halton *hal)
+double next_hal(t_halton *hal)
 {
-	float r = 1.0 - hal->value - 0.0000001;
+	double r = 1.0 - hal->value - 0.0000001;
 	if (hal->inv_base < r)
 		hal->value += hal->inv_base;
 	else
 	{
-		float h = hal->inv_base;
-		float hh;
+		double h = hal->inv_base;
+		double hh;
 		do {hh = h; h *= hal->inv_base;} while(h >= r);
 		hal->value += hh + h - 1.0;
 	}
 	return hal->value;
 }
+
+// int main(void)
+// {
+// 	t_halton h1, h2;
+// 	h1 = setup_halton(8500000,2);
+// 	h2 = setup_halton(8500000,3);
+// 	for (int i = 0; i < 10000; i++)
+// 	{
+// 		printf("%f, %f\n", next_hal(&h1), next_hal(&h2));
+// 	}
+// }

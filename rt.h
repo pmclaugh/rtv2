@@ -103,8 +103,8 @@ typedef struct s_import
 
 typedef struct s_halton
 {
-	float value;
-	float inv_base;
+	double value;
+	double inv_base;
 }				t_halton;
 
 int hit(t_ray *ray, const t_scene *scene, int do_shade);
@@ -141,24 +141,25 @@ void new_plane(t_scene *scene, t_float3 center, t_float3 normal, t_float3 corner
 void new_cylinder(t_scene *scene, t_float3 center, t_float3 radius, t_float3 extent, t_float3 color);
 void new_triangle(t_scene *scene, t_float3 center, t_float3 normal, t_float3 corner, t_float3 color);
 
-
 int intersect_triangle(const t_ray *ray, const t_object *triangle, float *d);
 
 void make_bvh(t_scene *scene);
 void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d);
 void hit_nearest_debug(const t_ray *ray, const t_box *box, t_object **hit, float *d);
 
-t_import load_file(int ac, char **av);
+t_import load_file(int ac, char **av, t_float3 color);
 void unit_scale(t_import import, t_float3 offset, float rescale);
 
 float max3(float a, float b, float c);
 float min3(float a, float b, float c);
 
 t_float3 *simple_render(const t_scene *scene, const int xres, const int yres);
+t_float3 *mt_render(t_scene const *scene, const int xres, const int yres);
 void init_camera(t_camera *camera, int xres, int yres);
 
-float rand_unit();
+float rand_unit(void);
 t_float3 hemisphere(float u1, float u2);
 t_float3 better_hemisphere(float u1, float u2);
-float next_hal(t_halton *hal);
+double next_hal(t_halton *hal);
 t_halton setup_halton(int i, int base);
+float rand_unit_sin(void);

@@ -37,7 +37,7 @@ void unit_scale(t_import import, t_float3 offset, float rescale)
 	}
 }
 
-t_import load_file(int ac, char **av)
+t_import load_file(int ac, char **av, t_float3 color)
 {
 	FILE *fp = fopen(av[1], "r");
 
@@ -91,7 +91,7 @@ t_import load_file(int ac, char **av)
 		}
 		if (type[0] == 'f')
 		{
-			t_object *this = new_simple_triangle(verts[(int)x - 1], verts[(int)y - 1], verts[(int)z - 1], GREEN);
+			t_object *this = new_simple_triangle(verts[(int)x - 1], verts[(int)y - 1], verts[(int)z - 1], color);
 			this->next = list;
 			if (list == NULL)
 				tail = this;

@@ -64,7 +64,7 @@ void print_box(const t_box *box)
 	printf("===========\n");
 }
 
-int intersect_box(const t_ray *ray, const t_box *box, float *t)
+int intersect_box(t_ray const * const ray, t_box const * const box, float *t)
 {
 	float tx0 = (box->min.x - ray->origin.x) * ray->inv_dir.x;
 	float tx1 = (box->max.x - ray->origin.x) * ray->inv_dir.x;
@@ -122,13 +122,13 @@ t_box AABB_from_triangle(t_object *triangle)
 	const t_float3 v1 = triangle->normal;
 	const t_float3 v2 = triangle->corner;
 
-	box.min.x = min3(v0.x, v1.x, v2.x);
-	box.min.y = min3(v0.y, v1.y, v2.y);
-	box.min.z = min3(v0.z, v1.z, v2.z);
+	box.min.x = min3(v0.x, v1.x, v2.x) - ERROR;
+	box.min.y = min3(v0.y, v1.y, v2.y) - ERROR;
+	box.min.z = min3(v0.z, v1.z, v2.z) - ERROR;
 
-	box.max.x = max3(v0.x, v1.x, v2.x);
-	box.max.y = max3(v0.y, v1.y, v2.y);
-	box.max.z = max3(v0.z, v1.z, v2.z);
+	box.max.x = max3(v0.x, v1.x, v2.x) + ERROR;
+	box.max.y = max3(v0.y, v1.y, v2.y) + ERROR;
+	box.max.z = max3(v0.z, v1.z, v2.z) + ERROR;
 
 	box.mid = (t_float3){	(box.max.x + box.min.x) / 2,
 							(box.max.y + box.min.y) / 2,
@@ -331,7 +331,7 @@ void make_bvh(t_scene *scene)
 	free(work_array);
 }
 
-void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d)
+void hit_nearest(const t_ray *ray, t_box const * const box, t_object **hit, float *d)
 {
 	float this_d = 0.0;
 	if (box->object)

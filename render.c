@@ -47,13 +47,12 @@ void init_camera(t_camera *camera, int xres, int yres)
 	camera->origin = vec_sub(camera->origin, vec_scale(camera_y, camera->height / 2.0));
 }
 
-#define DIFFUSE 0.6
+#define DIFFUSE 0.2
 
 void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
 {
 	float rrFactor = 1.0;
-	if(depth > 20)
-		return ; //this is mathematically bad, but good while testing
+
 	if (depth >= 5)
 	{
 		float stop_prob = 0.1;
@@ -73,10 +72,8 @@ void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
 	ray->origin = intersection;
 	t_float3 N = norm_object(closest_object, ray);
 	
-
 	float emission = closest_object->emission;
 	*color = vec_add(*color, (t_float3){emission * rrFactor, emission * rrFactor, emission * rrFactor});
-
 	//diffuse reflection
 	t_float3 hem_x, hem_y;
 	orthonormal(N, &hem_x, &hem_y);
@@ -85,7 +82,7 @@ void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
 	rotated_dir.x = dot(rand_dir, (t_float3){hem_x.x, hem_y.x, N.x});
 	rotated_dir.y = dot(rand_dir, (t_float3){hem_x.y, hem_y.y, N.y});
 	rotated_dir.z = dot(rand_dir, (t_float3){hem_x.z, hem_y.z, N.z});
-	ray->direction = unit_vec(rotated_dir);
+	ray->direction = rotated_dir;
 	ray->inv_dir = vec_inv(ray->direction);
 	float cost = dot(ray->direction, N);
 
@@ -94,23 +91,108 @@ void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
 	*color = vec_add(*color, vec_scale(vec_had(tmp, closest_object->color), cost * DIFFUSE * rrFactor));
 }
 
+void tone_map(t_float3 *pixels, int count)
+{
+	//compute log average
+	double lavg = 0.0;
+	for (int i = 0; i < count; i++)
+		lavg += log(vec_mag(pixels[i]) + ERROR);
+	lavg = exp(lavg / (double)count);
+	printf("lavg was %lf\n", lavg);
+	//map average value to middle-gray
+	for (int i = 0; i < count; i++)
+		pixels[i] = vec_scale(pixels[i], 0.2 / lavg);
+	//compress high luminances
+	for (int i = 0; i < count; i++)
+		pixels[i] = vec_scale(pixels[i], 1.0 + vec_mag(pixels[i]));
+}
+
+#define THREADCOUNT 4
+#define SPP 80
+
+typedef struct s_thread_params
+{
+	t_scene const *scene;
+	t_float3 * const pixels;
+	const int xres;
+	const int yoff;
+	const int lines;
+}				thread_params;
+
+void *render_thread(void *params)
+{
+	thread_params *tp = (thread_params *)params;
+	t_halton h1, h2;
+	
+	//printf("hi i'm a thread i'm going to start at line %d and go for %d lines\n", tp->yoff, tp->lines);
+	for (int y = 0; y < tp->lines; y++)
+	{
+		for (int x = 0; x < tp->xres; x++)
+		{
+			h1 = setup_halton(0,2);
+			h2 = setup_halton(0,3);
+			for (int s = 0; s < SPP; s++)
+			{
+				t_ray r = ray_from_camera(tp->scene->camera, (float)x + next_hal(&h1), (float)(tp->yoff + y) + next_hal(&h2));
+				t_float3 c = BLACK;
+				trace(&r, &c, tp->scene, 0);
+				tp->pixels[y * tp->xres + x] = vec_add(tp->pixels[y * tp->xres + x], vec_scale(c, 1.0 / (float)SPP));
+			}
+		}
+	}
+	//printf("goodbye i was a thread from %d to %d, i shot %d rays\n", tp->yoff, tp->yoff + tp->lines, rcount);
+	return NULL;
+}
+t_float3 *mt_render(t_scene const *scene, const int xres, const int yres)
+{
+	pthread_t *threads = malloc(THREADCOUNT * sizeof(pthread_t));
+	thread_params *tps = malloc(THREADCOUNT * sizeof(thread_params));
+	clock_t start, end;
+	start = clock();
+	t_float3 *pixels = malloc(xres * yres * sizeof(t_float3));
+	bzero(pixels, xres * yres * sizeof(t_float3));
+	int lpt = yres / THREADCOUNT; //for now i'm going to assume that this number is always divisible by threadcount
+	printf("lpt is %d\n", lpt);
+
+	for (int i = 0; i < THREADCOUNT; i++)
+	{
+		tps[i] = (thread_params){scene, &pixels[i * xres * lpt], xres, i * lpt, lpt};
+		pthread_create(&threads[i], NULL, render_thread, &tps[i]);
+	}
+
+	for (int i = 0; i < THREADCOUNT; i++)
+		pthread_join(threads[i], NULL);
+
+	printf("tone mapping...\n");
+	tone_map(pixels, yres * xres);
+
+	end = clock();
+	double cpu_time = ((double) (end - start)) / CLOCKS_PER_SEC;
+	printf("trace time %lf sec, %lf FPS\n", cpu_time, 1.0 / cpu_time);
+
+	free(tps);
+	free(threads);
+	return pixels;
+
+}
 t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 {
 	clock_t start, end;
 	start = clock();
-	int spp = 20;
+	int spp = SPP;
 	t_float3 *pixels = calloc(xres * yres, sizeof(t_float3));
+	
+	t_halton h1, h2;
 	
 	for (int y = 0; y < yres; y++)
 	{
 		for (int x = 0; x < xres; x++)
 		{
-			t_halton h1, h2;
 			h1 = setup_halton(0,2);
 			h2 = setup_halton(0,3);
 			for (int s = 0; s < spp; s++)
 			{
-				t_ray r = ray_from_camera(scene->camera, (float)x + FUZZ, (float)y + FUZZ);
+				t_ray r = ray_from_camera(scene->camera, (float)x + next_hal(&h1), (float)y + next_hal(&h2));
 				t_float3 c = BLACK;
 				trace(&r, &c, scene, 0);
 				pixels[y * xres + x] = vec_add(pixels[y * xres + x], vec_scale(c, 1.0 / (float)spp));
@@ -119,18 +201,9 @@ t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 		if (y % 10 == 0)
 			printf("%.2f%% done\n", 100.0 * (float)y / (float)yres);
 	}
-	float lmax = 0.0;
-	float lsum = 0.0;
-	for (int i =0 ; i < yres * xres; i++)
-	{
-		float l = max3(pixels[i].x, pixels[i].y, pixels[i].z);
-		lsum += l;
-		if (l > lmax)
-			lmax = l;
-	}
 
-	printf("highest luminance was %f\n", lmax);
-	printf("avg luminance was %f\n", lsum / (float)(yres * xres));
+	printf("tone mapping...\n");
+	tone_map(pixels, yres * xres);
 
 	end = clock();
 	double cpu_time = ((double) (end - start)) / CLOCKS_PER_SEC;
