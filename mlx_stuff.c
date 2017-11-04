@@ -10,13 +10,15 @@ typedef struct s_data_addr
 
 int color_to_int(t_float3 c)
 {
-	//c = unit_vec(c);
 	c = vec_scale(c, 255.0);
+	int R = fmax(0.0, fmin(c.x, 255.0));
+	int G = fmax(0.0, fmin(c.y, 255.0));
+	int B = fmax(0.0, fmin(c.z, 255.0));
 	int color;
 	color = 0;
-	color += (int)c.x << 16;
-	color += (int)c.y << 8;
-	color += (int)c.z;
+	color += R << 16;
+	color += G << 8;
+	color += B;
 	return color;
 }
 
@@ -43,5 +45,5 @@ void draw_pixels(void *img, int xres, int yres, t_float3 *pixels)
 {
 	for (int y = 0; y < yres; y++)
 		for (int x = 0; x < xres; x++)
-			draw_img_point(img, xres - x, y, pixels[y * xres + x]);
+			draw_img_point(img, xres - x - 1, y - 1, pixels[y * xres + x]);
 }

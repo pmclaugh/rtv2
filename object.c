@@ -17,6 +17,7 @@ void new_sphere(t_scene *scene, float x, float y, float z, float r, t_float3 col
 	sphere->position = (t_float3){x, y, z};
 	sphere->normal = (t_float3){r, 0, 0};
 	sphere->color = color;
+	sphere->emission = 5000.0;
 
 	sphere->next = scene->objects;
 	scene->objects = sphere;
@@ -36,6 +37,7 @@ void new_cylinder(t_scene *scene, t_float3 center, t_float3 radius, t_float3 ext
 	cylinder->normal = radius;
 	cylinder->corner = extent;
 	cylinder->color = color;
+	cylinder->emission = 0.0;
 
 	cylinder->next = scene->objects;
 	scene->objects = cylinder;
@@ -49,6 +51,7 @@ void new_triangle(t_scene *scene, t_float3 vertex0, t_float3 vertex1, t_float3 v
 	triangle->normal = vertex1;
 	triangle->corner = vertex2;
 	triangle->color = color;
+	triangle->emission = 0.0;
 
 	triangle->next = scene->objects;
 	scene->objects = triangle;

@@ -7,123 +7,58 @@
 
 #define Ia 1
 
-
+#define FUZZ rand_unit() / 700.0
 
 #define H_FOV M_PI_2 * 60.0 / 90.0 	//60 degrees. eventually this will be dynamic with aspect
 									// V_FOV is implicit with aspect of view-plane
 
-t_ray *rays_from_camera(t_camera camera, int xres, int yres)
+t_ray ray_from_camera(t_camera cam, float x, float y)
 {
-	//xres and yres will likely end up in some struct.
+	t_ray r;
+	r.origin = cam.focus;
+	t_float3 through = cam.origin;
+	through = vec_add(through, vec_scale(cam.d_x, (float)x));
+	through = vec_add(through, vec_scale(cam.d_y, (float)y));
+	r.direction = unit_vec(vec_sub(cam.focus, through));
+	r.inv_dir = vec_inv(r.direction);
+	return r;
+}
 
-	t_ray *rays = calloc(xres * yres, sizeof(t_ray));
-
+void init_camera(t_camera *camera, int xres, int yres)
+{
+	printf("init camera %d %d\n", xres, yres);
 	//determine a focus point in front of the view-plane
 	//such that the edge-focus-edge vertex has angle H_FOV
-	float d = (camera.width / 2.0) / tan(H_FOV / 2.0);
-	t_float3 focus = vec_add(camera.center, vec_scale(camera.normal, d));
+	float d = (camera->width / 2.0) / tan(H_FOV / 2.0);
+	camera->focus = vec_add(camera->center, vec_scale(camera->normal, d));
 
 	//now i need unit vectors on the plane
-	t_3x3 camera_matrix = rotation_matrix(UNIT_Z, camera.normal);
+	t_3x3 camera_matrix = rotation_matrix(UNIT_Z, camera->normal);
 	t_float3 camera_x, camera_y;
 	camera_x = mat_vec_mult(camera_matrix, UNIT_X);
 	camera_y = mat_vec_mult(camera_matrix, UNIT_Y);
 
 	//pixel deltas
-	t_float3 delta_x, delta_y;
-	delta_x = vec_scale(camera_x, camera.width / (float)xres);
-	delta_y = vec_scale(camera_y, camera.height / (float)yres);
+	camera->d_x = vec_scale(camera_x, camera->width / (float)xres);
+	camera->d_y = vec_scale(camera_y, camera->height / (float)yres);
 
 	//start at bottom corner (the plane's "origin")
-	t_float3 origin = camera.center;
-	origin = vec_sub(origin, vec_scale(camera_x, camera.width / 2.0));
-	origin = vec_sub(origin, vec_scale(camera_y, camera.height / 2.0));
+	camera->origin = vec_sub(camera->center, vec_scale(camera_x, camera->width / 2.0));
+	camera->origin = vec_sub(camera->origin, vec_scale(camera_y, camera->height / 2.0));
+}
 
-	for (int y = 0; y < yres; y++)
+#define DIFFUSE 0.2
+
+void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
+{
+	float rrFactor = 1.0;
+
+	if (depth >= 5)
 	{
-		t_float3 from = origin;
-		for (int x = 0; x < xres; x++)
-		{
-			rays[y * xres + x] = (t_ray){focus, unit_vec(vec_sub(focus, from)), WHITE, vec_inv(unit_vec(vec_sub(focus, from)))};
-			from = vec_add(from, delta_x);
-		}
-		origin = vec_add(origin, delta_y);
-	}
-
-	return (rays);
-}
-
-// typedef struct s_ray
-// {
-// 	t_float3 origin;
-// 	t_float3 direction;
-// 	t_float3 color;
-// 	t_float3 inv_dir;
-// }				t_ray;
-
-//using a point light for simplicity for now
-t_float3 clear_shot(const t_float3 point, const t_float3 N, const t_scene *scene)
-{
-	//is there a clear shot from this point to the light? (note need to move point slightly off surface)
-	t_float3 offset = vec_add(point, vec_scale(N, ERROR));
-	t_ray L;
-	L.origin = offset;
-	L.direction = unit_vec(vec_sub(scene->light, point));
-	L.color = WHITE;
-	L.inv_dir = vec_inv(L.direction);
-	if (hit(&L, scene, 0) && dist(L.origin, point) < dist(point, scene->light))
-		return (t_float3){0, 0, 0};
-	else
-		return L.direction;
-}
-
-int hit(t_ray *ray, const t_scene *scene, int do_shade)
-{
-	//printf("hit start\n");
-	// the goal of hit() is to check against all objects in the scene for intersection with Ray.
-	// returns 1/0 for hit/miss, stores resulting bounced ray in out.
-
-	t_float3 closest;
-	float closest_dist = FLT_MAX;
-	t_object *closest_object = NULL;
-	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist);
-
-	if (closest_object == NULL)
-		return 0;
-
-	closest = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
-	ray->origin = closest;
-	if (!do_shade)
-		return (1);
-	//normal at collision point
-	t_float3 N = norm_object(closest_object, ray);
-	//vector to light source (0,0,0 if no line)
-	t_float3 L = clear_shot(closest, N, scene);
-	//vector to camera
-	t_float3 V = vec_rev(ray->direction);
-	//reflected light ray
-	t_float3 R = bounce(vec_rev(L), N);
-
-	float ambient = Ia * ka;
-	float diffuse = kd * dot(L, N);
-	float specular = pow(ks * dot(V, R), 10);
-
-	float illumination = ambient + diffuse + specular;
-
-	illumination /= (ka + kd + ks);
-
-	t_float3 dir = bounce(ray->direction, N);
-	*ray = (t_ray){closest, dir, vec_scale(closest_object->color, illumination), vec_inv(dir)};
-
-	return (1);
-}
-
-void new_hit(t_ray *ray, const t_scene *scene, int depth)
-{
-	if (depth > 10)
-	{
-		ray->color = BLACK;
-		return ;
+		float stop_prob = 0.1;
+		if (rand_unit() <= stop_prob)
+			return;
+		rrFactor = 1.0 / (1.0 - stop_prob);
 	}
 
 	float closest_dist = FLT_MAX;
@@ -131,58 +66,147 @@ void new_hit(t_ray *ray, const t_scene *scene, int depth)
 	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist);
 
 	if (closest_object == NULL)
-	{
-		ray->color = BLACK;
 		return;
-	}
 
 	t_float3 intersection = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
-	//normal at collision point
+	ray->origin = intersection;
 	t_float3 N = norm_object(closest_object, ray);
-	ray->origin = vec_add(intersection, vec_scale(N, ERROR));
-
-}
-
-t_float3 trace(t_ray *ray, const t_scene *scene)
-{
-	//this will be recursive and more complicated but for now isn't
 	
-	if (hit(ray, scene, 1))
-	{
-		return ray->color;
-	}
-	else
-	{
-		return BLACK;
-	}
+	float emission = closest_object->emission;
+	*color = vec_add(*color, (t_float3){emission * rrFactor, emission * rrFactor, emission * rrFactor});
+	//diffuse reflection
+	t_float3 hem_x, hem_y;
+	orthonormal(N, &hem_x, &hem_y);
+	t_float3 rand_dir = better_hemisphere(rand_unit(), rand_unit());
+	t_float3 rotated_dir;
+	rotated_dir.x = dot(rand_dir, (t_float3){hem_x.x, hem_y.x, N.x});
+	rotated_dir.y = dot(rand_dir, (t_float3){hem_x.y, hem_y.y, N.y});
+	rotated_dir.z = dot(rand_dir, (t_float3){hem_x.z, hem_y.z, N.z});
+	ray->direction = rotated_dir;
+	ray->inv_dir = vec_inv(ray->direction);
+	float cost = dot(ray->direction, N);
+
+	t_float3 tmp = BLACK;
+	trace(ray, &tmp, scene, depth + 1);
+	*color = vec_add(*color, vec_scale(vec_had(tmp, closest_object->color), cost * DIFFUSE * rrFactor));
 }
 
+void tone_map(t_float3 *pixels, int count)
+{
+	//compute log average
+	double lavg = 0.0;
+	for (int i = 0; i < count; i++)
+		lavg += log(vec_mag(pixels[i]) + ERROR);
+	lavg = exp(lavg / (double)count);
+	printf("lavg was %lf\n", lavg);
+	//map average value to middle-gray
+	for (int i = 0; i < count; i++)
+		pixels[i] = vec_scale(pixels[i], 0.2 / lavg);
+	//compress high luminances
+	for (int i = 0; i < count; i++)
+		pixels[i] = vec_scale(pixels[i], 1.0 + vec_mag(pixels[i]));
+}
+
+#define THREADCOUNT 4
+#define SPP 80
+
+typedef struct s_thread_params
+{
+	t_scene const *scene;
+	t_float3 * const pixels;
+	const int xres;
+	const int yoff;
+	const int lines;
+}				thread_params;
+
+void *render_thread(void *params)
+{
+	thread_params *tp = (thread_params *)params;
+	t_halton h1, h2;
+	
+	//printf("hi i'm a thread i'm going to start at line %d and go for %d lines\n", tp->yoff, tp->lines);
+	for (int y = 0; y < tp->lines; y++)
+	{
+		for (int x = 0; x < tp->xres; x++)
+		{
+			h1 = setup_halton(0,2);
+			h2 = setup_halton(0,3);
+			for (int s = 0; s < SPP; s++)
+			{
+				t_ray r = ray_from_camera(tp->scene->camera, (float)x + next_hal(&h1), (float)(tp->yoff + y) + next_hal(&h2));
+				t_float3 c = BLACK;
+				trace(&r, &c, tp->scene, 0);
+				tp->pixels[y * tp->xres + x] = vec_add(tp->pixels[y * tp->xres + x], vec_scale(c, 1.0 / (float)SPP));
+			}
+		}
+	}
+	//printf("goodbye i was a thread from %d to %d, i shot %d rays\n", tp->yoff, tp->yoff + tp->lines, rcount);
+	return NULL;
+}
+t_float3 *mt_render(t_scene const *scene, const int xres, const int yres)
+{
+	pthread_t *threads = malloc(THREADCOUNT * sizeof(pthread_t));
+	thread_params *tps = malloc(THREADCOUNT * sizeof(thread_params));
+	clock_t start, end;
+	start = clock();
+	t_float3 *pixels = malloc(xres * yres * sizeof(t_float3));
+	bzero(pixels, xres * yres * sizeof(t_float3));
+	int lpt = yres / THREADCOUNT; //for now i'm going to assume that this number is always divisible by threadcount
+	printf("lpt is %d\n", lpt);
+
+	for (int i = 0; i < THREADCOUNT; i++)
+	{
+		tps[i] = (thread_params){scene, &pixels[i * xres * lpt], xres, i * lpt, lpt};
+		pthread_create(&threads[i], NULL, render_thread, &tps[i]);
+	}
+
+	for (int i = 0; i < THREADCOUNT; i++)
+		pthread_join(threads[i], NULL);
+
+	printf("tone mapping...\n");
+	tone_map(pixels, yres * xres);
+
+	end = clock();
+	double cpu_time = ((double) (end - start)) / CLOCKS_PER_SEC;
+	printf("trace time %lf sec, %lf FPS\n", cpu_time, 1.0 / cpu_time);
+
+	free(tps);
+	free(threads);
+	return pixels;
+
+}
 t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 {
 	clock_t start, end;
 	start = clock();
+	int spp = SPP;
 	t_float3 *pixels = calloc(xres * yres, sizeof(t_float3));
-	t_ray *rays = rays_from_camera(scene->camera, xres, yres);
+	
+	t_halton h1, h2;
+	
 	for (int y = 0; y < yres; y++)
+	{
 		for (int x = 0; x < xres; x++)
 		{
-			//printf("tracing\n");
-			pixels[y * xres + x] = trace(&(rays[y * xres + x]), scene);
-			//printf("traced\n");
+			h1 = setup_halton(0,2);
+			h2 = setup_halton(0,3);
+			for (int s = 0; s < spp; s++)
+			{
+				t_ray r = ray_from_camera(scene->camera, (float)x + next_hal(&h1), (float)y + next_hal(&h2));
+				t_float3 c = BLACK;
+				trace(&r, &c, scene, 0);
+				pixels[y * xres + x] = vec_add(pixels[y * xres + x], vec_scale(c, 1.0 / (float)spp));
+			}
 		}
+		if (y % 10 == 0)
+			printf("%.2f%% done\n", 100.0 * (float)y / (float)yres);
+	}
+
+	printf("tone mapping...\n");
+	tone_map(pixels, yres * xres);
+
 	end = clock();
 	double cpu_time = ((double) (end - start)) / CLOCKS_PER_SEC;
 	printf("trace time %lf sec, %lf FPS\n", cpu_time, 1.0 / cpu_time);
-	free(rays);
 	return pixels;
 }
-
-/*
-notes:
-	should fix planes and spheres asap
-		-I should do this before making major changes it's going to get way harder to fix later
-	next milestone:
-		lights are solid objects
-		rewrite trace/hit for recursive
-		better implementation of color
-*/

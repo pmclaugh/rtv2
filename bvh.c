@@ -64,7 +64,7 @@ void print_box(const t_box *box)
 	printf("===========\n");
 }
 
-int intersect_box(const t_ray *ray, const t_box *box, float *t)
+int intersect_box(t_ray const * const ray, t_box const * const box, float *t)
 {
 	float tx0 = (box->min.x - ray->origin.x) * ray->inv_dir.x;
 	float tx1 = (box->max.x - ray->origin.x) * ray->inv_dir.x;
@@ -92,11 +92,11 @@ int intersect_box(const t_ray *ray, const t_box *box, float *t)
 
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
-	if (tmin < ERROR && tmax < ERROR)
+	if (tmin <= 0.0 && tmax <= 0.0)
 		return (0);
 	if (t)
 	{
-		if (tmin > ERROR)
+		if (tmin > 0.0)
 			*t = tmin;
 		else
 			*t = tmax;
@@ -264,7 +264,7 @@ void tree_down(t_box *boxes, int box_count, t_box *parent, t_box *work_array, in
 		}
 		else if (counts[i] == 2 && vec_equ(boxes[0].mid, boxes[1].mid))
 		{
-			printf("dupe fudge\n");
+			//printf("dupe fudge\n");
 			children[child_ind++] = boxes[start];
 			children[child_ind] = boxes[start + 1];
 		}
@@ -326,11 +326,12 @@ void make_bvh(t_scene *scene)
 
 	scene->bvh = root;
 	printf("max depth %d boxcount %d\n", g_maxdepth, g_boxcount);
+	//print_box(root);
 	free(boxes);
 	free(work_array);
 }
 
-void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d)
+void hit_nearest(const t_ray *ray, t_box const * const box, t_object **hit, float *d)
 {
 	float this_d = 0.0;
 	if (box->object)
