@@ -1,6 +1,6 @@
 
 __constant float PI = 3.14159265359f;
-__constant int SAMPLES = 2000;
+__constant int SAMPLES = 200;
 __constant int MAXDEPTH = 30;
 
 enum type {SPHERE, TRIANGLE};
@@ -155,7 +155,7 @@ int hit_nearest_brute(Ray ray, __constant Object *scene, int object_count, float
 	return best_ind;
 }
 
-float3 trace(Ray ray, __constant Object *scene, int object_count, Halton *h1, Halton *h2)
+float3 trace(Ray ray, __constant Object *scene, int object_count, Halton h1, Halton h2)
 {
 	float3 color = (float3)(0.0f, 0.0f, 0.0f);
 	float3 mask = (float3)(1.0f, 1.0f, 1.0f);
@@ -183,9 +183,9 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, Halton *h1, Ha
 		float3 hem_y = cross(N, hem_x);
 
 		//generate random direction on the unit hemisphere
-		float rsq = next_hal(h1);
+		float rsq = next_hal(&h1);
 		float r = sqrt(rsq);
-		float theta = 2 * PI * next_hal(h2);
+		float theta = 2 * PI * next_hal(&h2);
 
 		//combine for new direction
 		float3 rand_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq))); //again is normalize necessary?
@@ -193,23 +193,23 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, Halton *h1, Ha
 		//consolidate
 		ray.origin = hit_point + N * 0.000001f;
 		ray.direction = rand_dir;
-		color += mask * closest_object.emission;
-		mask *= closest_object.color;
+		color += mask * hit.emission;
+		mask *= hit.color;
 		mask *= dot(rand_dir, N);
 	}
 	return color;
 }
 
-Ray ray_from_cam(Camera cam, float x, float y)
+Ray ray_from_cam(const Camera cam, float x, float y)
 {
 	Ray ray;
 	ray.origin = cam.focus;
 	float3 through = cam.origin + cam.d_x * x + cam.d_y *y;
-	ray.direction = normalize(through - origin);
+	ray.direction = normalize(through - cam.focus);
 	return ray;
 }
 
-__kernel void render_kernel(__constant Object *scene, __constant Camera cam, const int width, const int height, const int obj_count, __global float3* output)
+__kernel void render_kernel(__constant Object *scene, const Camera cam, const int width, const int height, const int obj_count, __global float3* output)
 {
 	unsigned int work_item_id = get_global_id(0);
 	unsigned int x = work_item_id % width;
