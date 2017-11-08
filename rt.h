@@ -25,6 +25,7 @@
 #define WHITE (t_float3){1.0, 1.0, 1.0}
 
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
+enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
 
 typedef struct s_float3
 {
@@ -57,6 +58,7 @@ typedef struct s_camera
 typedef struct s_object
 {
 	enum type shape;
+	enum mat material;
 	t_float3 position;
 	t_float3 normal;
 	t_float3 corner;
@@ -136,10 +138,10 @@ t_float3 vec_had(const t_float3 a, const t_float3 b);
 int intersect_object(const t_ray *ray, const t_object *object, float *d);
 t_float3 norm_object(const t_object *object, const t_ray *ray);
 
-void new_sphere(t_scene *scene, float x, float y, float z, float r, t_float3 color);
-void new_plane(t_scene *scene, t_float3 center, t_float3 normal, t_float3 corner, t_float3 color);
+void new_sphere(t_scene *scene, t_float3 center, float r, t_float3 color, enum mat material, float emission);
+void new_plane(t_scene *scene, t_float3 corner_A, t_float3 corner_B, t_float3 corner_C, t_float3 color, enum mat material, float emission);
 void new_cylinder(t_scene *scene, t_float3 center, t_float3 radius, t_float3 extent, t_float3 color);
-void new_triangle(t_scene *scene, t_float3 center, t_float3 normal, t_float3 corner, t_float3 color);
+void new_triangle(t_scene *scene, t_float3 vertex0, t_float3 vertex1, t_float3 vertex2, t_float3 color, enum mat material, float emission);
 
 int intersect_triangle(const t_ray *ray, const t_object *triangle, float *d);
 
@@ -147,7 +149,7 @@ void make_bvh(t_scene *scene);
 void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d);
 void hit_nearest_debug(const t_ray *ray, const t_box *box, t_object **hit, float *d);
 
-t_import load_file(int ac, char **av, t_float3 color);
+t_import load_file(int ac, char **av, t_float3 color, enum mat material, float emission);
 void unit_scale(t_import import, t_float3 offset, float rescale);
 
 float max3(float a, float b, float c);

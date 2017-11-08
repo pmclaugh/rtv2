@@ -10,23 +10,24 @@ void print_object(const t_object *object)
 	print_vec(object->color);
 }
 
-void new_sphere(t_scene *scene, float x, float y, float z, float r, t_float3 color)
+void new_sphere(t_scene *scene, t_float3 center, float r, t_float3 color, enum mat material, float emission)
 {
 	t_object *sphere = calloc(1, sizeof(t_object));
 	sphere->shape = SPHERE;
-	sphere->position = (t_float3){x, y, z};
+	sphere->material = material;
+	sphere->position = center;
 	sphere->normal = (t_float3){r, 0, 0};
 	sphere->color = color;
-	sphere->emission = 5000.0;
+	sphere->emission = emission;
 
 	sphere->next = scene->objects;
 	scene->objects = sphere;
 }
 
-void new_plane(t_scene *scene, t_float3 corner_A, t_float3 corner_B, t_float3 corner_C, t_float3 color)
+void new_plane(t_scene *scene, t_float3 corner_A, t_float3 corner_B, t_float3 corner_C, t_float3 color, enum mat material, float emission)
 {
-	new_triangle(scene, corner_A, corner_B, corner_C, color);
-	new_triangle(scene, corner_A, vec_sub(corner_C, vec_sub(corner_B, corner_A)), corner_C, color);
+	new_triangle(scene, corner_A, corner_B, corner_C, color, material, emission);
+	new_triangle(scene, corner_A, vec_sub(corner_C, vec_sub(corner_B, corner_A)), corner_C, color, material, emission);
 }
 
 void new_cylinder(t_scene *scene, t_float3 center, t_float3 radius, t_float3 extent, t_float3 color)
@@ -43,15 +44,16 @@ void new_cylinder(t_scene *scene, t_float3 center, t_float3 radius, t_float3 ext
 	scene->objects = cylinder;
 }
 
-void new_triangle(t_scene *scene, t_float3 vertex0, t_float3 vertex1, t_float3 vertex2, t_float3 color)
+void new_triangle(t_scene *scene, t_float3 vertex0, t_float3 vertex1, t_float3 vertex2, t_float3 color, enum mat material, float emission)
 {
 	t_object *triangle = calloc(1, sizeof(t_object));
 	triangle->shape = TRIANGLE;
+	triangle->material = material;
 	triangle->position = vertex0;
 	triangle->normal = vertex1;
 	triangle->corner = vertex2;
 	triangle->color = color;
-	triangle->emission = 0.0;
+	triangle->emission = emission;
 
 	triangle->next = scene->objects;
 	scene->objects = triangle;
@@ -77,11 +79,11 @@ int intersect_sphere(const t_ray *ray, const t_object *sphere, float *t)
 		radicand = sqrt(radicand);
 		dplus = d + radicand;
 		dminus = d - radicand;
-		if (dplus > 0 && dminus > 0)
+		if (dplus > ERROR && dminus > ERROR)
 			d = dplus > dminus ? dminus : dplus;
-		else if (dplus > 0)
+		else if (dplus > ERROR)
 			d = dplus;
-		else if (dminus > 0)
+		else if (dminus > ERROR)
 			d = dminus;
 		else
 			return (0);

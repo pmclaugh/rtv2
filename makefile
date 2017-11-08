@@ -8,9 +8,9 @@ FLAGS = -m64 -O3 -flto -march=native -funroll-loops
 all: $(NAME)
 
 $(NAME): $(OBJS)
-	cc -o $(NAME) $(FLAGS) $(OBJS) -framework OpenGL -framework AppKit
+	gcc-7 -o $(NAME) $(FLAGS) $(OBJS) -framework OpenGL -framework AppKit -fopenmp
 %.o: %.c rt.h
-	gcc $(FLAGS) -c -o $@ $<
+	gcc-7 $(FLAGS) -c -o $@ $< -fopenmp
 mlx/libmlx.a:
 	make -C mlx
 clean:

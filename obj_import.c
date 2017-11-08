@@ -1,15 +1,16 @@
 #include "rt.h"
 #include <fcntl.h>
 
-t_object *new_simple_triangle(t_float3 vertex0, t_float3 vertex1, t_float3 vertex2, t_float3 color)
+t_object *new_simple_triangle(t_float3 vertex0, t_float3 vertex1, t_float3 vertex2, t_float3 color, enum mat material, float emission)
 {
 	t_object *triangle = calloc(1, sizeof(t_object));
 	triangle->shape = TRIANGLE;
+	triangle->material = material;
 	triangle->position = vertex0;
 	triangle->normal = vertex1;
 	triangle->corner = vertex2;
 	triangle->color = color;
-	triangle->emission = 0.0;
+	triangle->emission = emission;
 
 	return triangle;
 }
@@ -37,7 +38,7 @@ void unit_scale(t_import import, t_float3 offset, float rescale)
 	}
 }
 
-t_import load_file(int ac, char **av, t_float3 color)
+t_import load_file(int ac, char **av, t_float3 color, enum mat material, float emission)
 {
 	FILE *fp = fopen(av[1], "r");
 
@@ -91,7 +92,7 @@ t_import load_file(int ac, char **av, t_float3 color)
 		}
 		if (type[0] == 'f')
 		{
-			t_object *this = new_simple_triangle(verts[(int)x - 1], verts[(int)y - 1], verts[(int)z - 1], color);
+			t_object *this = new_simple_triangle(verts[(int)x - 1], verts[(int)y - 1], verts[(int)z - 1], color, material, emission);
 			this->next = list;
 			if (list == NULL)
 				tail = this;
