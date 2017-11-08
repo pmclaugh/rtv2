@@ -1,7 +1,7 @@
 #include "rt.h"
 
-#define xdim 600
-#define ydim 600
+#define xdim 1200
+#define ydim 1200
 
 typedef struct s_param
 {
@@ -79,7 +79,7 @@ int main(int ac, char **av)
 
 	new_sphere(scene, (t_float3){-2, -2, 2}, 2.0, WHITE, MAT_SPECULAR, 0.0);
 
-	new_sphere(scene, (t_float3){0, 3, 0}, 1.0, WHITE, MAT_NULL, 800.0);
+	new_sphere(scene, (t_float3){0, 3, 0}, 1.0, WHITE, MAT_NULL, 1000.0);
 
 	make_bvh(scene);
 

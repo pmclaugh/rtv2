@@ -147,7 +147,7 @@ int intersect_triangle(const t_ray *ray, const t_object *triangle, float *d);
 
 void make_bvh(t_scene *scene);
 void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d);
-void hit_nearest_debug(const t_ray *ray, const t_box *box, t_object **hit, float *d);
+void hit_nearest_faster(const t_ray * const ray, t_box const * const box, t_object **hit, float *d);
 
 t_import load_file(int ac, char **av, t_float3 color, enum mat material, float emission);
 void unit_scale(t_import import, t_float3 offset, float rescale);
