@@ -40,6 +40,31 @@ int key_hook(int keycode, void *param)
 
 #define ROOMSIZE 10.0
 
+float vmag(cl_float3 v)
+{
+	return sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+void temp_tone_map(cl_float3 *pixels, int count)
+{
+	//compute log average
+	double lavg = 0.0;
+	for (int i = 0; i < count; i++)
+		lavg += log(vmag(pixels[i]) + ERROR);
+	lavg = exp(lavg / (double)count);
+	printf("lavg was %lf\n", lavg);
+	//map average value to middle-gray
+	for (int i = 0; i < count; i++)
+		pixels[i] = (cl_float3){pixels[i].x * 0.2 / lavg,
+								pixels[i].y * 0.2 / lavg,
+								pixels[i].z * 0.2 / lavg};
+	//compress high luminances
+	for (int i = 0; i < count; i++)
+		pixels[i] = (cl_float3){pixels[i].x * (1.0 + vmag(pixels[i])),
+								pixels[i].y * (1.0 + vmag(pixels[i])),
+								pixels[i].z * (1.0 + vmag(pixels[i]))};
+}
+
 int main(int ac, char **av)
 {
 	srand(time(NULL));
@@ -76,7 +101,7 @@ int main(int ac, char **av)
 
 	new_sphere(scene, (t_float3){-2, -2, 2}, 1.0, WHITE, MAT_SPECULAR, 0.0);
 
-	new_sphere(scene, (t_float3){0, 0, 0}, 1.0, WHITE, MAT_NULL, 100.0);
+	new_sphere(scene, (t_float3){0, 0, 0}, 1.0, WHITE, MAT_NULL, 20.0);
 
 	//make_bvh(scene);
 
@@ -95,6 +120,8 @@ int main(int ac, char **av)
 
 	cl_float3 *pixels = gpu_render(scene, scene->camera);
 	printf("left render\n");
+	//temp_tone_map(pixels, xdim * ydim);
+	printf("tone mapped\n");
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
 	void *img = mlx_new_image(mlx, xdim, ydim);

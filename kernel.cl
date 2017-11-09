@@ -1,7 +1,7 @@
 
 __constant float PI = 3.14159265359f;
-__constant int SAMPLES = 100;
-__constant int MAXDEPTH = 3;
+__constant int SAMPLES = 1500;
+__constant int MAXDEPTH = 30;
 
 #define SPHERE 1
 #define TRIANGLE 2
@@ -184,7 +184,7 @@ int hit_nearest_brute(const Ray ray, __constant Object *scene, int object_count,
 	return best_ind;
 }
 
-float3 trace(Ray ray, __constant Object *scene, int object_count, int *seed0, int *seed1)
+float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *seed0, unsigned int *seed1)
 {
 	float3 color = (float3)(0.0f, 0.0f, 0.0f);
 	float3 mask = (float3)(1.0f, 1.0f, 1.0f);
@@ -203,8 +203,11 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, int *seed0, in
 		if (hit.shape == SPHERE)
 			N = normalize(hit_point - hit.v0);
 		else
+		{
 			N = normalize(cross(hit.v1 - hit.v0, hit.v2 - hit.v0));
-		//N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
+			N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
+		}
+		
 
 		//local orthonormal system
 		float3 axis = fabs(N.x) > 0.1f ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -223,8 +226,8 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, int *seed0, in
 		ray.origin = hit_point + N * 0.00003f;
 		ray.direction = rand_dir;
 		color += mask * hit.emission;
-		//mask *= hit.color;
-		//mask *= dot(rand_dir, N);
+		mask *= hit.color;
+		mask *= dot(rand_dir, N);
 	}
 	return color;
 }
@@ -267,7 +270,7 @@ __kernel void render_kernel(__constant Object *scene,
 	for (int i = 0; i < SAMPLES; i++)
 	{
 		Ray ray = ray_from_cam(cam, (float)x + get_random(&seed0, &seed1), (float)y + get_random(&seed0, &seed1));
-		sum_color += trace(ray, scene, obj_count, &seed0, &seed1);
+		sum_color += trace(ray, scene, obj_count, &seed0, &seed1) / (float)SAMPLES;
 	}
 
 
@@ -275,8 +278,8 @@ __kernel void render_kernel(__constant Object *scene,
 }
 
 /*
-	Debug progress:
-	have verified that objects come across correctly, and that intersection is correct at least in trivial examples.
-	camera properties seem ok too but should be double checked.
-	ray generation seems the likely culprit.
+	TODO:
+		fix triangle intersection (it's a handedness issue)
+		tone mapping
+		party forever
 */

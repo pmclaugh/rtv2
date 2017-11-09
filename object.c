@@ -27,7 +27,7 @@ void new_sphere(t_scene *scene, t_float3 center, float r, t_float3 color, enum m
 void new_plane(t_scene *scene, t_float3 corner_A, t_float3 corner_B, t_float3 corner_C, t_float3 color, enum mat material, float emission)
 {
 	new_triangle(scene, corner_A, corner_B, corner_C, color, material, emission);
-	new_triangle(scene, corner_A, corner_C, vec_sub(corner_C, vec_sub(corner_B, corner_A)), color, material, emission);
+	new_triangle(scene, corner_A, vec_sub(corner_C, vec_sub(corner_B, corner_A)), corner_C, color, material, emission);
 }
 
 void new_cylinder(t_scene *scene, t_float3 center, t_float3 radius, t_float3 extent, t_float3 color)
