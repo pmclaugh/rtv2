@@ -9,8 +9,12 @@
 #include <float.h>
 #include <time.h>
 #include <pthread.h>
+#include <OpenCL/cl.h>
 
 #include "mlx/mlx.h"
+
+#define xdim 1200
+#define ydim 1200
 
 #define UNIT_X (t_float3){1, 0, 0}
 #define UNIT_Y (t_float3){0, 1, 0}
@@ -110,7 +114,7 @@ typedef struct s_halton
 }				t_halton;
 
 int hit(t_ray *ray, const t_scene *scene, int do_shade);
-void draw_pixels(void *img, int xres, int yres, t_float3 *pixels);
+void draw_pixels(void *img, int xres, int yres, cl_float3 *pixels);
 
 void print_vec(const t_float3 vec);
 void print_3x3(const t_3x3 mat);
@@ -165,3 +169,7 @@ t_float3 better_hemisphere(float u1, float u2);
 double next_hal(t_halton *hal);
 t_halton setup_halton(int i, int base);
 float rand_unit_sin(void);
+
+cl_float3 *gpu_render(t_scene *scene, t_camera cam);
+
+t_ray ray_from_camera(t_camera cam, float x, float y);

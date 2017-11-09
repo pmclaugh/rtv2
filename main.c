@@ -1,8 +1,5 @@
 #include "rt.h"
 
-#define xdim 1200
-#define ydim 1200
-
 typedef struct s_param
 {
 	void *mlx;
@@ -19,7 +16,7 @@ int loop_hook(void *param)
 {
 	t_param *p = (t_param *)param;
 
-	t_float3 *pixels = simple_render(p->scene, p->x, p->y);
+	cl_float3 *pixels = gpu_render(p->scene, p->scene->camera);
 	draw_pixels(p->img, p->x, p->y, pixels);
 	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
 	free(pixels);
@@ -51,10 +48,10 @@ int main(int ac, char **av)
 
 	t_import import;
 
-	import = load_file(ac, av, GREEN, MAT_DIFFUSE, 0.0);
-	unit_scale(import, (t_float3){0, -3, 0}, 3);
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av, GREEN, MAT_DIFFUSE, 0.0);
+	// unit_scale(import, (t_float3){0, -3, 0}, 3);
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
 	// import = load_file(ac, av, WHITE, MAT_DIFFUSE, 0.0);
 	// unit_scale(import, (t_float3){-3, -3, 0}, 3);
@@ -77,24 +74,26 @@ int main(int ac, char **av)
 	new_plane(scene, left_top_front, right_top_front, right_top_back, WHITE, MAT_DIFFUSE, 0.0); //ceiling
 	new_plane(scene, left_bot_front, left_top_front, right_top_front, WHITE, MAT_DIFFUSE, 0.0); //back wall
 
-	new_sphere(scene, (t_float3){-2, -2, 2}, 2.0, WHITE, MAT_SPECULAR, 0.0);
+	new_sphere(scene, (t_float3){-2, -2, 2}, 1.0, WHITE, MAT_SPECULAR, 0.0);
 
-	new_sphere(scene, (t_float3){0, 3, 0}, 1.0, WHITE, MAT_NULL, 1000.0);
+	new_sphere(scene, (t_float3){0, 0, 0}, 1.0, WHITE, MAT_NULL, 100.0);
 
-	make_bvh(scene);
+	//make_bvh(scene);
 
 
 	t_camera cam;
-	cam.center = (t_float3){0, 0, -8};
+	cam.center = (t_float3){0, 0, -20};
 	cam.normal = (t_float3){0, 0, 1};
 	cam.width = 1.0;
 	cam.height = 1.0;
 	scene->camera = cam;
 	init_camera(&scene->camera, xdim, ydim);
 
+	t_ray r = ray_from_camera(scene->camera, 0.0, 0.0);
+	print_ray(r);
 	//debug_render(scene, 300, xdim, 300, ydim);
 
-	t_float3 *pixels = simple_render(scene, xdim, ydim);
+	cl_float3 *pixels = gpu_render(scene, scene->camera);
 	printf("left render\n");
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
