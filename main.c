@@ -92,22 +92,22 @@ int main(int ac, char **av)
 	t_float3 right_top_back = (t_float3){ROOMSIZE / 2, ROOMSIZE / 2, -1 *ROOMSIZE / 2};
 	t_float3 right_top_front = (t_float3){ROOMSIZE / 2, ROOMSIZE / 2, ROOMSIZE / 2};
 
-	new_plane(scene, left_bot_back, left_bot_front, left_top_front, RED, MAT_DIFFUSE, 0.0); //left wall
+	new_plane(scene, left_bot_back, left_bot_front, left_top_front, BLUE, MAT_DIFFUSE, 0.0); //left wall
 	//new_plane(scene, left_bot_back, right_bot_back, right_top_back, WHITE, MAT_DIFFUSE, 0.0); // front wall
 	new_plane(scene, left_bot_back, left_bot_front, right_bot_front, WHITE, MAT_DIFFUSE, 0.0); // floor
-	new_plane(scene, right_bot_back, right_bot_front, right_top_front, BLUE, MAT_DIFFUSE, 0.0); //right wall
+	new_plane(scene, right_bot_back, right_bot_front, right_top_front, RED, MAT_DIFFUSE, 0.0); //right wall
 	new_plane(scene, left_top_front, right_top_front, right_top_back, WHITE, MAT_DIFFUSE, 0.0); //ceiling
 	new_plane(scene, left_bot_front, left_top_front, right_top_front, WHITE, MAT_DIFFUSE, 0.0); //back wall
 
-	new_sphere(scene, (t_float3){-2, -2, 2}, 1.0, WHITE, MAT_SPECULAR, 0.0);
+	new_sphere(scene, (t_float3){-2, -2, 2}, 1.0, WHITE, MAT_DIFFUSE, 0.0);
 
-	new_sphere(scene, (t_float3){0, 0, 0}, 1.0, WHITE, MAT_NULL, 20.0);
+	new_sphere(scene, (t_float3){0, 3, 0}, 1.0, WHITE, MAT_NULL, 30.0);
 
 	//make_bvh(scene);
 
 
 	t_camera cam;
-	cam.center = (t_float3){0, 0, -20};
+	cam.center = (t_float3){0, 0, -10};
 	cam.normal = (t_float3){0, 0, 1};
 	cam.width = 1.0;
 	cam.height = 1.0;

@@ -1,7 +1,8 @@
 
 __constant float PI = 3.14159265359f;
-__constant int SAMPLES = 1500;
-__constant int MAXDEPTH = 30;
+__constant float DIFFUSE_CONSTANT = 0.7;
+__constant int SAMPLES = 800;
+__constant int MAXDEPTH = 20;
 
 #define SPHERE 1
 #define TRIANGLE 2
@@ -95,35 +96,26 @@ double next_hal(Halton *hal)
 
 int intersect_sphere(Ray ray, Object obj, float *t)
 {
-	float3 o_min_c = ray.origin - obj.v0;
+	float3 toCenter = obj.v0 - ray.origin;
+	float b = dot(toCenter, ray.direction);
+	float c = dot(toCenter, toCenter) - obj.v1.x * obj.v1.x;
+	float disc = b * b - c;
 
-	float a = dot(ray.direction, o_min_c);
+	if (disc < 0.0f) return 0;
+	else disc = sqrt(disc);
 
-	float b = length(o_min_c);
-
-	float c = obj.v1.x; //this is the radius
-
-	float radicand = a * a - b * b + c * c; //probably a better way to do this
-
-	if (radicand < 0.0)
-		return 0;
-	float d = -1 * a;
-	if (radicand > 0.0)
+	if ((b - disc) > 0.00003f)
 	{
-		float dplus, dminus;
-		radicand = sqrt(radicand);
-		dplus = d + radicand;
-		dminus = d - radicand;
-
-		if (dminus > 0)
-			d = dplus;
-		else if (dplus > 0)
-			d = dplus;
-		else
-			return 0;
+		*t = b - disc;
+		return 1;
 	}
-	*t = d;
-	return (1);
+	if ((b + disc) > 0.00003f) 
+	{
+		*t = b + disc;
+		return 1;
+	}
+
+	return 0;
 }
 
 int intersect_triangle(Ray ray, Object obj, float *t)
@@ -205,12 +197,12 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 		else
 		{
 			N = normalize(cross(hit.v1 - hit.v0, hit.v2 - hit.v0));
-			N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
 		}
+		N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
 		
-
+		
 		//local orthonormal system
-		float3 axis = fabs(N.x) > 0.1f ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+		float3 axis = fabs(N.x) > fabs(N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
 		float3 hem_x = normalize(cross(axis, N)); // I don't think normalize is necessary here (?)
 		float3 hem_y = cross(N, hem_x);
 
@@ -226,8 +218,7 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 		ray.origin = hit_point + N * 0.00003f;
 		ray.direction = rand_dir;
 		color += mask * hit.emission;
-		mask *= hit.color;
-		mask *= dot(rand_dir, N);
+		mask *= hit.color * dot(rand_dir, N) * DIFFUSE_CONSTANT;
 	}
 	return color;
 }
@@ -279,7 +270,8 @@ __kernel void render_kernel(__constant Object *scene,
 
 /*
 	TODO:
-		fix triangle intersection (it's a handedness issue)
 		tone mapping
+		specular reflection
+		kernel duration fix
 		party forever
 */
