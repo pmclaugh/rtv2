@@ -120,6 +120,8 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 			gpu_scene[i].material = GPU_MAT_DIFFUSE;
 		else if (obj->material == MAT_SPECULAR)
 			gpu_scene[i].material = GPU_MAT_SPECULAR;
+		else if (obj->material == MAT_REFRACTIVE)
+			gpu_scene[i].material = GPU_MAT_REFRACTIVE;
 		obj = obj->next;
 	}
 
@@ -150,11 +152,12 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 	cl_mem d_seeds;
 
 	d_scene = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(gpu_object) * obj_count, NULL, NULL);
-	d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
-	d_seeds = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
+	d_output = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
+	d_seeds = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
 
 	clEnqueueWriteBuffer(commands, d_scene, CL_TRUE, 0, sizeof(gpu_object) * obj_count, gpu_scene, 0, NULL, NULL);
 	clEnqueueWriteBuffer(commands, d_seeds, CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
+	clEnqueueWriteBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 
 	printf("copied scene to gpu\n");
 
@@ -163,6 +166,8 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 	size_t resolution = xdim * ydim;
 	size_t groupsize = 256;
 	size_t threadcount = resolution * groupsize;
+
+	cl_uint total_samples = 4096;
 
 	//DEBUGGING
 	//gpu_cam_origin = (cl_float3){0.5f, 0.5f, 0.5f};
@@ -183,16 +188,21 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 	clSetKernelArg(k, 9, sizeof(cl_mem), &d_output);
 	printf("output arg\n");
 	clSetKernelArg(k, 10, sizeof(cl_mem), &d_seeds);
+	clSetKernelArg(k, 11, sizeof(cl_uint), &total_samples);
 
 	printf("about to fire\n");
 	//pull the trigger
-	clEnqueueNDRangeKernel(commands, k, 1, 0, &threadcount, &groupsize, 0, NULL, NULL);
-	clFinish(commands);
+
+	for (int i =0 ; i < total_samples; i+=1024)
+	{
+		printf("%d samples done\n", i);
+		clEnqueueNDRangeKernel(commands, k, 1, 0, &threadcount, &groupsize, 0, NULL, NULL);
+		clFinish(commands);
+	}
 	clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 
 	for (int i = 0; i < 10; i++)
 		print_clf3(h_output[i]);
-
 
 	return h_output;
 }

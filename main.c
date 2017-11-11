@@ -53,6 +53,7 @@ void temp_tone_map(cl_float3 *pixels, int count)
 		lavg += log(vmag(pixels[i]) + ERROR);
 	lavg = exp(lavg / (double)count);
 	printf("lavg was %lf\n", lavg);
+
 	//map average value to middle-gray
 	for (int i = 0; i < count; i++)
 		pixels[i] = (cl_float3){pixels[i].x * 0.2 / lavg,
@@ -97,17 +98,26 @@ int main(int ac, char **av)
 	new_plane(scene, left_bot_back, left_bot_front, right_bot_front, WHITE, MAT_DIFFUSE, 0.0); // floor
 	new_plane(scene, right_bot_back, right_bot_front, right_top_front, RED, MAT_DIFFUSE, 0.0); //right wall
 	new_plane(scene, left_top_front, right_top_front, right_top_back, WHITE, MAT_DIFFUSE, 0.0); //ceiling
-	new_plane(scene, left_bot_front, left_top_front, right_top_front, WHITE, MAT_DIFFUSE, 0.0); //back wall
+	new_plane(scene, left_bot_front, left_top_front, right_top_front, GREEN, MAT_DIFFUSE, 0.0); //back wall
 
-	new_sphere(scene, (t_float3){-2, -2, 2}, 1.0, WHITE, MAT_DIFFUSE, 0.0);
+	// new_sphere(scene, (t_float3){-2, -2, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	// new_sphere(scene, (t_float3){0, -2, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	// new_sphere(scene, (t_float3){2, -2, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
 
-	new_sphere(scene, (t_float3){0, 3, 0}, 1.0, WHITE, MAT_NULL, 30.0);
+	// new_sphere(scene, (t_float3){-2, 0, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	// new_sphere(scene, (t_float3){0, 0, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	// new_sphere(scene, (t_float3){2, 0, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+
+	//new_sphere(scene, (t_float3){0, -1, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	//new_sphere(scene, (t_float3){0, -2, 0}, 2.0, WHITE, MAT_REFRACTIVE, 0.0);
+
+	new_sphere(scene, (t_float3){0, 3, 2}, 1.0, WHITE, MAT_SPECULAR, 100.0);
 
 	//make_bvh(scene);
 
 
 	t_camera cam;
-	cam.center = (t_float3){0, 0, -10};
+	cam.center = (t_float3){0, 0, -12};
 	cam.normal = (t_float3){0, 0, 1};
 	cam.width = 1.0;
 	cam.height = 1.0;
@@ -117,10 +127,9 @@ int main(int ac, char **av)
 	t_ray r = ray_from_camera(scene->camera, 0.0, 0.0);
 	print_ray(r);
 	//debug_render(scene, 300, xdim, 300, ydim);
-
 	cl_float3 *pixels = gpu_render(scene, scene->camera);
 	printf("left render\n");
-	//temp_tone_map(pixels, xdim * ydim);
+	temp_tone_map(pixels, xdim * ydim);
 	printf("tone mapped\n");
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");

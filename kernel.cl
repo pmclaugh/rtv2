@@ -1,9 +1,9 @@
 
 __constant float PI = 3.14159265359f;
 __constant float DIFFUSE_CONSTANT = 0.7;
-__constant int SAMPLES = 1024;
+__constant int SAMPLES_PER_LAUNCH = 1024;
 __constant int POOLSIZE = 256;
-__constant int MAXDEPTH = 15;
+__constant int MAXDEPTH = 10;
 
 #define SPHERE 1
 #define TRIANGLE 2
@@ -201,25 +201,54 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 		}
 		N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
 		
-		
-		//local orthonormal system
-		float3 axis = fabs(N.x) > fabs(N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-		float3 hem_x = normalize(cross(axis, N)); // I don't think normalize is necessary here (?)
-		float3 hem_y = cross(N, hem_x);
-
-		//generate random direction on the unit hemisphere
-		float rsq = get_random(seed0, seed1);
-		float r = sqrt(rsq);
-		float theta = 2 * PI * get_random(seed0, seed1);
-
-		//combine for new direction
-		float3 rand_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq))); //again is normalize necessary?
-
-		//consolidate
-		ray.origin = hit_point + N * 0.00003f;
-		ray.direction = rand_dir;
 		color += mask * hit.emission;
-		mask *= hit.color * dot(rand_dir, N) * DIFFUSE_CONSTANT;
+
+		float3 new_dir;
+		if (hit.material == MAT_DIFFUSE)
+		{
+			//local orthonormal system
+			float3 axis = fabs(N.x) > fabs(N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+			float3 hem_x = cross(axis, N);
+			float3 hem_y = cross(N, hem_x);
+
+			//generate random direction on the unit hemisphere
+			float rsq = get_random(seed0, seed1);
+			float r = sqrt(rsq);
+			float theta = 2 * PI * get_random(seed0, seed1);
+
+			//combine for new direction
+			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
+			mask *= hit.color * dot(new_dir, N) * DIFFUSE_CONSTANT;
+		}
+		else if (hit.material == MAT_SPECULAR)
+		{
+			new_dir = normalize(ray.direction - 2.0f * N * dot(ray.direction, N));
+			mask *= SPECULAR_CONSTANT;
+		}
+		else //MAT_REFRACTIVE
+		{
+			float n = REFRACTIVE_INDEX;
+			float R0 = (1.0f - n)/(1.0 + n);
+			R0 = R0 * R0;
+			if (dot(N, ray.direction) > 0)
+			{
+				N = -1 * N;
+				n = 1.0 / n;
+			}
+			n = 1.0 / n;
+
+			float cost1 = dot(N, ray.direction) * -1;
+			float cost2 = 1.0 - n * n *(1.0 - cost1 * cost1);
+			float invc1 = 1.0 - cost1;
+			float Rprob = R0 + (1.0 - R0) * invc1 * invc1 * invc1 * invc1 * invc1;
+			if (cost2 > 0 && (get_random(seed0, seed1) + get_random(seed0, seed1) / 2.0) > Rprob)
+				new_dir = normalize(ray.direction * n + N * (n * cost1 - sqrt(cost2)));
+			else
+				new_dir = normalize(ray.direction + N * (cost1 * 2));
+		}
+
+		ray.origin = hit_point + N * 0.00003f;
+		ray.direction = new_dir;
 	}
 	return color;
 }
@@ -243,7 +272,8 @@ __kernel void render_kernel(__constant Object *scene,
 							const int obj_count,
 							__local float3* sample_pool, 
 							__global float3* output,
-							__global uint* seeds)
+							__global uint* seeds,
+							const uint total_samples)
 {
 	unsigned int pixel_id = get_group_id(0);
 	unsigned int local_id = get_local_id(0);
@@ -268,13 +298,15 @@ __kernel void render_kernel(__constant Object *scene,
 	cam.d_x = cam_dx;
 	cam.d_y = cam_dy;
 
-	for (int i = 0; i < SAMPLES / POOLSIZE; i++)
+	for (int i = 0; i < SAMPLES_PER_LAUNCH / POOLSIZE; i++)
 	{
 		Ray ray = ray_from_cam(cam, x_coord, y_coord);
-		sum_color += trace(ray, scene, obj_count, &seed0, &seed1) / (float)SAMPLES;
+		sum_color += trace(ray, scene, obj_count, &seed0, &seed1) / (float)total_samples;
 	}
 
 	sample_pool[local_id] = sum_color;
+	seeds[pixel_id * 2] = seed0;
+	seeds[pixel_id * 2 + 1] = seed1;
 	barrier(CLK_LOCAL_MEM_FENCE);
 
 	//there is a faster way to do this but that's for later
@@ -282,6 +314,6 @@ __kernel void render_kernel(__constant Object *scene,
 	{
 		for (int i = 1; i < POOLSIZE; i++)
 			sum_color += sample_pool[i];
-		output[pixel_id] = sum_color;
+		output[pixel_id] += sum_color;
 	}
 }
