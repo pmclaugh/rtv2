@@ -1,9 +1,13 @@
 
 __constant float PI = 3.14159265359f;
-__constant float DIFFUSE_CONSTANT = 0.7;
+__constant float DIFFUSE_CONSTANT = 0.4;
+__constant float SPECULAR_CONSTANT = 0.9;
+__constant float REFRACTIVE_INDEX = 1.5;
 __constant int SAMPLES_PER_LAUNCH = 1024;
 __constant int POOLSIZE = 256;
 __constant int MAXDEPTH = 10;
+__constant float COLLIDE_ERR = 0.00001f;
+__constant float NORMAL_SHIFT = 0.00003f;
 
 #define SPHERE 1
 #define TRIANGLE 2
@@ -105,12 +109,12 @@ int intersect_sphere(Ray ray, Object obj, float *t)
 	if (disc < 0.0f) return 0;
 	else disc = sqrt(disc);
 
-	if ((b - disc) > 0.00003f)
+	if ((b - disc) > COLLIDE_ERR)
 	{
 		*t = b - disc;
 		return 1;
 	}
-	if ((b + disc) > 0.00003f) 
+	if ((b + disc) > COLLIDE_ERR) 
 	{
 		*t = b + disc;
 		return 1;
@@ -139,7 +143,7 @@ int intersect_triangle(Ray ray, Object obj, float *t)
 	if (v < 0.0 || u + v > 1.0)
 		return 0;
 	float this_t = f * dot(e2, q);
-	if (this_t > 0)
+	if (this_t > COLLIDE_ERR)
 	{
 		*t = this_t;
 		return (1);
@@ -179,10 +183,14 @@ int hit_nearest_brute(const Ray ray, __constant Object *scene, int object_count,
 
 float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *seed0, unsigned int *seed1)
 {
+
 	float3 color = (float3)(0.0f, 0.0f, 0.0f);
 	float3 mask = (float3)(1.0f, 1.0f, 1.0f);
-	for (int j = 0; j < MAXDEPTH; j++)
+
+	float stop_prob = 0.1f;
+	for (int j = 0; j < 8 || get_random(seed0, seed1) <= stop_prob; j++)
 	{
+		float rrFactor =  j >= 8 ? 1.0 / (1.0 - stop_prob) : 1.0;
 		//collide
 		float t;
 		int hit_ind = hit_nearest_brute(ray, scene, object_count, &t);
@@ -218,12 +226,14 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 
 			//combine for new direction
 			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
-			mask *= hit.color * dot(new_dir, N) * DIFFUSE_CONSTANT;
+			mask *= hit.color * dot(new_dir, N) * DIFFUSE_CONSTANT * rrFactor;
+			ray.origin = hit_point + N * NORMAL_SHIFT;
 		}
 		else if (hit.material == MAT_SPECULAR)
 		{
 			new_dir = normalize(ray.direction - 2.0f * N * dot(ray.direction, N));
-			mask *= SPECULAR_CONSTANT;
+			mask *= SPECULAR_CONSTANT * rrFactor;
+			ray.origin = hit_point + N * NORMAL_SHIFT;
 		}
 		else //MAT_REFRACTIVE
 		{
@@ -241,13 +251,18 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 			float cost2 = 1.0 - n * n *(1.0 - cost1 * cost1);
 			float invc1 = 1.0 - cost1;
 			float Rprob = R0 + (1.0 - R0) * invc1 * invc1 * invc1 * invc1 * invc1;
-			if (cost2 > 0 && (get_random(seed0, seed1) + get_random(seed0, seed1) / 2.0) > Rprob)
+			if (cost2 > 0 && get_random(seed0, seed1) > Rprob)
+			{
 				new_dir = normalize(ray.direction * n + N * (n * cost1 - sqrt(cost2)));
+				ray.origin = hit_point - N * NORMAL_SHIFT;
+			}
 			else
+			{
 				new_dir = normalize(ray.direction + N * (cost1 * 2));
+				ray.origin = hit_point + N * NORMAL_SHIFT;
+			}
+			mask *= SPECULAR_CONSTANT * rrFactor;
 		}
-
-		ray.origin = hit_point + N * 0.00003f;
 		ray.direction = new_dir;
 	}
 	return color;
@@ -317,3 +332,16 @@ __kernel void render_kernel(__constant Object *scene,
 		output[pixel_id] += sum_color;
 	}
 }
+
+
+/*
+
+	TODO:
+		material becomes float3, use as probabilities of different types
+		probably 2 float3s actually, one for probabilities and one for respective constants
+
+		bvh on gpu
+
+		render some really sick scenes
+
+*/

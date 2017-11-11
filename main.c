@@ -100,24 +100,24 @@ int main(int ac, char **av)
 	new_plane(scene, left_top_front, right_top_front, right_top_back, WHITE, MAT_DIFFUSE, 0.0); //ceiling
 	new_plane(scene, left_bot_front, left_top_front, right_top_front, GREEN, MAT_DIFFUSE, 0.0); //back wall
 
-	// new_sphere(scene, (t_float3){-2, -2, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-	// new_sphere(scene, (t_float3){0, -2, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-	// new_sphere(scene, (t_float3){2, -2, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	// new_sphere(scene, (t_float3){-2, -2, 0}, 1.0, WHITE, MAT_SPECULAR, 0.0);
+	// new_sphere(scene, (t_float3){0, -2, 0}, 1.0, WHITE, MAT_SPECULAR, 0.0);
+	// new_sphere(scene, (t_float3){2, -2, 0}, 1.0, WHITE, MAT_SPECULAR, 0.0);
 
-	// new_sphere(scene, (t_float3){-2, 0, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-	// new_sphere(scene, (t_float3){0, 0, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-	// new_sphere(scene, (t_float3){2, 0, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	// new_sphere(scene, (t_float3){-2, 0, 0}, 1.0, WHITE, MAT_SPECULAR, 0.0);
+	//new_sphere(scene, (t_float3){0, 0, 0}, 1.0, WHITE, MAT_SPECULAR, 0.0);
+	// new_sphere(scene, (t_float3){2, 0, 0}, 1.0, WHITE, MAT_SPECULAR, 0.0);
 
-	//new_sphere(scene, (t_float3){0, -1, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-	//new_sphere(scene, (t_float3){0, -2, 0}, 2.0, WHITE, MAT_REFRACTIVE, 0.0);
+	new_sphere(scene, (t_float3){0, 0, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	new_sphere(scene, (t_float3){0, -2, 0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
 
-	new_sphere(scene, (t_float3){0, 3, 2}, 1.0, WHITE, MAT_SPECULAR, 100.0);
+	new_sphere(scene, (t_float3){0, 3, 0}, 0.5, WHITE, MAT_DIFFUSE, 100.0);
 
 	//make_bvh(scene);
 
 
 	t_camera cam;
-	cam.center = (t_float3){0, 0, -12};
+	cam.center = (t_float3){0, 0, -14.0};
 	cam.normal = (t_float3){0, 0, 1};
 	cam.width = 1.0;
 	cam.height = 1.0;

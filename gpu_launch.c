@@ -167,7 +167,7 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 	size_t groupsize = 256;
 	size_t threadcount = resolution * groupsize;
 
-	cl_uint total_samples = 4096;
+	cl_uint total_samples = 1024;
 
 	//DEBUGGING
 	//gpu_cam_origin = (cl_float3){0.5f, 0.5f, 0.5f};
