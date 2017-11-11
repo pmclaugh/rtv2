@@ -140,13 +140,21 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 	printf("translated cam\n");
 	//set up memory areas
 	cl_float3 *h_output = calloc(xdim * ydim, sizeof(cl_float3));
+	cl_uint *h_seeds = calloc(xdim * ydim * 2, sizeof(cl_uint));
+
+	for (int i = 0; i < xdim * ydim * 2; i++)
+		h_seeds[i] = rand();
 
 	cl_mem d_scene;
 	cl_mem d_output;
+	cl_mem d_seeds;
 
 	d_scene = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(gpu_object) * obj_count, NULL, NULL);
 	d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
+	d_seeds = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
+
 	clEnqueueWriteBuffer(commands, d_scene, CL_TRUE, 0, sizeof(gpu_object) * obj_count, gpu_scene, 0, NULL, NULL);
+	clEnqueueWriteBuffer(commands, d_seeds, CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
 
 	printf("copied scene to gpu\n");
 
@@ -154,6 +162,7 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 	int i_ydim = ydim;
 	size_t resolution = xdim * ydim;
 	size_t groupsize = 256;
+	size_t threadcount = resolution * groupsize;
 
 	//DEBUGGING
 	//gpu_cam_origin = (cl_float3){0.5f, 0.5f, 0.5f};
@@ -170,12 +179,14 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 	clSetKernelArg(k, 6, sizeof(cl_int), &i_ydim);
 	clSetKernelArg(k, 7, sizeof(cl_int), &obj_count);
 	printf("dim args\n");
-	clSetKernelArg(k, 8, sizeof(cl_mem), &d_output);
+	clSetKernelArg(k, 8, sizeof(cl_float3) * groupsize, NULL);
+	clSetKernelArg(k, 9, sizeof(cl_mem), &d_output);
 	printf("output arg\n");
+	clSetKernelArg(k, 10, sizeof(cl_mem), &d_seeds);
 
 	printf("about to fire\n");
 	//pull the trigger
-	clEnqueueNDRangeKernel(commands, k, 1, 0, &resolution, &groupsize, 0, NULL, NULL);
+	clEnqueueNDRangeKernel(commands, k, 1, 0, &threadcount, &groupsize, 0, NULL, NULL);
 	clFinish(commands);
 	clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 

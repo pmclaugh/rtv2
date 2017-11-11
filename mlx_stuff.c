@@ -47,5 +47,5 @@ void draw_pixels(void *img, int xres, int yres, cl_float3 *pixels)
 {
 	for (int y = 0; y < yres; y++)
 		for (int x = 0; x < xres; x++)
-			draw_img_point(img, xres - x - 1, y - 1, pixels[y * xres + x]);
+			draw_img_point(img, xres - x - 1, y, pixels[y * xres + x]);
 }

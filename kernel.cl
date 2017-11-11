@@ -1,8 +1,9 @@
 
 __constant float PI = 3.14159265359f;
 __constant float DIFFUSE_CONSTANT = 0.7;
-__constant int SAMPLES = 800;
-__constant int MAXDEPTH = 20;
+__constant int SAMPLES = 1024;
+__constant int POOLSIZE = 256;
+__constant int MAXDEPTH = 15;
 
 #define SPHERE 1
 #define TRIANGLE 2
@@ -239,16 +240,25 @@ __kernel void render_kernel(__constant Object *scene,
 							const float3 cam_dy, 
 							const int width, 
 							const int height, 
-							const int obj_count, 
-							__global float3* output)
+							const int obj_count,
+							__local float3* sample_pool, 
+							__global float3* output,
+							__global uint* seeds)
 {
-	unsigned int work_item_id = get_global_id(0);
-	unsigned int x = work_item_id % width;
-	unsigned int y = work_item_id / width;
+	unsigned int pixel_id = get_group_id(0);
+	unsigned int local_id = get_local_id(0);
+	unsigned int x = pixel_id % width;
+	unsigned int y = pixel_id / width;
+
+	unsigned int xoff = local_id % 16;
+	unsigned int yoff = local_id / 16;
 
 	/* seeds for random number generator */
-	unsigned int seed0 = x;
-	unsigned int seed1 = y;
+	unsigned int seed0 = seeds[pixel_id * 2] + get_global_id(0);
+	unsigned int seed1 = seeds[pixel_id * 2 + 1];
+
+	float x_coord = (float)x + (float)xoff / 16.0f;
+	float y_coord = (float)y + (float)yoff / 16.0f;
 
 	float3 sum_color = (float3)(0.0f, 0.0f, 0.0f);
 
@@ -258,20 +268,20 @@ __kernel void render_kernel(__constant Object *scene,
 	cam.d_x = cam_dx;
 	cam.d_y = cam_dy;
 
-	for (int i = 0; i < SAMPLES; i++)
+	for (int i = 0; i < SAMPLES / POOLSIZE; i++)
 	{
-		Ray ray = ray_from_cam(cam, (float)x + get_random(&seed0, &seed1), (float)y + get_random(&seed0, &seed1));
+		Ray ray = ray_from_cam(cam, x_coord, y_coord);
 		sum_color += trace(ray, scene, obj_count, &seed0, &seed1) / (float)SAMPLES;
 	}
 
+	sample_pool[local_id] = sum_color;
+	barrier(CLK_LOCAL_MEM_FENCE);
 
-	output[work_item_id] = sum_color;
+	//there is a faster way to do this but that's for later
+	if (local_id == 0)
+	{
+		for (int i = 1; i < POOLSIZE; i++)
+			sum_color += sample_pool[i];
+		output[pixel_id] = sum_color;
+	}
 }
-
-/*
-	TODO:
-		tone mapping
-		specular reflection
-		kernel duration fix
-		party forever
-*/
