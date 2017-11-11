@@ -29,19 +29,14 @@ typedef struct s_ray {
 typedef struct s_object
 {
 	int shape;
-	int material;
+	float3 mat_probabilities;
+	float3 mat_constants;
 	float3 v0;
 	float3 v1;
 	float3 v2;
 	float3 color;
 	float3 emission;
 }				Object;
-
-typedef struct s_halton
-{
-	double value;
-	double inv_base;
-}				Halton;
 
 typedef struct s_camera
 {
@@ -67,36 +62,6 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 
 	res.ui = (ires & 0x007fffff) | 0x40000000;  /* bitwise AND, bitwise OR */
 	return (res.f - 2.0f) / 2.0f;
-}
-
-Halton setup_halton(int i, int base)
-{
-	Halton hal;
-	double f = 1.0 / (double)base;
-	hal.inv_base = f;
-	hal.value = 0.0;
-	while(i > 0)
-	{
-		hal.value += f * (double)(i % base);
-		i /= base;
-		f *= hal.inv_base;
-	}
-	return hal;
-}
-
-double next_hal(Halton *hal)
-{
-	double r = 1.0 - hal->value - 0.0000001;
-	if (hal->inv_base < r)
-		hal->value += hal->inv_base;
-	else
-	{
-		double h = hal->inv_base;
-		double hh;
-		do {hh = h; h *= hal->inv_base;} while(h >= r);
-		hal->value += hh + h - 1.0;
-	}
-	return hal->value;
 }
 
 int intersect_sphere(Ray ray, Object obj, float *t)
@@ -212,7 +177,12 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 		color += mask * hit.emission;
 
 		float3 new_dir;
-		if (hit.material == MAT_DIFFUSE)
+
+		//decide what type of bounce we're doing based on material properties
+		float prob_max = hit.mat_probabilities.x + hit.mat_probabilities.y + hit.mat_probabilities.z;
+		float mat_roll = prob_max * get_random(seed0, seed1);
+
+		if (mat_roll < hit.mat_probabilities.x)
 		{
 			//local orthonormal system
 			float3 axis = fabs(N.x) > fabs(N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -226,13 +196,13 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 
 			//combine for new direction
 			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
-			mask *= hit.color * dot(new_dir, N) * DIFFUSE_CONSTANT * rrFactor;
+			mask *= hit.color * dot(new_dir, N) * hit.mat_constants.x * rrFactor * (hit.mat_probabilities.x / prob_max);
 			ray.origin = hit_point + N * NORMAL_SHIFT;
 		}
-		else if (hit.material == MAT_SPECULAR)
+		else if (mat_roll < hit.mat_probabilities.y + hit.mat_probabilities.x)
 		{
 			new_dir = normalize(ray.direction - 2.0f * N * dot(ray.direction, N));
-			mask *= SPECULAR_CONSTANT * rrFactor;
+			mask *= hit.mat_constants.y * rrFactor * (hit.mat_probabilities.y / prob_max);
 			ray.origin = hit_point + N * NORMAL_SHIFT;
 		}
 		else //MAT_REFRACTIVE
@@ -261,7 +231,7 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 				new_dir = normalize(ray.direction + N * (cost1 * 2));
 				ray.origin = hit_point + N * NORMAL_SHIFT;
 			}
-			mask *= SPECULAR_CONSTANT * rrFactor;
+			mask *= hit.mat_constants.z * rrFactor * (hit.mat_probabilities.z / prob_max);
 		}
 		ray.direction = new_dir;
 	}

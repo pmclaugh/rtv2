@@ -3,7 +3,8 @@
 typedef struct s_gpu_object
 {
 	cl_int shape;
-	cl_int material;
+	cl_float3 mat_probabilities;
+	cl_float3 mat_constants;
 	cl_float3 v0;
 	cl_float3 v1;
 	cl_float3 v2;
@@ -85,7 +86,12 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
     err = clBuildProgram(p, 0, NULL, NULL, NULL, NULL);
     if (err != CL_SUCCESS)
     {
-        printf("bad compile, use tool to check\n");
+        size_t len;
+        char buffer[2048];
+
+        //printf("Error: Failed to build program executable!\n%s\n", err_code(err));
+        clGetProgramBuildInfo(p, device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
+        printf("%s\n", buffer);
         exit(0);
     }
 
@@ -117,11 +123,21 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 			gpu_scene[i].shape = GPU_TRIANGLE;
 
 		if (obj->material == MAT_DIFFUSE)
-			gpu_scene[i].material = GPU_MAT_DIFFUSE;
+		{
+			gpu_scene[i].mat_probabilities = (cl_float3){1.0, 0.1, 0.0};
+			gpu_scene[i].mat_constants = (cl_float3){0.3, 0.1, 0.0};
+		}
 		else if (obj->material == MAT_SPECULAR)
-			gpu_scene[i].material = GPU_MAT_SPECULAR;
+		{
+			gpu_scene[i].mat_probabilities = (cl_float3){0.1, 1.0, 0.0};
+			gpu_scene[i].mat_constants = (cl_float3){0.1, 0.9, 0.0};
+		}
 		else if (obj->material == MAT_REFRACTIVE)
-			gpu_scene[i].material = GPU_MAT_REFRACTIVE;
+		{
+			gpu_scene[i].mat_probabilities = (cl_float3){0.5, 0.0, 1.0};
+			gpu_scene[i].mat_constants = (cl_float3){0.4, 0.0, 0.9};
+		}
+		
 		obj = obj->next;
 	}
 
