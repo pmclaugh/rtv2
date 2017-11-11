@@ -1,11 +1,8 @@
 
 __constant float PI = 3.14159265359f;
-__constant float DIFFUSE_CONSTANT = 0.4;
-__constant float SPECULAR_CONSTANT = 0.9;
 __constant float REFRACTIVE_INDEX = 1.5;
 __constant int SAMPLES_PER_LAUNCH = 1024;
 __constant int POOLSIZE = 256;
-__constant int MAXDEPTH = 10;
 __constant float COLLIDE_ERR = 0.00001f;
 __constant float NORMAL_SHIFT = 0.00003f;
 
@@ -169,10 +166,7 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 		if (hit.shape == SPHERE)
 			N = normalize(hit_point - hit.v0);
 		else
-		{
 			N = normalize(cross(hit.v1 - hit.v0, hit.v2 - hit.v0));
-		}
-		N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
 		
 		color += mask * hit.emission;
 
@@ -182,8 +176,11 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 		float prob_max = hit.mat_probabilities.x + hit.mat_probabilities.y + hit.mat_probabilities.z;
 		float mat_roll = prob_max * get_random(seed0, seed1);
 
-		if (mat_roll < hit.mat_probabilities.x)
+		if (prob_max == 0.0)
+			break ;
+		else if (mat_roll < hit.mat_probabilities.x)
 		{
+			N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
 			//local orthonormal system
 			float3 axis = fabs(N.x) > fabs(N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
 			float3 hem_x = cross(axis, N);
@@ -201,6 +198,7 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 		}
 		else if (mat_roll < hit.mat_probabilities.y + hit.mat_probabilities.x)
 		{
+			N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
 			new_dir = normalize(ray.direction - 2.0f * N * dot(ray.direction, N));
 			mask *= hit.mat_constants.y * rrFactor * (hit.mat_probabilities.y / prob_max);
 			ray.origin = hit_point + N * NORMAL_SHIFT;
@@ -268,9 +266,8 @@ __kernel void render_kernel(__constant Object *scene,
 	unsigned int xoff = local_id % 16;
 	unsigned int yoff = local_id / 16;
 
-	/* seeds for random number generator */
-	unsigned int seed0 = seeds[pixel_id * 2] + get_global_id(0);
-	unsigned int seed1 = seeds[pixel_id * 2 + 1];
+	unsigned int seed0 = seeds[pixel_id * 2] + xoff;
+	unsigned int seed1 = seeds[pixel_id * 2 + 1] + yoff;
 
 	float x_coord = (float)x + (float)xoff / 16.0f;
 	float y_coord = (float)y + (float)yoff / 16.0f;
@@ -283,11 +280,9 @@ __kernel void render_kernel(__constant Object *scene,
 	cam.d_x = cam_dx;
 	cam.d_y = cam_dy;
 
+	Ray ray = ray_from_cam(cam, x_coord, y_coord);
 	for (int i = 0; i < SAMPLES_PER_LAUNCH / POOLSIZE; i++)
-	{
-		Ray ray = ray_from_cam(cam, x_coord, y_coord);
 		sum_color += trace(ray, scene, obj_count, &seed0, &seed1) / (float)total_samples;
-	}
 
 	sample_pool[local_id] = sum_color;
 	seeds[pixel_id * 2] = seed0;
@@ -309,9 +304,11 @@ __kernel void render_kernel(__constant Object *scene,
 	TODO:
 		material becomes float3, use as probabilities of different types
 		probably 2 float3s actually, one for probabilities and one for respective constants
+			//this sort of works but i need to explore how people really do it
 
 		bvh on gpu
 
 		render some really sick scenes
 
+		tone mapping is still kinda busted, seems that full black values cause issues
 */

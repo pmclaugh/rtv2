@@ -92,8 +92,10 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
         //printf("Error: Failed to build program executable!\n%s\n", err_code(err));
         clGetProgramBuildInfo(p, device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
         printf("%s\n", buffer);
+        free(source);
         exit(0);
     }
+    free(source);
 
     // Create the compute kernel from the program
     k = clCreateKernel(p, "render_kernel", &err);
@@ -124,18 +126,23 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 
 		if (obj->material == MAT_DIFFUSE)
 		{
-			gpu_scene[i].mat_probabilities = (cl_float3){1.0, 0.1, 0.0};
-			gpu_scene[i].mat_constants = (cl_float3){0.3, 0.1, 0.0};
+			gpu_scene[i].mat_probabilities = (cl_float3){1.0, 0.0, 0.0};
+			gpu_scene[i].mat_constants = (cl_float3){0.4, 0.0, 0.0};
 		}
 		else if (obj->material == MAT_SPECULAR)
 		{
-			gpu_scene[i].mat_probabilities = (cl_float3){0.1, 1.0, 0.0};
-			gpu_scene[i].mat_constants = (cl_float3){0.1, 0.9, 0.0};
+			gpu_scene[i].mat_probabilities = (cl_float3){0.0, 1.0, 0.0};
+			gpu_scene[i].mat_constants = (cl_float3){0.5, 0.8, 0.0};
 		}
 		else if (obj->material == MAT_REFRACTIVE)
 		{
-			gpu_scene[i].mat_probabilities = (cl_float3){0.5, 0.0, 1.0};
+			gpu_scene[i].mat_probabilities = (cl_float3){0.0, 0.0, 1.0};
 			gpu_scene[i].mat_constants = (cl_float3){0.4, 0.0, 0.9};
+		}
+		else if (obj->material == MAT_NULL)
+		{
+			gpu_scene[i].mat_probabilities = (cl_float3){0.0, 0.0, 0.0};
+			gpu_scene[i].mat_constants = (cl_float3){0.0, 0.0, 0.0};
 		}
 		
 		obj = obj->next;
@@ -183,7 +190,7 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 	size_t groupsize = 256;
 	size_t threadcount = resolution * groupsize;
 
-	cl_uint total_samples = 1024;
+	cl_uint total_samples = 10240;
 
 	//DEBUGGING
 	//gpu_cam_origin = (cl_float3){0.5f, 0.5f, 0.5f};
