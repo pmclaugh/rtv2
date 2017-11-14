@@ -1,8 +1,5 @@
 #include "rt.h"
 
-#define xdim 600
-#define ydim 600
-
 typedef struct s_param
 {
 	void *mlx;
@@ -19,7 +16,7 @@ int loop_hook(void *param)
 {
 	t_param *p = (t_param *)param;
 
-	t_float3 *pixels = simple_render(p->scene, p->x, p->y);
+	cl_float3 *pixels = gpu_render(p->scene, p->scene->camera);
 	draw_pixels(p->img, p->x, p->y, pixels);
 	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
 	free(pixels);
@@ -43,6 +40,63 @@ int key_hook(int keycode, void *param)
 
 #define ROOMSIZE 10.0
 
+float vmag(cl_float3 v)
+{
+	return sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+float vsum(cl_float3 v)
+{
+	return v.x + v.y + v.z;
+}
+
+float vmax(cl_float3 v)
+{
+	return fmax(fmax(v.x, v.y), v.z);
+}
+
+void reinhard_tone_map(cl_float3 *pixels, int count)
+{
+	//get greyscale luminance values for all pixels,
+	//and pixels become color masks
+	float *lums = calloc(count, sizeof(float));
+	for (int i = 0; i < count; i++)
+	{
+		lums[i] = vmag(pixels[i]);
+		pixels[i].x /= lums[i];
+		pixels[i].y /= lums[i];
+		pixels[i].z /= lums[i];
+	}
+
+	//debug: print some lums
+	printf("%f %f %f %f\n", lums[0], lums[1], lums[2], lums[300]);
+	printf("%f %f %f\n", pixels[1].x, pixels[1].y, pixels[1].z);
+
+	//compute log average of luminances
+	double lavg = 0.0;
+	for (int i = 0; i < count; i++)
+		lavg += log(lums[i] + 0.001);
+	printf("lavg before exp: %lf\n", lavg);
+	lavg = exp(lavg / (double)count);
+
+	printf("lavg: %lf\n", lavg);
+	//map so log-average value is now mid-gray
+	for (int i = 0; i < count; i++)
+		lums[i] = lums[i] * 0.3 / lavg;
+
+	//compress high luminances
+	for (int i = 0; i < count; i++)
+		lums[i] = lums[i] / (lums[i] + 1.0);
+
+	//re-color
+	for (int i = 0; i < count; i++)
+	{
+		pixels[i].x *= lums[i];
+		pixels[i].y *= lums[i];
+		pixels[i].z *= lums[i];
+	}
+}
+
 int main(int ac, char **av)
 {
 	srand(time(NULL));
@@ -51,10 +105,10 @@ int main(int ac, char **av)
 
 	t_import import;
 
-	import = load_file(ac, av, GREEN, MAT_DIFFUSE, 0.0);
-	unit_scale(import, (t_float3){0, -3, 0}, 3);
-	import.tail->next = scene->objects;
-	scene->objects = import.head;
+	// import = load_file(ac, av, GREEN, MAT_DIFFUSE, 0.0);
+	// unit_scale(import, (t_float3){0, -3, 0}, 3);
+	// import.tail->next = scene->objects;
+	// scene->objects = import.head;
 
 	// import = load_file(ac, av, WHITE, MAT_DIFFUSE, 0.0);
 	// unit_scale(import, (t_float3){-3, -3, 0}, 3);
@@ -75,27 +129,44 @@ int main(int ac, char **av)
 	new_plane(scene, left_bot_back, left_bot_front, right_bot_front, WHITE, MAT_DIFFUSE, 0.0); // floor
 	new_plane(scene, right_bot_back, right_bot_front, right_top_front, BLUE, MAT_DIFFUSE, 0.0); //right wall
 	new_plane(scene, left_top_front, right_top_front, right_top_back, WHITE, MAT_DIFFUSE, 0.0); //ceiling
-	new_plane(scene, left_bot_front, left_top_front, right_top_front, WHITE, MAT_DIFFUSE, 0.0); //back wall
+	new_plane(scene, left_bot_front, left_top_front, right_top_front, GREEN, MAT_DIFFUSE, 0.0); //back wall
 
-	new_sphere(scene, (t_float3){-2, -2, 2}, 2.0, WHITE, MAT_SPECULAR, 0.0);
+	new_sphere(scene, (t_float3){0.0, -2.0, 0.0}, 1.0, WHITE, MAT_DIFFUSE, 0.0);
 
-	new_sphere(scene, (t_float3){0, 3, 0}, 1.0, WHITE, MAT_NULL, 800.0);
+	// new_sphere(scene, (t_float3){2.0, -2.0, 1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
 
-	make_bvh(scene);
+	// new_sphere(scene, (t_float3){-2.0, -2.0, 1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+
+	// new_sphere(scene, (t_float3){0.0, -2.0, -1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+
+	// new_sphere(scene, (t_float3){0.0, -2.0, 3.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+
+
+	//***** IMPORTANT ********
+	//for now the light needs to be the last object added and there can only be one light.
+	new_sphere(scene, (t_float3){0, 4, 1.0}, 1.0, WHITE, MAT_NULL, 10000.0);
+
+	//make_bvh(scene);
 
 
 	t_camera cam;
-	cam.center = (t_float3){0, 0, -8};
+	cam.center = (t_float3){0, 0.0, -14.0};
 	cam.normal = (t_float3){0, 0, 1};
 	cam.width = 1.0;
 	cam.height = 1.0;
 	scene->camera = cam;
 	init_camera(&scene->camera, xdim, ydim);
 
+	t_ray r = ray_from_camera(scene->camera, 0.0, 0.0);
+	print_ray(r);
 	//debug_render(scene, 300, xdim, 300, ydim);
-
-	t_float3 *pixels = simple_render(scene, xdim, ydim);
+	cl_float3 *pixels = gpu_render(scene, scene->camera);
 	printf("left render\n");
+
+	reinhard_tone_map(pixels, xdim * ydim);
+	printf("tone mapped\n");
+	
+
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
 	void *img = mlx_new_image(mlx, xdim, ydim);

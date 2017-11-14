@@ -349,3 +349,23 @@ void hit_nearest(const t_ray *ray, t_box const * const box, t_object **hit, floa
 			hit_nearest(ray, &box->children[i], hit, d);
 	}
 }
+
+void hit_nearest_faster(const t_ray * const ray, t_box const * const box, t_object **hit, float *d)
+{
+	float this_d = 0.0;
+	if (box->object)
+	{
+		if (intersect_object(ray, box->object, &this_d))
+			if (this_d < *d)
+			{
+				*d = this_d;
+				*hit = box->object;
+			}
+	}
+	else if (intersect_box(ray, box, &this_d))
+	{
+		if (!*hit || this_d < *d)
+			for (int i = 0; i < box->children_count; i++)
+				hit_nearest(ray, &box->children[i], hit, d);
+	}
+}

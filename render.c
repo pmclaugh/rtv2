@@ -64,7 +64,7 @@ void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
 
 	float closest_dist = FLT_MAX;
 	t_object *closest_object = NULL;
-	hit_nearest(ray, scene->bvh, &closest_object, &closest_dist);
+	hit_nearest_faster(ray, scene->bvh, &closest_object, &closest_dist);
 
 	if (closest_object == NULL)
 		return;
@@ -121,7 +121,7 @@ void tone_map(t_float3 *pixels, int count)
 		pixels[i] = vec_scale(pixels[i], 1.0 + vec_mag(pixels[i]));
 }
 
-#define SPP 40.0f
+#define SPP 20000.0f
 
 t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 {
