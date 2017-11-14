@@ -26,7 +26,7 @@ t_ray ray_from_camera(t_camera cam, float x, float y)
 
 void init_camera(t_camera *camera, int xres, int yres)
 {
-	printf("init camera %d %d\n", xres, yres);
+	//printf("init camera %d %d\n", xres, yres);
 	//determine a focus point in front of the view-plane
 	//such that the edge-focus-edge vertex has angle H_FOV
 	float d = (camera->width / 2.0) / tan(H_FOV / 2.0);

@@ -12,16 +12,27 @@ typedef struct s_param
 
 #define rot_angle M_PI_2 * 4.0 / 90.0
 
+void baby_tone_map(cl_float3 *pixels, int count)
+{
+	for (int i = 0; i < count; i++)
+	{
+		pixels[i].x = pixels[i].x / (pixels[i].x + 1.0);
+		pixels[i].y = pixels[i].y / (pixels[i].y + 1.0);
+		pixels[i].z = pixels[i].z / (pixels[i].z + 1.0);
+	}
+}
+
 int loop_hook(void *param)
 {
 	t_param *p = (t_param *)param;
 
 	cl_float3 *pixels = gpu_render(p->scene, p->scene->camera);
+	baby_tone_map(pixels, xdim * ydim);
 	draw_pixels(p->img, p->x, p->y, pixels);
 	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
 	free(pixels);
-	p->scene->camera.center = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.center);
-	p->scene->camera.normal = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.normal);
+	p->scene->camera.center = vec_add(p->scene->camera.center, (t_float3){0.0, 0.0, 0.1});
+	init_camera(&p->scene->camera, xdim, ydim);
 	return (1);
 }
 
@@ -68,25 +79,21 @@ void reinhard_tone_map(cl_float3 *pixels, int count)
 		pixels[i].z /= lums[i];
 	}
 
-	//debug: print some lums
-	printf("%f %f %f %f\n", lums[0], lums[1], lums[2], lums[300]);
-	printf("%f %f %f\n", pixels[1].x, pixels[1].y, pixels[1].z);
-
 	//compute log average of luminances
 	double lavg = 0.0;
 	for (int i = 0; i < count; i++)
-		lavg += log(lums[i] + 0.1);
-	printf("lavg before exp: %lf\n", lavg);
+		lavg += log(lums[i]);
+	printf("lavg before exp: %lf\n", lavg / (double)count);
 	lavg = exp(lavg / (double)count);
 
 	printf("lavg: %lf\n", lavg);
 	//map so log-average value is now mid-gray
 	for (int i = 0; i < count; i++)
-		lums[i] = lums[i] * 0.3 / lavg;
+		lums[i] = lums[i] * 0.5 / lavg;
 
 	//compress high luminances
-	// for (int i = 0; i < count; i++)
-	// 	lums[i] = lums[i] / (lums[i] + 1.0);
+	for (int i = 0; i < count; i++)
+		lums[i] = lums[i] / (lums[i] + 1.0);
 
 	//re-color
 	for (int i = 0; i < count; i++)
@@ -132,10 +139,12 @@ int main(int ac, char **av)
 	new_plane(scene, left_bot_front, left_top_front, right_top_front, GREEN, MAT_DIFFUSE, 0.0); //back wall
 
 	new_sphere(scene, (t_float3){0.0, -2.0, 0.0}, 1.0, WHITE, MAT_DIFFUSE, 0.0);
+	new_sphere(scene, (t_float3){2.0, 2.0, 2.0}, 1.0, WHITE, MAT_DIFFUSE, 0.0);
+	new_sphere(scene, (t_float3){-2.0, 2.0, 2.0}, 1.0, WHITE, MAT_DIFFUSE, 0.0);
 
 	//***** IMPORTANT ********
 	//for now the light needs to be the last object added and there can only be one light.
-	new_sphere(scene, (t_float3){0, 3.9, 1.0}, 1.0, WHITE, MAT_NULL, 10000.0);
+	new_sphere(scene, (t_float3){0, 3.9, 1.0}, 1.0, WHITE, MAT_NULL, 500.0);
 
 	//make_bvh(scene);
 
@@ -148,13 +157,11 @@ int main(int ac, char **av)
 	scene->camera = cam;
 	init_camera(&scene->camera, xdim, ydim);
 
-	t_ray r = ray_from_camera(scene->camera, 0.0, 0.0);
-	print_ray(r);
 	//debug_render(scene, 300, xdim, 300, ydim);
 	cl_float3 *pixels = gpu_render(scene, scene->camera);
 	printf("left render\n");
 
-	reinhard_tone_map(pixels, xdim * ydim);
+	baby_tone_map(pixels, xdim * ydim);
 	printf("tone mapped\n");
 	
 
@@ -167,7 +174,7 @@ int main(int ac, char **av)
 	t_param *param = calloc(1, sizeof(t_param));
 	*param = (t_param){mlx, win, img, xdim, ydim, scene};
 
-	//mlx_loop_hook(mlx, loop_hook, param);
+	mlx_loop_hook(mlx, loop_hook, param);
 	
 	mlx_key_hook(win, key_hook, param);
 	mlx_loop(mlx);

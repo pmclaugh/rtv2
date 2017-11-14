@@ -45,174 +45,170 @@ char *load_cl_file(char *file)
 
 cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 {
-	cl_uint numPlatforms;
-    int err;
 
-    // Find number of platforms
-    err = clGetPlatformIDs(0, NULL, &numPlatforms);
+	static cl_context context;
+	static cl_command_queue commands;
+	static cl_program p;
+	static gpu_object *gpu_scene;
+	static cl_mem d_scene;
+	static cl_mem d_output;
+	static cl_mem d_seeds;
+	static int obj_count;
+	static int first = 1;
 
-    // Get all platforms
-    cl_platform_id Platform[numPlatforms];
-    err = clGetPlatformIDs(numPlatforms, Platform, NULL);
-
-    // Secure a GPU
-    cl_device_id device_id;
-    for (int i = 0; i < numPlatforms; i++)
-    {
-        err = clGetDeviceIDs(Platform[i], DEVICE, 1, &device_id, NULL);
-        if (err == CL_SUCCESS)
-        {
-            break;
-        }
-    }
-
-    // Create a compute context
-    cl_context context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
-
-    // Create a command queue
-    cl_command_queue commands = clCreateCommandQueue(context, device_id, 0, &err);
-    printf("setup context\n");
-
-
-    cl_kernel k;
-    cl_program p;
-
-    char *source = load_cl_file("kernel.cl");
-
-    p = clCreateProgramWithSource(context, 1, (const char **) &source, NULL, &err);
-
-    // Build the program
-    err = clBuildProgram(p, 0, NULL, NULL, NULL, NULL);
-    if (err != CL_SUCCESS)
-    {
-        size_t len;
-        char buffer[8192];
-
-        //printf("Error: Failed to build program executable!\n%s\n", err_code(err));
-        clGetProgramBuildInfo(p, device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
-        printf("%s\n", buffer);
-        free(source);
-        exit(0);
-    }
-    free(source);
-
-    // Create the compute kernel from the program
-    k = clCreateKernel(p, "render_kernel", &err);
-    clReleaseProgram(p);
-    printf("made kernel\n");
-
-
-	//consolidate scene->objects to an array (this is a hack to avoid changing lots of other stuff, will rework)
-	t_object *obj = scene->objects;
-	int obj_count = 0;
-	while (obj && ++obj_count)
-		obj = obj->next;
-
-	gpu_object * gpu_scene = malloc(sizeof(gpu_object) * obj_count);
-	obj = scene->objects;
-	for (int i = 0; i < obj_count; i++)
+	if (first)
 	{
-		gpu_scene[i].v0 = (cl_float3){obj->position.x, obj->position.y, obj->position.z};
-		gpu_scene[i].v1 = (cl_float3){obj->normal.x, obj->normal.y, obj->normal.z};
-		gpu_scene[i].v2 = (cl_float3){obj->corner.x, obj->corner.y, obj->corner.z};
-		gpu_scene[i].color = (cl_float3){obj->color.x, obj->color.y, obj->color.z};
-		gpu_scene[i].emission = (cl_float3){obj->emission, obj->emission, obj->emission};
-		
-		if (obj->shape == SPHERE)
-			gpu_scene[i].shape = GPU_SPHERE;
-		else if (obj->shape == TRIANGLE)
-			gpu_scene[i].shape = GPU_TRIANGLE;
+		cl_uint numPlatforms;
+	    int err;
 
-		if (obj->material == MAT_DIFFUSE)
-			gpu_scene[i].material = GPU_MAT_DIFFUSE;
-		else if (obj->material == MAT_SPECULAR)
-			gpu_scene[i].material = GPU_MAT_SPECULAR;
-		else if (obj->material == MAT_REFRACTIVE)
-			gpu_scene[i].material = GPU_MAT_REFRACTIVE;
-		else if (obj->material == MAT_NULL)
-			gpu_scene[i].material = GPU_MAT_NULL;
-		
-		obj = obj->next;
+	    // Find number of platforms
+	    err = clGetPlatformIDs(0, NULL, &numPlatforms);
+
+	    // Get all platforms
+	    cl_platform_id Platform[numPlatforms];
+	    err = clGetPlatformIDs(numPlatforms, Platform, NULL);
+
+	    // Secure a GPU
+	    cl_device_id device_id;
+	    for (int i = 0; i < numPlatforms; i++)
+	    {
+	        err = clGetDeviceIDs(Platform[i], DEVICE, 1, &device_id, NULL);
+	        if (err == CL_SUCCESS)
+	        {
+	            break;
+	        }
+	    }
+
+	    // Create a compute context
+	    context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
+
+	    // Create a command queue
+	    commands = clCreateCommandQueue(context, device_id, 0, &err);
+	    //printf("setup context\n");
+
+
+	    char *source = load_cl_file("kernel.cl");
+
+	    p = clCreateProgramWithSource(context, 1, (const char **) &source, NULL, &err);
+
+	    // Build the program
+	    err = clBuildProgram(p, 0, NULL, NULL, NULL, NULL);
+	    if (err != CL_SUCCESS)
+	    {
+	        size_t len;
+	        char buffer[8192];
+
+	        //printf("Error: Failed to build program executable!\n%s\n", err_code(err));
+	        clGetProgramBuildInfo(p, device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
+	        printf("%s\n", buffer);
+	        free(source);
+	        exit(0);
+	    }
+	    free(source);
+	    //printf("made kernel\n");
+
+
+		//consolidate scene->objects to an array (this is a hack to avoid changing lots of other stuff, will rework)
+		t_object *obj = scene->objects;
+		obj_count = 0;
+		while (obj && ++obj_count)
+			obj = obj->next;
+
+		gpu_scene = malloc(sizeof(gpu_object) * obj_count);
+		obj = scene->objects;
+		for (int i = 0; i < obj_count; i++)
+		{
+			gpu_scene[i].v0 = (cl_float3){obj->position.x, obj->position.y, obj->position.z};
+			gpu_scene[i].v1 = (cl_float3){obj->normal.x, obj->normal.y, obj->normal.z};
+			gpu_scene[i].v2 = (cl_float3){obj->corner.x, obj->corner.y, obj->corner.z};
+			gpu_scene[i].color = (cl_float3){obj->color.x, obj->color.y, obj->color.z};
+			gpu_scene[i].emission = (cl_float3){obj->emission, obj->emission, obj->emission};
+			
+			if (obj->shape == SPHERE)
+				gpu_scene[i].shape = GPU_SPHERE;
+			else if (obj->shape == TRIANGLE)
+				gpu_scene[i].shape = GPU_TRIANGLE;
+
+			if (obj->material == MAT_DIFFUSE)
+				gpu_scene[i].material = GPU_MAT_DIFFUSE;
+			else if (obj->material == MAT_SPECULAR)
+				gpu_scene[i].material = GPU_MAT_SPECULAR;
+			else if (obj->material == MAT_REFRACTIVE)
+				gpu_scene[i].material = GPU_MAT_REFRACTIVE;
+			else if (obj->material == MAT_NULL)
+				gpu_scene[i].material = GPU_MAT_NULL;
+			
+			obj = obj->next;
+		}
+
+		//printf("obj count is %d\n", obj_count);
+
+		//printf("scene translated\n");
+		//transform cam stuff to simple vectors
+		//set up memory areas
+		cl_uint *h_seeds = calloc(xdim * ydim * 2, sizeof(cl_uint));
+
+		for (int i = 0; i < xdim * ydim * 2; i++)
+			h_seeds[i] = rand();
+
+		d_scene = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(gpu_object) * obj_count, NULL, NULL);
+		d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
+		d_seeds = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
+
+		clEnqueueWriteBuffer(commands, d_scene, CL_TRUE, 0, sizeof(gpu_object) * obj_count, gpu_scene, 0, NULL, NULL);
+		clEnqueueWriteBuffer(commands, d_seeds, CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
+		//clEnqueueWriteBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
+
+		clRetainContext(context);
+		clRetainCommandQueue(commands);
+		clRetainProgram(p);
+		clRetainMemObject(d_scene);
+		clRetainMemObject(d_output);
+		clRetainMemObject(d_seeds);
+		first = 0;
 	}
 
-	printf("obj count is %d\n", obj_count);
-
-	printf("scene translated\n");
-	//transform cam stuff to simple vectors
-	cl_float3 gpu_cam_origin = tfloat_to_cl(cam.origin);
-	cl_float3 gpu_cam_focus = tfloat_to_cl(cam.focus);
-	cl_float3 gpu_cam_dx = tfloat_to_cl(cam.d_x);
-	cl_float3 gpu_cam_dy = tfloat_to_cl(cam.d_y);
-
-	print_clf3(gpu_cam_origin);
-	print_clf3(gpu_cam_focus);
-	print_clf3(gpu_cam_dx);
-	print_clf3(gpu_cam_dy);
-
-	printf("translated cam\n");
-	//set up memory areas
+	// Create the compute kernel from the program
+	cl_kernel k = clCreateKernel(p, "render_kernel", NULL);
+	//printf("copied scene to gpu\n");
 	cl_float3 *h_output = calloc(xdim * ydim, sizeof(cl_float3));
-	cl_uint *h_seeds = calloc(xdim * ydim * 2, sizeof(cl_uint));
-
-	for (int i = 0; i < xdim * ydim * 2; i++)
-		h_seeds[i] = rand();
-
-	cl_mem d_scene;
-	cl_mem d_output;
-	cl_mem d_seeds;
-
-	d_scene = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(gpu_object) * obj_count, NULL, NULL);
-	d_output = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
-	d_seeds = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
-
-	clEnqueueWriteBuffer(commands, d_scene, CL_TRUE, 0, sizeof(gpu_object) * obj_count, gpu_scene, 0, NULL, NULL);
-	clEnqueueWriteBuffer(commands, d_seeds, CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
-	clEnqueueWriteBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
-
-	printf("copied scene to gpu\n");
-
 	int i_xdim = xdim;
 	int i_ydim = ydim;
 	size_t resolution = xdim * ydim;
 	size_t groupsize = 256;
-	size_t threadcount = resolution * groupsize;
 
-	cl_uint total_samples = 1024;
+	cl_uint total_samples = 10;
+	cl_float3 gpu_cam_origin = tfloat_to_cl(cam.origin);
+	cl_float3 gpu_cam_focus = tfloat_to_cl(cam.focus);
+	cl_float3 gpu_cam_dx = tfloat_to_cl(cam.d_x);
+	cl_float3 gpu_cam_dy = tfloat_to_cl(cam.d_y);
 
 	//DEBUGGING
 	//gpu_cam_origin = (cl_float3){0.5f, 0.5f, 0.5f};
 	//END DEBUG
 
 	clSetKernelArg(k, 0, sizeof(cl_mem), &d_scene);
-	printf("scene arg\n");
+	//printf("scene arg\n");
 	clSetKernelArg(k, 1, sizeof(cl_float3), &gpu_cam_origin);
 	clSetKernelArg(k, 2, sizeof(cl_float3), &gpu_cam_focus);
 	clSetKernelArg(k, 3, sizeof(cl_float3), &gpu_cam_dx);
 	clSetKernelArg(k, 4, sizeof(cl_float3), &gpu_cam_dy);
-	printf("cam args\n");
+	//printf("cam args\n");
 	clSetKernelArg(k, 5, sizeof(cl_int), &i_xdim);
 	clSetKernelArg(k, 6, sizeof(cl_int), &i_ydim);
 	clSetKernelArg(k, 7, sizeof(cl_int), &obj_count);
-	printf("dim args\n");
-	clSetKernelArg(k, 8, sizeof(cl_float3) * groupsize, NULL);
-	clSetKernelArg(k, 9, sizeof(cl_mem), &d_output);
-	printf("output arg\n");
-	clSetKernelArg(k, 10, sizeof(cl_mem), &d_seeds);
-	clSetKernelArg(k, 11, sizeof(cl_uint), &total_samples);
+	//printf("dim args\n");
+	clSetKernelArg(k, 8, sizeof(cl_mem), &d_output);
+	//printf("output arg\n");
+	clSetKernelArg(k, 9, sizeof(cl_mem), &d_seeds);
+	clSetKernelArg(k, 10, sizeof(cl_uint), &total_samples);
 
-	printf("about to fire\n");
+	//printf("about to fire\n");
 	//pull the trigger
 
-	for (int i =0 ; i < total_samples; i+=1024)
-	{
-		printf("%d samples done\n", i);
-		clEnqueueNDRangeKernel(commands, k, 1, 0, &threadcount, &groupsize, 0, NULL, NULL);
-		clFinish(commands);
-	}
+	clEnqueueNDRangeKernel(commands, k, 1, 0, &resolution, &groupsize, 0, NULL, NULL);
+	clFinish(commands);
 	clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
-
-	for (int i = 0; i < 10; i++)
-		print_clf3(h_output[i]);
 
 	return h_output;
 }

@@ -1,12 +1,10 @@
 
 __constant float PI = 3.14159265359f;
 __constant float REFRACTIVE_INDEX = 1.5;
-__constant int SAMPLES_PER_LAUNCH = 256;
-__constant int POOLSIZE = 256;
 __constant float COLLIDE_ERR = 0.00001f;
 __constant float NORMAL_SHIFT = 0.00003f;
 
-__constant float DIFFUSE_CONSTANT = 0.4;
+__constant float DIFFUSE_CONSTANT = 0.7;
 __constant float SPECULAR_CONSTANT = 0.9;
 
 #define SPHERE 1
@@ -330,13 +328,11 @@ __kernel void render_kernel(__constant Object *scene,
 							const int width, 
 							const int height, 
 							const int obj_count,
-							__local float3* sample_pool, 
 							__global float3* output,
 							__global uint* seeds,
-							const uint total_samples)
+							const uint sample_count)
 {
-	unsigned int pixel_id = get_group_id(0);
-	unsigned int local_id = get_local_id(0);
+	unsigned int pixel_id = get_global_id(0);
 	unsigned int x = pixel_id % width;
 	unsigned int y = pixel_id / width;
 
@@ -351,24 +347,15 @@ __kernel void render_kernel(__constant Object *scene,
 	cam.d_x = cam_dx;
 	cam.d_y = cam_dy;
 
-	for (int i = 0; i < SAMPLES_PER_LAUNCH / POOLSIZE; i++)
+	for (int i = 0; i < sample_count; i++)
 	{
 		float x_coord = (float)x + get_random(&seed0, &seed1);
 		float y_coord = (float)y + get_random(&seed0, &seed1);
 		Ray ray = ray_from_cam(cam, x_coord, y_coord);
-		sum_color += trace(ray, scene, obj_count, &seed0, &seed1) / (float)total_samples;
+		sum_color += trace(ray, scene, obj_count, &seed0, &seed1) / (float)sample_count;
 	}
 
-	sample_pool[local_id] = sum_color;
 	seeds[pixel_id * 2] = seed0;
 	seeds[pixel_id * 2 + 1] = seed1;
-	barrier(CLK_LOCAL_MEM_FENCE);
-
-	//there is a faster way to do this but that's for later
-	if (local_id == 0)
-	{
-		for (int i = 1; i < POOLSIZE; i++)
-			sum_color += sample_pool[i];
-		output[pixel_id] += sum_color;
-	}
+	output[pixel_id] = sum_color;
 }
