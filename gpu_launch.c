@@ -86,7 +86,7 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
     if (err != CL_SUCCESS)
     {
         size_t len;
-        char buffer[2048];
+        char buffer[8192];
 
         //printf("Error: Failed to build program executable!\n%s\n", err_code(err));
         clGetProgramBuildInfo(p, device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);

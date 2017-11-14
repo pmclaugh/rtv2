@@ -75,7 +75,7 @@ void reinhard_tone_map(cl_float3 *pixels, int count)
 	//compute log average of luminances
 	double lavg = 0.0;
 	for (int i = 0; i < count; i++)
-		lavg += log(lums[i] + 0.001);
+		lavg += log(lums[i] + 0.1);
 	printf("lavg before exp: %lf\n", lavg);
 	lavg = exp(lavg / (double)count);
 
@@ -85,8 +85,8 @@ void reinhard_tone_map(cl_float3 *pixels, int count)
 		lums[i] = lums[i] * 0.3 / lavg;
 
 	//compress high luminances
-	for (int i = 0; i < count; i++)
-		lums[i] = lums[i] / (lums[i] + 1.0);
+	// for (int i = 0; i < count; i++)
+	// 	lums[i] = lums[i] / (lums[i] + 1.0);
 
 	//re-color
 	for (int i = 0; i < count; i++)
@@ -133,18 +133,9 @@ int main(int ac, char **av)
 
 	new_sphere(scene, (t_float3){0.0, -2.0, 0.0}, 1.0, WHITE, MAT_DIFFUSE, 0.0);
 
-	// new_sphere(scene, (t_float3){2.0, -2.0, 1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-
-	// new_sphere(scene, (t_float3){-2.0, -2.0, 1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-
-	// new_sphere(scene, (t_float3){0.0, -2.0, -1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-
-	// new_sphere(scene, (t_float3){0.0, -2.0, 3.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-
-
 	//***** IMPORTANT ********
 	//for now the light needs to be the last object added and there can only be one light.
-	new_sphere(scene, (t_float3){0, 4, 1.0}, 1.0, WHITE, MAT_NULL, 10000.0);
+	new_sphere(scene, (t_float3){0, 3.9, 1.0}, 1.0, WHITE, MAT_NULL, 10000.0);
 
 	//make_bvh(scene);
 

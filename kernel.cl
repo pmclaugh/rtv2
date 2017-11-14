@@ -6,7 +6,7 @@ __constant int POOLSIZE = 256;
 __constant float COLLIDE_ERR = 0.00001f;
 __constant float NORMAL_SHIFT = 0.00003f;
 
-__constant float DIFFUSE_CONSTANT = 0.7;
+__constant float DIFFUSE_CONSTANT = 0.4;
 __constant float SPECULAR_CONSTANT = 0.9;
 
 #define SPHERE 1
@@ -193,7 +193,7 @@ static float3 trace(Ray ray, __constant Object *scene, int object_count, unsigne
 
 	for (int j = 0; j < 5 || get_random(seed0, seed1) <= stop_prob; j++)
 	{
-		float rrFactor =  j >= 5 ? 1.0 / (1.0 - stop_prob) : 1.0;
+		float rrFactor =  j >= 5 ? 1.0 - stop_prob : 1.0;
 		
 		//collide
 		float t;
@@ -266,7 +266,7 @@ static float3 trace(Ray ray, __constant Object *scene, int object_count, unsigne
 					//calculate solid angle for the light from the point (this is only for spheres, general formula is harder)
 					float solid_angle = light.v1.x * light.v1.x / (4 * PI * t);
 					//mush it all together
-					color += mask * dot(N, shadow_ray.direction) * solid_angle * DIFFUSE_CONSTANT * light.emission / PI;
+					color += mask * dot(N, shadow_ray.direction) * solid_angle * DIFFUSE_CONSTANT * rrFactor * light.emission / PI;
 				}
 			}
 		}
