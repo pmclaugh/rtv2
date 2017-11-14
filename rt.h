@@ -23,9 +23,9 @@
 #define ERROR 1e-5
 
 #define BLACK (t_float3){0.01, 0.01, 0.01}
-#define RED (t_float3){1.0, 0.01, 0.01}
-#define GREEN (t_float3){0.01, 1.0, 0.01}
-#define BLUE (t_float3){0.01, 0.01, 1.0}
+#define RED (t_float3){1.0, 0.2, 0.2}
+#define GREEN (t_float3){0.2, 1.0, 0.2}
+#define BLUE (t_float3){0.2, 0.2, 1.0}
 #define WHITE (t_float3){1.0, 1.0, 1.0}
 
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};

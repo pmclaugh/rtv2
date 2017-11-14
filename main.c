@@ -45,26 +45,56 @@ float vmag(cl_float3 v)
 	return sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
-void temp_tone_map(cl_float3 *pixels, int count)
+float vsum(cl_float3 v)
 {
+	return v.x + v.y + v.z;
+}
 
-	//compute log average
+float vmax(cl_float3 v)
+{
+	return fmax(fmax(v.x, v.y), v.z);
+}
+
+void reinhard_tone_map(cl_float3 *pixels, int count)
+{
+	//get greyscale luminance values for all pixels,
+	//and pixels become color masks
+	float *lums = calloc(count, sizeof(float));
+	for (int i = 0; i < count; i++)
+	{
+		lums[i] = vmag(pixels[i]);
+		pixels[i].x /= lums[i];
+		pixels[i].y /= lums[i];
+		pixels[i].z /= lums[i];
+	}
+
+	//debug: print some lums
+	printf("%f %f %f %f\n", lums[0], lums[1], lums[2], lums[300]);
+	printf("%f %f %f\n", pixels[1].x, pixels[1].y, pixels[1].z);
+
+	//compute log average of luminances
 	double lavg = 0.0;
 	for (int i = 0; i < count; i++)
-		lavg += log(vmag(pixels[i]) + 0.1);
+		lavg += log(lums[i] + 0.001);
+	printf("lavg before exp: %lf\n", lavg);
 	lavg = exp(lavg / (double)count);
-	printf("lavg was %lf\n", lavg);
 
-	//map average value to middle-gray
+	printf("lavg: %lf\n", lavg);
+	//map so log-average value is now mid-gray
 	for (int i = 0; i < count; i++)
-		pixels[i] = (cl_float3){pixels[i].x * 0.2 / lavg,
-								pixels[i].y * 0.2 / lavg,
-								pixels[i].z * 0.2 / lavg};
+		lums[i] = lums[i] * 0.3 / lavg;
+
 	//compress high luminances
 	for (int i = 0; i < count; i++)
-		pixels[i] = (cl_float3){pixels[i].x * (1.0 + vmag(pixels[i])),
-								pixels[i].y * (1.0 + vmag(pixels[i])),
-								pixels[i].z * (1.0 + vmag(pixels[i]))};
+		lums[i] = lums[i] / (lums[i] + 1.0);
+
+	//re-color
+	for (int i = 0; i < count; i++)
+	{
+		pixels[i].x *= lums[i];
+		pixels[i].y *= lums[i];
+		pixels[i].z *= lums[i];
+	}
 }
 
 int main(int ac, char **av)
@@ -94,33 +124,33 @@ int main(int ac, char **av)
 	t_float3 right_top_back = (t_float3){ROOMSIZE / 2, ROOMSIZE / 2, -1 *ROOMSIZE / 2};
 	t_float3 right_top_front = (t_float3){ROOMSIZE / 2, ROOMSIZE / 2, ROOMSIZE / 2};
 
-	new_plane(scene, left_bot_back, left_bot_front, left_top_front, BLUE, MAT_SPECULAR, 0.0); //left wall
-	new_plane(scene, left_bot_back, right_bot_back, right_top_back, WHITE, MAT_SPECULAR, 0.0); // front wall
-	new_plane(scene, left_bot_back, left_bot_front, right_bot_front, BLUE, MAT_DIFFUSE, 0.0); // floor
-	new_plane(scene, right_bot_back, right_bot_front, right_top_front, RED, MAT_SPECULAR, 0.0); //right wall
-	new_plane(scene, left_top_front, right_top_front, right_top_back, RED, MAT_DIFFUSE, 0.0); //ceiling
-	new_plane(scene, left_bot_front, left_top_front, right_top_front, WHITE, MAT_SPECULAR, 0.0); //back wall
+	new_plane(scene, left_bot_back, left_bot_front, left_top_front, RED, MAT_DIFFUSE, 0.0); //left wall
+	//new_plane(scene, left_bot_back, right_bot_back, right_top_back, WHITE, MAT_DIFFUSE, 0.0); // front wall
+	new_plane(scene, left_bot_back, left_bot_front, right_bot_front, WHITE, MAT_DIFFUSE, 0.0); // floor
+	new_plane(scene, right_bot_back, right_bot_front, right_top_front, BLUE, MAT_DIFFUSE, 0.0); //right wall
+	new_plane(scene, left_top_front, right_top_front, right_top_back, WHITE, MAT_DIFFUSE, 0.0); //ceiling
+	new_plane(scene, left_bot_front, left_top_front, right_top_front, GREEN, MAT_DIFFUSE, 0.0); //back wall
 
-	new_sphere(scene, (t_float3){0.0, -2.0, 1.0}, 1.0, WHITE, MAT_SPECULAR, 0.0);
+	new_sphere(scene, (t_float3){0.0, -2.0, 0.0}, 1.0, WHITE, MAT_DIFFUSE, 0.0);
 
-	new_sphere(scene, (t_float3){2.0, -2.0, 1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	// new_sphere(scene, (t_float3){2.0, -2.0, 1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
 
-	new_sphere(scene, (t_float3){-2.0, -2.0, 1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	// new_sphere(scene, (t_float3){-2.0, -2.0, 1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
 
-	new_sphere(scene, (t_float3){0.0, -2.0, -1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	// new_sphere(scene, (t_float3){0.0, -2.0, -1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
 
-	new_sphere(scene, (t_float3){0.0, -2.0, 3.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
+	// new_sphere(scene, (t_float3){0.0, -2.0, 3.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
 
 
-	new_sphere(scene, (t_float3){0, 3, 1.0}, 0.5, WHITE, MAT_NULL, 1000.0);
-
-	//new_plane (scene, (t_float3){-0.5, -0.5, 2}, (t_float3){-0.5, 0.5, 2}, (t_float3){0.5, 0.5, 2}, WHITE, MAT_DIFFUSE, 0.0);
+	//***** IMPORTANT ********
+	//for now the light needs to be the last object added and there can only be one light.
+	new_sphere(scene, (t_float3){0, 4, 1.0}, 1.0, WHITE, MAT_NULL, 10000.0);
 
 	//make_bvh(scene);
 
 
 	t_camera cam;
-	cam.center = (t_float3){0, -2.0, -4.0};
+	cam.center = (t_float3){0, 0.0, -14.0};
 	cam.normal = (t_float3){0, 0, 1};
 	cam.width = 1.0;
 	cam.height = 1.0;
@@ -132,8 +162,11 @@ int main(int ac, char **av)
 	//debug_render(scene, 300, xdim, 300, ydim);
 	cl_float3 *pixels = gpu_render(scene, scene->camera);
 	printf("left render\n");
-	temp_tone_map(pixels, xdim * ydim);
+
+	reinhard_tone_map(pixels, xdim * ydim);
 	printf("tone mapped\n");
+	
+
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
 	void *img = mlx_new_image(mlx, xdim, ydim);

@@ -1,10 +1,13 @@
 
 __constant float PI = 3.14159265359f;
 __constant float REFRACTIVE_INDEX = 1.5;
-__constant int SAMPLES_PER_LAUNCH = 1024;
+__constant int SAMPLES_PER_LAUNCH = 256;
 __constant int POOLSIZE = 256;
 __constant float COLLIDE_ERR = 0.00001f;
 __constant float NORMAL_SHIFT = 0.00003f;
+
+__constant float DIFFUSE_CONSTANT = 0.7;
+__constant float SPECULAR_CONSTANT = 0.9;
 
 #define SPHERE 1
 #define TRIANGLE 2
@@ -26,8 +29,7 @@ typedef struct s_ray {
 typedef struct s_object
 {
 	int shape;
-	float3 mat_probabilities;
-	float3 mat_constants;
+	int material;
 	float3 v0;
 	float3 v1;
 	float3 v2;
@@ -42,6 +44,42 @@ typedef struct s_camera
 	float3 d_x;
 	float3 d_y;
 }				Camera;
+
+typedef struct s_halton
+{
+	double value;
+	double inv_base;
+}				Halton;
+
+static Halton setup_halton(int i, int base)
+{
+	Halton hal;
+	double f = 1.0 / (double)base;
+	hal.inv_base = f;
+	hal.value = 0.0;
+	while(i > 0)
+	{
+		hal.value += f * (double)(i % base);
+		i /= base;
+		f *= hal.inv_base;
+	}
+	return hal;
+}
+
+static double next_hal(Halton *hal)
+{
+	double r = 1.0 - hal->value - 0.0000001;
+	if (hal->inv_base < r)
+		hal->value += hal->inv_base;
+	else
+	{
+		double h = hal->inv_base;
+		double hh;
+		do {hh = h; h *= hal->inv_base;} while(h >= r);
+		hal->value += hh + h - 1.0;
+	}
+	return hal->value;
+}
 
 static float get_random(unsigned int *seed0, unsigned int *seed1) {
 
@@ -61,7 +99,7 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 	return (res.f - 2.0f) / 2.0f;
 }
 
-int intersect_sphere(Ray ray, Object obj, float *t)
+static int intersect_sphere(const Ray ray, const Object obj, float *t)
 {
 	float3 toCenter = obj.v0 - ray.origin;
 	float b = dot(toCenter, ray.direction);
@@ -85,7 +123,7 @@ int intersect_sphere(Ray ray, Object obj, float *t)
 	return 0;
 }
 
-int intersect_triangle(Ray ray, Object obj, float *t)
+static int intersect_triangle(const Ray ray, const Object obj, float *t)
 {
 	float3 e1 = obj.v1 - obj.v0;
 	float3 e2 = obj.v2 - obj.v0;
@@ -114,7 +152,7 @@ int intersect_triangle(Ray ray, Object obj, float *t)
 		return (0);
 }
 
-int hit_nearest_brute(const Ray ray, __constant Object *scene, int object_count, float *t)
+static int hit_nearest_brute(const Ray ray, __constant Object *scene, int object_count, float *t)
 {
 	float t_min = FLT_MAX;
 	int best_ind = -1;
@@ -143,16 +181,20 @@ int hit_nearest_brute(const Ray ray, __constant Object *scene, int object_count,
 	return best_ind;
 }
 
-float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *seed0, unsigned int *seed1)
+static float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *seed0, unsigned int *seed1)
 {
 
 	float3 color = (float3)(0.0f, 0.0f, 0.0f);
 	float3 mask = (float3)(1.0f, 1.0f, 1.0f);
 
 	float stop_prob = 0.1f;
-	for (int j = 0; j < 8 || get_random(seed0, seed1) <= stop_prob; j++)
+
+	const float3 viewpoint = ray.origin;
+
+	for (int j = 0; j < 5 || get_random(seed0, seed1) <= stop_prob; j++)
 	{
-		float rrFactor =  j >= 8 ? 1.0 / (1.0 - stop_prob) : 1.0;
+		float rrFactor =  j >= 5 ? 1.0 / (1.0 - stop_prob) : 1.0;
+		
 		//collide
 		float t;
 		int hit_ind = hit_nearest_brute(ray, scene, object_count, &t);
@@ -167,18 +209,19 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 			N = normalize(hit_point - hit.v0);
 		else
 			N = normalize(cross(hit.v1 - hit.v0, hit.v2 - hit.v0));
-		
-		color += mask * hit.emission;
+
+
+		//NEE fudge
+		if (hit_ind == 0 && j == 0)
+		{
+			color += mask * hit.emission;
+			break ;
+		}
+
 
 		float3 new_dir;
 
-		//decide what type of bounce we're doing based on material properties
-		float prob_max = hit.mat_probabilities.x + hit.mat_probabilities.y + hit.mat_probabilities.z;
-		float mat_roll = prob_max * get_random(seed0, seed1);
-
-		if (prob_max == 0.0)
-			break ;
-		else if (mat_roll < hit.mat_probabilities.x)
+		if (hit.material == MAT_DIFFUSE)
 		{
 			N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
 			//local orthonormal system
@@ -193,17 +236,48 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 
 			//combine for new direction
 			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
-			mask *= hit.color * dot(new_dir, N) * hit.mat_constants.x * rrFactor * (hit.mat_probabilities.x / prob_max);
+			mask *= hit.color * dot(new_dir, N) * DIFFUSE_CONSTANT * rrFactor;
 			ray.origin = hit_point + N * NORMAL_SHIFT;
+
+			//Next Event Estimation (experimental)
+			//ASSUMPTIONS: Scene[0] is the only light and it's a sphere.
+
+			Object light = scene[0];
+			Ray shadow_ray;
+			shadow_ray.origin = hit_point + N * NORMAL_SHIFT;
+
+			//pick a random point on the light
+			rsq = get_random(seed0, seed1);
+			r = sqrt(rsq);
+			theta = 2 * PI * get_random(seed0, seed1);
+
+			float3 point = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
+			point = get_random(seed0, seed1) > 0.5 ? point : -point;
+			point = light.v1.x * (point + light.v0);
+
+			//make a ray pointed toward the light
+			
+			shadow_ray.direction = normalize(point - shadow_ray.origin);
+			if (dot(N, shadow_ray.direction) > 0)
+			{
+				int shadow_hit_ind = hit_nearest_brute(shadow_ray, scene, object_count, &t);
+				if (shadow_hit_ind == 0)
+				{
+					//calculate solid angle for the light from the point (this is only for spheres, general formula is harder)
+					float solid_angle = light.v1.x * light.v1.x / (4 * PI * t);
+					//mush it all together
+					color += mask * dot(N, shadow_ray.direction) * solid_angle * DIFFUSE_CONSTANT * light.emission / PI;
+				}
+			}
 		}
-		else if (mat_roll < hit.mat_probabilities.y + hit.mat_probabilities.x)
+		else if (hit.material == MAT_SPECULAR)
 		{
 			N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
 			new_dir = normalize(ray.direction - 2.0f * N * dot(ray.direction, N));
-			mask *= hit.mat_constants.y * rrFactor * (hit.mat_probabilities.y / prob_max);
+			mask *= SPECULAR_CONSTANT * rrFactor;
 			ray.origin = hit_point + N * NORMAL_SHIFT;
 		}
-		else //MAT_REFRACTIVE
+		else if (hit.material == MAT_REFRACTIVE) //MAT_REFRACTIVE
 		{
 			float n = REFRACTIVE_INDEX;
 			float R0 = (1.0f - n)/(1.0 + n);
@@ -229,14 +303,17 @@ float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *
 				new_dir = normalize(ray.direction + N * (cost1 * 2));
 				ray.origin = hit_point + N * NORMAL_SHIFT;
 			}
-			mask *= hit.mat_constants.z * rrFactor * (hit.mat_probabilities.z / prob_max);
+			mask *= rrFactor * SPECULAR_CONSTANT;
 		}
+		else
+			break ;
+
 		ray.direction = new_dir;
 	}
 	return color;
 }
 
-Ray ray_from_cam(const Camera cam, float x, float y)
+static Ray ray_from_cam(const Camera cam, float x, float y)
 {
 	Ray ray;
 	ray.origin = cam.focus;
@@ -263,14 +340,8 @@ __kernel void render_kernel(__constant Object *scene,
 	unsigned int x = pixel_id % width;
 	unsigned int y = pixel_id / width;
 
-	unsigned int xoff = local_id % 16;
-	unsigned int yoff = local_id / 16;
-
-	unsigned int seed0 = seeds[pixel_id * 2] + xoff;
-	unsigned int seed1 = seeds[pixel_id * 2 + 1] + yoff;
-
-	float x_coord = (float)x + (float)xoff / 16.0f;
-	float y_coord = (float)y + (float)yoff / 16.0f;
+	unsigned int seed0 = seeds[pixel_id * 2] + get_global_id(0);
+	unsigned int seed1 = seeds[pixel_id * 2 + 1];
 
 	float3 sum_color = (float3)(0.0f, 0.0f, 0.0f);
 
@@ -280,9 +351,13 @@ __kernel void render_kernel(__constant Object *scene,
 	cam.d_x = cam_dx;
 	cam.d_y = cam_dy;
 
-	Ray ray = ray_from_cam(cam, x_coord, y_coord);
 	for (int i = 0; i < SAMPLES_PER_LAUNCH / POOLSIZE; i++)
+	{
+		float x_coord = (float)x + get_random(&seed0, &seed1);
+		float y_coord = (float)y + get_random(&seed0, &seed1);
+		Ray ray = ray_from_cam(cam, x_coord, y_coord);
 		sum_color += trace(ray, scene, obj_count, &seed0, &seed1) / (float)total_samples;
+	}
 
 	sample_pool[local_id] = sum_color;
 	seeds[pixel_id * 2] = seed0;
@@ -297,18 +372,3 @@ __kernel void render_kernel(__constant Object *scene,
 		output[pixel_id] += sum_color;
 	}
 }
-
-
-/*
-
-	TODO:
-		material becomes float3, use as probabilities of different types
-		probably 2 float3s actually, one for probabilities and one for respective constants
-			//this sort of works but i need to explore how people really do it
-
-		bvh on gpu
-
-		render some really sick scenes
-
-		tone mapping is still kinda busted, seems that full black values cause issues
-*/

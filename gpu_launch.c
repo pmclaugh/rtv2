@@ -3,8 +3,7 @@
 typedef struct s_gpu_object
 {
 	cl_int shape;
-	cl_float3 mat_probabilities;
-	cl_float3 mat_constants;
+	cl_int material;
 	cl_float3 v0;
 	cl_float3 v1;
 	cl_float3 v2;
@@ -38,8 +37,8 @@ void print_clf3(cl_float3 v)
 char *load_cl_file(char *file)
 {
 	int fd = open(file, O_RDONLY);
-	char *source = malloc(8192); // real kernel is about 5k characters, whatever
-	read(fd, source, 8192);
+	char *source = calloc(sizeof(char),30000); // real kernel is about 8k characters, whatever
+	read(fd, source, 30000);
 	close(fd);
 	return source;
 }
@@ -125,25 +124,13 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 			gpu_scene[i].shape = GPU_TRIANGLE;
 
 		if (obj->material == MAT_DIFFUSE)
-		{
-			gpu_scene[i].mat_probabilities = (cl_float3){1.0, 0.0, 0.0};
-			gpu_scene[i].mat_constants = (cl_float3){0.4, 0.0, 0.0};
-		}
+			gpu_scene[i].material = GPU_MAT_DIFFUSE;
 		else if (obj->material == MAT_SPECULAR)
-		{
-			gpu_scene[i].mat_probabilities = (cl_float3){0.0, 1.0, 0.0};
-			gpu_scene[i].mat_constants = (cl_float3){0.5, 0.8, 0.0};
-		}
+			gpu_scene[i].material = GPU_MAT_SPECULAR;
 		else if (obj->material == MAT_REFRACTIVE)
-		{
-			gpu_scene[i].mat_probabilities = (cl_float3){0.0, 0.0, 1.0};
-			gpu_scene[i].mat_constants = (cl_float3){0.4, 0.0, 0.9};
-		}
+			gpu_scene[i].material = GPU_MAT_REFRACTIVE;
 		else if (obj->material == MAT_NULL)
-		{
-			gpu_scene[i].mat_probabilities = (cl_float3){0.0, 0.0, 0.0};
-			gpu_scene[i].mat_constants = (cl_float3){0.0, 0.0, 0.0};
-		}
+			gpu_scene[i].material = GPU_MAT_NULL;
 		
 		obj = obj->next;
 	}
@@ -190,7 +177,7 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 	size_t groupsize = 256;
 	size_t threadcount = resolution * groupsize;
 
-	cl_uint total_samples = 10240;
+	cl_uint total_samples = 1024;
 
 	//DEBUGGING
 	//gpu_cam_origin = (cl_float3){0.5f, 0.5f, 0.5f};
