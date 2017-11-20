@@ -182,8 +182,8 @@ static int hit_nearest_brute(const Ray ray, __constant Object *scene, int object
 static float3 trace(Ray ray, __constant Object *scene, int object_count, unsigned int *seed0, unsigned int *seed1)
 {
 
-	float3 color = (float3)(0.0f, 0.0f, 0.0f);
-	float3 mask = (float3)(1.0f, 1.0f, 1.0f);
+	float3 color = BLACK;
+	float3 mask = WHITE;
 
 	float stop_prob = 0.1f;
 
@@ -264,7 +264,7 @@ static float3 trace(Ray ray, __constant Object *scene, int object_count, unsigne
 					//calculate solid angle for the light from the point (this is only for spheres, general formula is harder)
 					float solid_angle = light.v1.x * light.v1.x / (4 * PI * t);
 					//mush it all together
-					color += mask * dot(N, shadow_ray.direction) * solid_angle * DIFFUSE_CONSTANT * rrFactor * light.emission / PI;
+					color += mask * dot(N, shadow_ray.direction) * solid_angle * light.emission / PI;
 				}
 			}
 		}
@@ -275,7 +275,7 @@ static float3 trace(Ray ray, __constant Object *scene, int object_count, unsigne
 			mask *= SPECULAR_CONSTANT * rrFactor;
 			ray.origin = hit_point + N * NORMAL_SHIFT;
 		}
-		else if (hit.material == MAT_REFRACTIVE) //MAT_REFRACTIVE
+		else if (hit.material == MAT_REFRACTIVE)
 		{
 			float n = REFRACTIVE_INDEX;
 			float R0 = (1.0f - n)/(1.0 + n);
@@ -303,8 +303,11 @@ static float3 trace(Ray ray, __constant Object *scene, int object_count, unsigne
 			}
 			mask *= rrFactor * SPECULAR_CONSTANT;
 		}
-		else
+		else // MAT_NULL
+		{
+			//we hit the light
 			break ;
+		}
 
 		ray.direction = new_dir;
 	}

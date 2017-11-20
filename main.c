@@ -174,7 +174,7 @@ int main(int ac, char **av)
 	t_param *param = calloc(1, sizeof(t_param));
 	*param = (t_param){mlx, win, img, xdim, ydim, scene};
 
-	mlx_loop_hook(mlx, loop_hook, param);
+	//mlx_loop_hook(mlx, loop_hook, param);
 	
 	mlx_key_hook(win, key_hook, param);
 	mlx_loop(mlx);

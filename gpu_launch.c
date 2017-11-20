@@ -177,7 +177,7 @@ cl_float3 *gpu_render(t_scene *scene, t_camera cam)
 	size_t resolution = xdim * ydim;
 	size_t groupsize = 256;
 
-	cl_uint total_samples = 10;
+	cl_uint total_samples = 200;
 	cl_float3 gpu_cam_origin = tfloat_to_cl(cam.origin);
 	cl_float3 gpu_cam_focus = tfloat_to_cl(cam.focus);
 	cl_float3 gpu_cam_dx = tfloat_to_cl(cam.d_x);
