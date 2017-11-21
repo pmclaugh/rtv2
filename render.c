@@ -16,7 +16,7 @@ t_ray ray_from_camera(t_camera cam, float x, float y)
 {
 	t_ray r;
 	r.origin = cam.focus;
-	t_float3 through = cam.origin;
+	cl_float3 through = cam.origin;
 	through = vec_add(through, vec_scale(cam.d_x, (float)x));
 	through = vec_add(through, vec_scale(cam.d_y, (float)y));
 	r.direction = unit_vec(vec_sub(cam.focus, through));
@@ -34,7 +34,7 @@ void init_camera(t_camera *camera, int xres, int yres)
 
 	//now i need unit vectors on the plane
 	t_3x3 camera_matrix = rotation_matrix(UNIT_Z, camera->normal);
-	t_float3 camera_x, camera_y;
+	cl_float3 camera_x, camera_y;
 	camera_x = mat_vec_mult(camera_matrix, UNIT_X);
 	camera_y = mat_vec_mult(camera_matrix, UNIT_Y);
 
@@ -50,7 +50,7 @@ void init_camera(t_camera *camera, int xres, int yres)
 #define DIFFUSE 0.3
 #define SPECULAR 0.8
 
-void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
+void trace(t_ray *ray, cl_float3 *color, const t_scene *scene, int depth)
 {
 	float rrFactor = 1.0;
 
@@ -69,28 +69,28 @@ void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
 	if (closest_object == NULL)
 		return;
 
-	t_float3 intersection = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
+	cl_float3 intersection = vec_add(ray->origin, vec_scale(ray->direction, closest_dist));
 	ray->origin = intersection;
-	t_float3 N = norm_object(closest_object, ray);
+	cl_float3 N = norm_object(closest_object, ray);
 	
 	float emission = closest_object->emission;
-	*color = vec_add(*color, (t_float3){emission * rrFactor, emission * rrFactor, emission * rrFactor});
+	*color = vec_add(*color, (cl_float3){emission * rrFactor, emission * rrFactor, emission * rrFactor});
 
 	if (closest_object->material == MAT_DIFFUSE)
 	{
 		//diffuse reflection
-		t_float3 hem_x, hem_y;
+		cl_float3 hem_x, hem_y;
 		orthonormal(N, &hem_x, &hem_y);
-		t_float3 rand_dir = better_hemisphere(rand_unit(), rand_unit());
-		t_float3 rotated_dir;
-		rotated_dir.x = dot(rand_dir, (t_float3){hem_x.x, hem_y.x, N.x});
-		rotated_dir.y = dot(rand_dir, (t_float3){hem_x.y, hem_y.y, N.y});
-		rotated_dir.z = dot(rand_dir, (t_float3){hem_x.z, hem_y.z, N.z});
+		cl_float3 rand_dir = better_hemisphere(rand_unit(), rand_unit());
+		cl_float3 rotated_dir;
+		rotated_dir.x = dot(rand_dir, (cl_float3){hem_x.x, hem_y.x, N.x});
+		rotated_dir.y = dot(rand_dir, (cl_float3){hem_x.y, hem_y.y, N.y});
+		rotated_dir.z = dot(rand_dir, (cl_float3){hem_x.z, hem_y.z, N.z});
 		ray->direction = rotated_dir;
 		ray->inv_dir = vec_inv(ray->direction);
 		float cost = dot(ray->direction, N);
 
-		t_float3 tmp = BLACK;
+		cl_float3 tmp = BLACK;
 		trace(ray, &tmp, scene, depth + 1);
 		*color = vec_add(*color, vec_scale(vec_had(tmp, closest_object->color), cost * DIFFUSE * rrFactor));
 	}
@@ -99,13 +99,13 @@ void trace(t_ray *ray, t_float3 *color, const t_scene *scene, int depth)
 		ray->direction = bounce(ray->direction, N);
 		ray->inv_dir = vec_inv(ray->direction);
 
-		t_float3 tmp = BLACK;
+		cl_float3 tmp = BLACK;
 		trace(ray, &tmp, scene, depth + 1);
 		*color = vec_add(*color, vec_scale(tmp, rrFactor * SPECULAR));
 	}
 }
 
-void tone_map(t_float3 *pixels, int count)
+void tone_map(cl_float3 *pixels, int count)
 {
 	//compute log average
 	double lavg = 0.0;
@@ -123,9 +123,9 @@ void tone_map(t_float3 *pixels, int count)
 
 #define SPP 20000.0f
 
-t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
+cl_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 {
-	t_float3 *pixels = calloc(xres * yres, sizeof(t_float3));
+	cl_float3 *pixels = calloc(xres * yres, sizeof(cl_float3));
 	
 	#pragma omp parallel for schedule(dynamic)
 	for (int y = 0; y < yres; y++)
@@ -138,7 +138,7 @@ t_float3 *simple_render(const t_scene *scene, const int xres, const int yres)
 			for (int s = 0; s < SPP; s++)
 			{
 				t_ray r = ray_from_camera(scene->camera, (float)x + next_hal(&h1), (float)y + next_hal(&h2));
-				t_float3 c = BLACK;
+				cl_float3 c = BLACK;
 				trace(&r, &c, scene, 0);
 				pixels[y * xres + x] = vec_add(pixels[y * xres + x], vec_scale(c, 1.0 / SPP));
 			}

@@ -10,14 +10,14 @@ float rand_unit_sin(void)
 	return sin(M_PI * rand_unit());
 }
 
-t_float3 hemisphere(float u1, float u2)
+cl_float3 hemisphere(float u1, float u2)
 {
 	const float r = sqrt(1.0 - u1 * u1);
 	const float phi = 2 * M_PI * u2;
-	return (t_float3){cos(phi) * r, sin(phi) * r, u1};
+	return (cl_float3){cos(phi) * r, sin(phi) * r, u1};
 }
 
-t_float3 better_hemisphere(float u1, float u2)
+cl_float3 better_hemisphere(float u1, float u2)
 {
 	const float r = sqrt(u1);
     const float theta = 2 * M_PI * u2;
@@ -25,7 +25,7 @@ t_float3 better_hemisphere(float u1, float u2)
     const float x = r * cos(theta);
     const float y = r * sin(theta);
  
-    return (t_float3){x, y, sqrt(fmax(0.0f, 1 - u1))};
+    return (cl_float3){x, y, sqrt(fmax(0.0f, 1 - u1))};
 }
 
 t_halton setup_halton(int i, int base)

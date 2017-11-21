@@ -31,9 +31,9 @@ uint64_t morton64(float x, float y, float z)
     return (mortonEncode_magicbits((unsigned int)x, (unsigned int)y, (unsigned int)z));
 }
 
-uint64_t mortonize(t_float3 pos, t_box *bounds)
+uint64_t mortonize(cl_float3 pos, t_box *bounds)
 {
-	t_float3 ranges = vec_sub(bounds->max, bounds->min);
+	cl_float3 ranges = vec_sub(bounds->max, bounds->min);
     return morton64((pos.x - bounds->min.x) / (ranges.x), 
     				(pos.y - bounds->min.y) / (ranges.y), 
     				(pos.z - bounds->min.z) / (ranges.z));
@@ -118,9 +118,9 @@ t_box AABB_from_triangle(t_object *triangle)
 {
 	t_box box;
 	//variable name change
-	const t_float3 v0 = triangle->position;
-	const t_float3 v1 = triangle->normal;
-	const t_float3 v2 = triangle->corner;
+	const cl_float3 v0 = triangle->position;
+	const cl_float3 v1 = triangle->normal;
+	const cl_float3 v2 = triangle->corner;
 
 	box.min.x = min3(v0.x, v1.x, v2.x) - ERROR;
 	box.min.y = min3(v0.y, v1.y, v2.y) - ERROR;
@@ -130,7 +130,7 @@ t_box AABB_from_triangle(t_object *triangle)
 	box.max.y = max3(v0.y, v1.y, v2.y) + ERROR;
 	box.max.z = max3(v0.z, v1.z, v2.z) + ERROR;
 
-	box.mid = (t_float3){	(box.max.x + box.min.x) / 2,
+	box.mid = (cl_float3){	(box.max.x + box.min.x) / 2,
 							(box.max.y + box.min.y) / 2,
 							(box.max.z + box.min.z) / 2};
 
@@ -145,10 +145,10 @@ t_box AABB_from_sphere(t_object *sphere)
 	t_box box;
 	box.mid = sphere->position;
 	//remember sphere's radius is stored in "normal" bc reasons
-	box.max = (t_float3){	sphere->position.x + sphere->normal.x,
+	box.max = (cl_float3){	sphere->position.x + sphere->normal.x,
 							sphere->position.y + sphere->normal.x,
 							sphere->position.z + sphere->normal.x};
-	box.min = (t_float3){	sphere->position.x - sphere->normal.x,
+	box.min = (cl_float3){	sphere->position.x - sphere->normal.x,
 							sphere->position.y - sphere->normal.x,
 							sphere->position.z - sphere->normal.x};
 	box.object = sphere;
@@ -214,9 +214,9 @@ t_box BB_from_boxes(t_box *boxes, int count)
 
 	t_box box;
 
-	box.min = (t_float3){min_x, min_y, min_z};
-	box.max = (t_float3){max_x, max_y, max_z};
-	box.mid = (t_float3){	(box.max.x + box.min.x) / 2,
+	box.min = (cl_float3){min_x, min_y, min_z};
+	box.max = (cl_float3){max_x, max_y, max_z};
+	box.mid = (cl_float3){	(box.max.x + box.min.x) / 2,
 							(box.max.y + box.min.y) / 2,
 							(box.max.z + box.min.z) / 2};
 	box.children_count = 0;
