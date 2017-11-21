@@ -1,6 +1,7 @@
 #include "rt.h"
 #include <string.h>
 
+#define VERBOSE 0
 
 typedef struct s_face
 {
@@ -13,8 +14,9 @@ typedef struct s_face
 
 typedef struct s_map
 {
-	//not sure what this is going to look like
-	//but placeholder for texture/lighting maps
+	int height;
+	int width;
+	int *pixels;
 }				Map;
 
 typedef struct s_material
@@ -61,10 +63,56 @@ typedef struct s_new_scene
 	int obj_count;
 }				Scene;
 
-void load_mats(Scene *S, char *filename)
+Map *load_map(char *rel_path, char *filename)
 {
-	//printf("trying to open %s\n", filename);
-	FILE *fp = fopen("objects/sponza/sponza.mtl", "r");
+	char *tga_file = malloc(strlen(rel_path) + strlen(filename) + 1);
+	strcpy(tga_file, rel_path);
+	strcat(tga_file, filename);
+	FILE *fp = fopen(tga_file, "r");
+	
+	if (fp == NULL)
+	{
+		if (VERBOSE)
+			printf("cannot find file %s\n", tga_file);
+		free(tga_file);
+		return NULL;
+	}
+
+	char *header = malloc(18);
+	fread(header, 18, 1, fp);
+
+	Map *map = calloc(1, sizeof(Map));
+	//12-13 width
+	map->width = (unsigned char)header[12] + (unsigned char)header[13] * 256;
+	//14-15 height
+	map->height = (unsigned char)header[14] + (unsigned char)header[15] * 256;
+
+	map->pixels = calloc(map->height * map->width, sizeof(int) * 3);
+	unsigned char *raw_pixels = calloc(map->height * map->width, sizeof(unsigned char) * 3);
+	fread(raw_pixels, map->height * map->width, sizeof(char) * 3, fp);
+
+	for (int i = 0; i < map->height * map->width; i++)
+	{
+		//convert to ints and remap from BGR to RGB
+		map->pixels[i * 3] = (int)raw_pixels[i * 3 + 2];
+		map->pixels[i * 3 + 1] = (int)raw_pixels[i * 3 + 1];
+		map->pixels[i * 3 + 2] = (int)raw_pixels[i * 3];
+	}
+
+	fclose(fp);
+	if (VERBOSE)
+		printf("loaded texture %s\n", tga_file);
+	free(tga_file);
+	return map;
+}
+
+void load_mats(Scene *S, char *rel_path, char *filename)
+{
+	char *mtl_file = malloc(strlen(rel_path) + strlen(filename) + 1);
+	strcpy(mtl_file, rel_path);
+	strcat(mtl_file, filename);
+	FILE *fp = fopen(mtl_file, "r");
+	free(mtl_file);
 
 	char *line = calloc(512, 1);
 	int mtl_count = 0;
@@ -82,10 +130,16 @@ void load_mats(Scene *S, char *filename)
 		if (strncmp(line, "newmtl ", 7) == 0)
 		{
 			if (mat_ind >= 0)
+			{
 				S->materials[mat_ind] = m;
+				if (VERBOSE)
+					printf("loaded material %s\n", m.friendly_name);
+			}
 			bzero(&m, sizeof(Material));
 			mat_ind++;
-			m.friendly_name = strdup(&line[7]);
+			m.friendly_name = malloc(256);
+			sscanf(line, "newmtl %s\n", m.friendly_name);
+			printf("new mtl friendly name %s\n", m.friendly_name);
 		}
 		else if (strncmp(line, "\tNs", 3) == 0)
 			sscanf(line, "\tNs %f", &m.Ns);
@@ -113,35 +167,43 @@ void load_mats(Scene *S, char *filename)
 		{
 			m.map_Ka_path = calloc(512, 1);
 			sscanf(line, "\tmap_Ka %s\n", m.map_Ka_path);
+			m.map_Ka = load_map(rel_path, m.map_Ka_path);
 		}
 		else if (strncmp(line, "\tmap_Kd", 7) == 0)
 		{
 			m.map_Kd_path = calloc(512, 1);
 			sscanf(line, "\tmap_Kd %s\n", m.map_Kd_path);
+			m.map_Kd = load_map(rel_path, m.map_Kd_path);
 		}
 		else if (strncmp(line, "\tmap_bump", 10) == 0)
 		{
 			m.map_bump_path = calloc(512, 1);
 			sscanf(line, "\tmap_bump %s\n", m.map_bump_path);
+			m.map_bump = load_map(rel_path, m.map_bump_path);
 		}
 		else if (strncmp(line, "\tmap_d", 6) == 0)
 		{
 			m.map_d_path = calloc(512, 1);
 			sscanf(line, "\tmap_d %s\n", m.map_d_path);
+			m.map_d = load_map(rel_path, m.map_d_path);
 		}
 	}
+	S->materials[mat_ind] = m;
 
 	fclose(fp);
 
 }
 
-Scene *scene_from_obj(char *filename)
+Scene *scene_from_obj(char *rel_path, char *filename)
 {
 	//meta function to load whole scene from file (ie sponza.obj + sponza.mtl)
 
-	FILE *fp = fopen(filename, "r");
+	char *obj_file = malloc(strlen(rel_path) + strlen(filename) + 1);
+	strcpy(obj_file, rel_path);
+	strcat(obj_file, filename);
+	FILE *fp = fopen(obj_file, "r");
+	free(obj_file);
 
-	char c;
 	char *line = calloc(512, 1);
 
 	char *matpath = calloc(512, 1);
@@ -167,7 +229,7 @@ Scene *scene_from_obj(char *filename)
 	}
 
 	//load mats
-	load_mats(S, matpath);
+	load_mats(S, rel_path, matpath);
 	printf("basics counted\n");
 
 	//back to top of file, alloc objects, count faces, load v, vt, vn
@@ -188,28 +250,43 @@ Scene *scene_from_obj(char *filename)
 		cl_float3 v;
 		if (strncmp(line, "# object", 8) == 0)
 		{
+			if (obj_ind >=0 && VERBOSE)
+				printf("loaded object %s\n", S->objects[obj_ind].friendly_name);
 			obj_ind++;
-			S->objects[obj_ind].friendly_name = strdup(&line[8]);
+			S->objects[obj_ind].friendly_name = malloc(256);
+			sscanf(line, "# object %s\n", S->objects[obj_ind].friendly_name);
 		}
 		else if (strncmp(line, "v ", 2) == 0)
 		{
-			sscanf(line, "%f %f %f", &v.x, &v.y, &v.z);
+			sscanf(line, "v %f %f %f", &v.x, &v.y, &v.z);
 			V[v_count++] = v;
 		}
 		else if (strncmp(line, "vn", 2) == 0)
 		{
-			sscanf(line, "%f %f %f", &v.x, &v.y, &v.z);
+			sscanf(line, "vn %f %f %f", &v.x, &v.y, &v.z);
 			VN[vn_count++] = v;
 		}
 		else if (strncmp(line, "vt", 2) == 0)
 		{
-			sscanf(line, "%f %f %f", &v.x, &v.y, &v.z);
+			sscanf(line, "vt %f %f %f", &v.x, &v.y, &v.z);
 			VT[vt_count++] = v;
 		}
 		else if (strncmp(line, "f ", 2) == 0)
 			S->objects[obj_ind].face_count++;
 		else if (strncmp(line, "usemtl ", 7) == 0)
-			S->objects[obj_ind].matstring = strdup(&line[7]);
+		{
+			S->objects[obj_ind].matstring = malloc(256);
+			sscanf(line, "usemtl %s\n", S->objects[obj_ind].matstring);
+			//match to material in array
+			for (int i = 0; i < S->mat_count; i++)
+			{
+				if (strcmp(S->objects[obj_ind].matstring, S->materials[i].friendly_name) == 0)
+				{
+					S->objects[obj_ind].mat = &S->materials[i];
+					break;
+				}
+			}
+		}
 	}
 
 	printf("objects described\n");
@@ -218,6 +295,7 @@ Scene *scene_from_obj(char *filename)
 	fseek(fp, 0, SEEK_SET);
 	obj_ind = -1;
 	int f_ind = 0;
+	int smoothing = 0;
 	while(fgets(line, 512, fp))
 	{
 		if (strncmp(line, "# object", 8) == 0)
@@ -226,6 +304,8 @@ Scene *scene_from_obj(char *filename)
 			S->objects[obj_ind].faces = calloc(S->objects[obj_ind].face_count, sizeof(Face));
 			f_ind = 0;
 		}
+		else if (strncmp(line, "s ", 2) == 0)
+			sscanf(line, "s %d\n", &smoothing);
 		else if (strncmp(line, "f ", 2) == 0)
 		{
 			Face f;
@@ -255,16 +335,28 @@ Scene *scene_from_obj(char *filename)
 			if (f.dim == 4)
 				f.tex[3] = VN[vtd - 1];
 
+			f.smoothing = smoothing;
 			S->objects[obj_ind].faces[f_ind] = f;
 			f_ind++;
 		}
 	}
 	printf("objects loaded\n");
 	fclose(fp);
+
+	free(V);
+	free(VN);
+	free(VT);
+
 	return S;
 }
 
 int main (void)
 {
-	scene_from_obj("objects/sponza/sponza.obj");
+	scene_from_obj("objects/sponza/", "sponza.obj");
 }
+
+
+
+/*
+	this has gone faster than expected and is very promising. still a lot of work to do before seeing it though.
+*/
