@@ -184,7 +184,7 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 	cl_float3 *V = calloc(v_count, sizeof(cl_float3));
 	cl_float3 *VN = calloc(vn_count, sizeof(cl_float3));
 	cl_float3 *VT = calloc(vt_count, sizeof(cl_float3));
-	Face *faces = calloc(face_count + 1, sizeof(Face));
+	Face *faces = calloc(face_count, sizeof(Face));
 
 	v_count = 0;
 	vn_count = 0;
@@ -265,17 +265,8 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 			faces[face_count++] = f;
 		}
 	}
-
-	//temporary
-	Face light;
-	light.verts[0] = (cl_float3){0.0, 0.0, 1000.0};
-	light.verts[1] = (cl_float3){100.0, 0.0, 0.0};
-	light.shape = 1;
-	light.mat_type = MAT_NULL;
-
-	faces[face_count] = light;
 	S->faces = faces;
-	S->face_count = face_count + 1;
+	S->face_count = face_count;
 
 	printf("faces loaded\n");
 

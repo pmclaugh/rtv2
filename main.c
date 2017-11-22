@@ -112,7 +112,7 @@ int main(int ac, char **av)
 	printf("loaded scene. it has %d faces and %d materials\n", scene->face_count, scene->mat_count);
 
 	t_camera cam;
-	cam.center = (cl_float3){500.0, 180.0, 100.0};
+	cam.center = (cl_float3){100.0, 180.0, -500.0};
 	cam.normal = (cl_float3){0.0, 0.0, 1.0};
 	cam.normal = unit_vec(cam.normal);
 	cam.width = 1.0;

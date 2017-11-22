@@ -114,6 +114,9 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 			};
 		}
 
+		printf("DEBUG: clamping to 10k faces\n");
+		s->face_count = 10000;
+
 		d_scene = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(Face) * s->face_count, NULL, NULL);
 		d_mats = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(gpu_mat) * s->mat_count, NULL, NULL);
 		d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
@@ -141,7 +144,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 	size_t resolution = xdim * ydim;
 	size_t groupsize = 256;
 
-	cl_uint total_samples = 4;
+	cl_uint total_samples = 1;
 	cl_float3 gpu_cam_origin = tfloat_to_cl(cam.origin);
 	cl_float3 gpu_cam_focus = tfloat_to_cl(cam.focus);
 	cl_float3 gpu_cam_dx = tfloat_to_cl(cam.d_x);
