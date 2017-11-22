@@ -107,7 +107,7 @@ int main(int ac, char **av)
 {
 	srand(time(NULL));
 
-	Scene *scene = scene_from_obj("objects/sponza/", "simple_sponza.obj");
+	Scene *scene = scene_from_obj("objects/sponza/", "sponza.obj");
 
 	printf("loaded scene. it has %d faces and %d materials\n", scene->face_count, scene->mat_count);
 
