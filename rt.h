@@ -229,15 +229,29 @@ typedef struct s_face
 	cl_float3 N;
 }				Face;
 
+typedef struct s_Box
+{
+	cl_float3 min; //spatial bounds of box
+	cl_float3 max; 
+	cl_int start; //indices in Faces[] that this box contains
+	cl_int end;
+	cl_int children[8];
+	cl_int children_count;
+}				Box;
+
 typedef struct s_new_scene
 {
 	Material *materials;
 	int mat_count;
 	Face *faces;
 	int face_count;
+	Box *boxes;
+	int box_count;
 }				Scene;
 
 Scene *scene_from_obj(char *rel_path, char *filename);
 
 
 cl_float3 *gpu_render(Scene *scene, t_camera cam);
+void gpu_bvh(Scene *S);
+void print_clf3(cl_float3 v);

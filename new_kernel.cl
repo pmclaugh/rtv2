@@ -23,6 +23,7 @@ __constant float SPECULAR_CONSTANT = 0.9;
 typedef struct s_ray {
 	float3 origin;
 	float3 direction;
+	float3 inv_dir;
 }				Ray;
 
 typedef struct s_object
@@ -54,6 +55,16 @@ typedef struct s_camera
 	float3 d_x;
 	float3 d_y;
 }				Camera;
+
+typedef struct s_box
+{
+	float3 min;
+	float3 max; 
+	int start;
+	int end;
+	int children[8];
+	int children_count;
+}				Box;
 
 static float get_random(unsigned int *seed0, unsigned int *seed1) {
 
@@ -155,51 +166,133 @@ static int intersect_triangle_raw(const Ray ray, const float3 v0, const float3 v
 		return (0);
 }
 
-static int hit_nearest_brute(const Ray ray, __global Object *scene, int object_count, float *t)
+//intersect_box
+static int intersect_box(const Ray ray, const Box box, float *t_out)
 {
-	float t_min = FLT_MAX;
-	int best_ind = -1;
-	for (int i = 0; i < object_count; i++)
+	
+	float tx0 = (box.min.x - ray.origin.x) / ray.direction.x;
+	float tx1 = (box.max.x - ray.origin.x) /ray.direction.x;
+	float tmin = fmin(tx0, tx1);
+	float tmax = fmax(tx0, tx1);
+
+	float ty0 = (box.min.y - ray.origin.y) /ray.direction.y;
+	float ty1 = (box.max.y - ray.origin.y) /ray.direction.y;
+	float tymin = fmin(ty0, ty1);
+	float tymax = fmax(ty0, ty1);
+
+	if ((tmin >= tymax) || (tymin >= tmax))
+		return (0);
+
+	tmin = fmax(tymin, tmin);
+	tmax = fmin(tymax, tmax);
+
+	float tz0 = (box.min.z - ray.origin.z) /ray.direction.z;
+	float tz1 = (box.max.z - ray.origin.z) /ray.direction.z;
+	float tzmin = fmin(tz0, tz1);
+	float tzmax = fmax(tz0, tz1);
+
+	if ((tmin >= tzmax) || (tzmin >= tmax))
+		return (0);
+
+    tmin = fmax(tzmin, tmin);
+	tmax = fmin(tzmax, tmax);
+	if (tmin <= 0.0 && tmax <= 0.0)
+		return (0);
+	if (tmin > 0.0)
+		*t_out = tmin;
+	else
+		*t_out = tmax;
+	return (1);
+}
+
+
+//intersect_object
+static int intersect_object(const Ray ray, const Object obj, float *t)
+{
+	if (obj.shape == SPHERE)
+		return intersect_sphere(ray, obj, t);
+	else if (obj.shape == TRIANGLE)
+		return intersect_triangle(ray, obj, t);
+	else if (obj.shape == QUAD)
 	{
-		float this_t = FLT_MAX;
-		Object obj = scene[i];
-		if (obj.shape == SPHERE)
+		int result_a, result_b;
+		float t_a = FLT_MAX;
+		float t_b = FLT_MAX;
+		result_a = intersect_triangle_raw(ray, obj.v[0], obj.v[1], obj.v[2], &t_a);
+		result_b = intersect_triangle_raw(ray, obj.v[0], obj.v[3], obj.v[2], &t_b);
+		if (result_a || result_b)
 		{
-			if (intersect_sphere(ray, obj, &this_t) && this_t < t_min)
-			{
-				t_min = this_t;
-				best_ind = i;
-			}
+			*t = fmin(t_a, t_b);
+			return (1);
 		}
-		else if (obj.shape == TRIANGLE)
-		{
-			if (intersect_triangle(ray, obj, &this_t) && this_t < t_min)
-			{
-				t_min = this_t;
-				best_ind = i;
-			}
-		}
-		else if (obj.shape == QUAD)
-		{
-			if (intersect_triangle_raw(ray, obj.v[0], obj.v[1], obj.v[2], &this_t) && this_t < t_min)
-			{
-				t_min = this_t;
-				best_ind = i;
-			}
-			if (intersect_triangle_raw(ray, obj.v[0], obj.v[3], obj.v[2], &this_t) && this_t < t_min)
-			{
-				t_min = this_t;
-				best_ind = i;
-			}
-		}
-		if (best_ind >= 0) ////////////
-			break ;
+		else
+			return (0);
 	}
-	*t = t_min;
+	else
+		return (0);
+}
+
+
+static int hit_bvh(const Ray ray, __global const Object *scene, __global const Box *boxes, float *t_out)
+{
+
+	int2 stack[32];
+	int best_ind = -1;
+	float best_t = FLT_MAX;
+
+	float box_t;
+	Box top = boxes[0];
+	if (!intersect_box(ray, top, &box_t))
+		return (-1);
+	stack[0][0] = 0;
+	stack[0][1] = 0;
+	int count = 1;
+	
+	while (count)
+	{
+		int tail_ind = stack[count - 1][0];
+		int child_ind = stack[count - 1][1];
+		stack[count - 1][1] = stack[count - 1][1] + 1;
+		const Box tail = boxes[tail_ind];
+
+		if (child_ind == tail.children_count)
+		{
+			count--;
+			continue;
+		}
+
+		int candidate_ind = tail.children[child_ind];
+		const Box candidate = boxes[candidate_ind];
+		if (intersect_box(ray, candidate, &box_t) && box_t <= best_t)
+		{
+			//if candidate has children
+			if (candidate.children_count)
+			{
+				stack[count][0] = boxes[tail_ind].children[child_ind];
+				stack[count][1] = 0;
+				count++;
+			}
+			else //if leaf, try intersect faces
+			{
+				float t;
+				for (int i = candidate.start; i < candidate.end; i++)
+				{
+					Object obj = scene[i];
+					if (intersect_object(ray, obj, &t))
+						if (t < best_t)
+						{
+							best_t = t;
+							best_ind = i;
+						}
+				}
+			}
+		}
+	}
+	*t_out = best_t;
 	return best_ind;
 }
 
-static float3 trace(Ray ray, __global Object *scene, __global Material *mats, int object_count, unsigned int *seed0, unsigned int *seed1)
+static float3 trace(Ray ray, __global Object *scene, __global Material *mats, __global Box *boxes, unsigned int *seed0, unsigned int *seed1)
 {
 
 	float3 color = BLACK;
@@ -213,9 +306,14 @@ static float3 trace(Ray ray, __global Object *scene, __global Material *mats, in
 		
 		//collide
 		float t;
-		int hit_ind = hit_nearest_brute(ray, scene, object_count, &t);
+		int hit_ind = hit_bvh(ray, scene, boxes, &t);
 		if (hit_ind == -1)
 			break ;
+		else
+		{
+			color = (float3)((float)hit_ind, (float)hit_ind, (float)hit_ind);
+			break ;
+		}
 		Object hit = scene[hit_ind];
 		Material mat = mats[hit.mat_ind];
 
@@ -270,6 +368,7 @@ static float3 trace(Ray ray, __global Object *scene, __global Material *mats, in
 		}
 
 		ray.direction = new_dir;
+		ray.inv_dir = 1.0f / new_dir;
 	}
 	return color;
 }
@@ -280,12 +379,13 @@ static Ray ray_from_cam(const Camera cam, float x, float y)
 	ray.origin = cam.focus;
 	float3 through = cam.origin + cam.d_x * x + cam.d_y * y;
 	ray.direction = normalize(cam.focus - through);
+	ray.inv_dir = 1.0f / ray.direction;
 	return ray;
 }
 
 __kernel void render_kernel(__global Object *scene,
 							__global Material *mats,
-							const int obj_count, 
+							__global Box *boxes,
 							const float3 cam_origin,
 							const float3 cam_focus,
 							const float3 cam_dx,
@@ -315,7 +415,7 @@ __kernel void render_kernel(__global Object *scene,
 		float x_coord = (float)x + get_random(&seed0, &seed1);
 		float y_coord = (float)y + get_random(&seed0, &seed1);
 		Ray ray = ray_from_cam(cam, x_coord, y_coord);
-		sum_color += trace(ray, scene, mats, obj_count, &seed0, &seed1) / (float)sample_count;
+		sum_color += trace(ray, scene, mats, boxes, &seed0, &seed1) / (float)sample_count;
 	}
 
 	seeds[pixel_id * 2] = seed0;

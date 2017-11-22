@@ -35,6 +35,32 @@ void baby_tone_map(cl_float3 *pixels, int count)
 // 	return (1);
 // }
 
+#define H_FOV M_PI_2 * 60.0 / 90.0 	//60 degrees. eventually this will be dynamic with aspect
+									// V_FOV is implicit with aspect of view-plane
+
+void init_camera(t_camera *camera, int xres, int yres)
+{
+	//printf("init camera %d %d\n", xres, yres);
+	//determine a focus point in front of the view-plane
+	//such that the edge-focus-edge vertex has angle H_FOV
+	float d = (camera->width / 2.0) / tan(H_FOV / 2.0);
+	camera->focus = vec_add(camera->center, vec_scale(camera->normal, d));
+
+	//now i need unit vectors on the plane
+	t_3x3 camera_matrix = rotation_matrix(UNIT_Z, camera->normal);
+	cl_float3 camera_x, camera_y;
+	camera_x = mat_vec_mult(camera_matrix, UNIT_X);
+	camera_y = mat_vec_mult(camera_matrix, UNIT_Y);
+
+	//pixel deltas
+	camera->d_x = vec_scale(camera_x, camera->width / (float)xres);
+	camera->d_y = vec_scale(camera_y, camera->height / (float)yres);
+
+	//start at bottom corner (the plane's "origin")
+	camera->origin = vec_sub(camera->center, vec_scale(camera_x, camera->width / 2.0));
+	camera->origin = vec_sub(camera->origin, vec_scale(camera_y, camera->height / 2.0));
+}
+
 int key_hook(int keycode, void *param)
 {
 	t_param *p = (t_param *)param;
@@ -111,9 +137,11 @@ int main(int ac, char **av)
 
 	printf("loaded scene. it has %d faces and %d materials\n", scene->face_count, scene->mat_count);
 
+	gpu_bvh(scene);
+
 	t_camera cam;
-	cam.center = (cl_float3){100.0, 180.0, -500.0};
-	cam.normal = (cl_float3){0.0, 0.0, 1.0};
+	cam.center = (cl_float3){0.0, 4000.0, 4000.0};
+	cam.normal = (cl_float3){0.0, -1.0, -1.0};
 	cam.normal = unit_vec(cam.normal);
 	cam.width = 1.0;
 	cam.height = 1.0;

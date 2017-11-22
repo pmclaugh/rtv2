@@ -43,6 +43,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 	static cl_mem d_output;
 	static cl_mem d_seeds;
 	static cl_mem d_mats;
+	static cl_mem d_boxes;
 	static int obj_count;
 	static int first = 1;
 
@@ -114,17 +115,16 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 			};
 		}
 
-		printf("DEBUG: clamping to 10k faces\n");
-		s->face_count = 10000;
-
 		d_scene = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(Face) * s->face_count, NULL, NULL);
 		d_mats = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(gpu_mat) * s->mat_count, NULL, NULL);
 		d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
 		d_seeds = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
+		d_boxes = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(Box) * s->box_count, NULL, NULL);
 
 		clEnqueueWriteBuffer(commands, d_scene, CL_TRUE, 0, sizeof(Face) * s->face_count, s->faces, 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_mats, CL_TRUE, 0, sizeof(gpu_mat) * s->mat_count, simple_mats, 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_seeds, CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
+		clEnqueueWriteBuffer(commands, d_boxes, CL_TRUE, 0, sizeof(Box) * s->box_count, s->boxes, 0, NULL, NULL);
 		//clEnqueueWriteBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 
 		clRetainContext(context);
@@ -153,7 +153,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 
 	clSetKernelArg(k, 0, sizeof(cl_mem), &d_scene);
 	clSetKernelArg(k, 1, sizeof(cl_mem), &d_mats);
-	clSetKernelArg(k, 2, sizeof(cl_int), &s->face_count);
+	clSetKernelArg(k, 2, sizeof(cl_mem), &d_boxes);
 	clSetKernelArg(k, 3, sizeof(cl_float3), &gpu_cam_origin);
 	clSetKernelArg(k, 4, sizeof(cl_float3), &gpu_cam_focus);
 	clSetKernelArg(k, 5, sizeof(cl_float3), &gpu_cam_dx);
