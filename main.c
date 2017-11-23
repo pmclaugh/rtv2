@@ -137,31 +137,35 @@ int main(int ac, char **av)
 
 	printf("loaded scene. it has %d faces and %d materials\n", scene->face_count, scene->mat_count);
 
+	// printf("THE CLAMPS\n");
+	// scene->face_count = 10000;
+
 	gpu_bvh(scene);
 
-	t_camera cam;
-	cam.center = (cl_float3){0.0, 4000.0, 4000.0};
-	cam.normal = (cl_float3){0.0, -1.0, -1.0};
-	cam.normal = unit_vec(cam.normal);
-	cam.width = 1.0;
-	cam.height = 1.0;
-	init_camera(&cam, xdim, ydim);
+	// t_camera cam;
+	// cam.center = (cl_float3){-1200.0, 150.0, 0.0};
+	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
-	cl_float3 *pixels = gpu_render(scene, cam);
+	// cam.normal = unit_vec(cam.normal);
+	// cam.width = 1.0;
+	// cam.height = 1.0;
+	// init_camera(&cam, xdim, ydim);
 
-	baby_tone_map(pixels, xdim * ydim);
-	printf("tone mapped\n");
+	// cl_float3 *pixels = gpu_render(scene, cam);
+
+	// baby_tone_map(pixels, xdim * ydim);
+	// printf("tone mapped\n");
 	
-	void *mlx = mlx_init();
-	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
-	void *img = mlx_new_image(mlx, xdim, ydim);
-	draw_pixels(img, xdim, ydim, pixels);
-	mlx_put_image_to_window(mlx, win, img, 0, 0);
+	// void *mlx = mlx_init();
+	// void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
+	// void *img = mlx_new_image(mlx, xdim, ydim);
+	// draw_pixels(img, xdim, ydim, pixels);
+	// mlx_put_image_to_window(mlx, win, img, 0, 0);
 
-	t_param *param = calloc(1, sizeof(t_param));
-	*param = (t_param){mlx, win, img, xdim, ydim};
+	// t_param *param = calloc(1, sizeof(t_param));
+	// *param = (t_param){mlx, win, img, xdim, ydim};
 	
-	mlx_key_hook(win, key_hook, param);
-	mlx_loop(mlx);
+	// mlx_key_hook(win, key_hook, param);
+	// mlx_loop(mlx);
 
 }

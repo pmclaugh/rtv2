@@ -1,45 +1,5 @@
 #include "rt.h"
 
-// int intersect_box(t_ray const * const ray, t_box const * const box, float *t)
-// {
-// 	float tx0 = (box->min.x - ray->origin.x) * ray->inv_dir.x;
-// 	float tx1 = (box->max.x - ray->origin.x) * ray->inv_dir.x;
-// 	float tmin = fmin(tx0, tx1);
-// 	float tmax = fmax(tx0, tx1);
-
-// 	float ty0 = (box->min.y - ray->origin.y) * ray->inv_dir.y;
-// 	float ty1 = (box->max.y - ray->origin.y) * ray->inv_dir.y;
-// 	float tymin = fmin(ty0, ty1);
-// 	float tymax = fmax(ty0, ty1);
-
-// 	if ((tmin >= tymax) || (tymin >= tmax))
-// 		return (0);
-
-// 	tmin = fmax(tymin, tmin);
-// 	tmax = fmin(tymax, tmax);
-
-// 	float tz0 = (box->min.z - ray->origin.z) * ray->inv_dir.z;
-// 	float tz1 = (box->max.z - ray->origin.z) * ray->inv_dir.z;
-// 	float tzmin = fmin(tz0, tz1);
-// 	float tzmax = fmax(tz0, tz1);
-
-// 	if ((tmin >= tzmax) || (tzmin >= tmax))
-// 		return (0);
-
-//     tmin = fmax(tzmin, tmin);
-// 	tmax = fmin(tzmax, tmax);
-// 	if (tmin <= 0.0 && tmax <= 0.0)
-// 		return (0);
-// 	if (t)
-// 	{
-// 		if (tmin > 0.0)
-// 			*t = tmin;
-// 		else
-// 			*t = tmax;
-// 	}
-// 	return (1);
-// }
-
 #define ORIGIN (cl_float3){0.0f, 0.0f, 0.0f}
 
 float min3(float a, float b, float c)
@@ -89,7 +49,7 @@ cl_float3 bigmax;
 
 uint64_t morty_face(const Face *F)
 {
-	cl_float3 c;
+	cl_float3 c = ORIGIN;
 	for (int i = 0; i < F->shape; i++)
 		c = vec_add(c, F->verts[i]);
 	c = vec_scale(c, 1.0f / (float)F->shape);
@@ -104,7 +64,16 @@ uint64_t morty_face(const Face *F)
 
 int face_cmp(const void *a, const void *b)
 {
-	return (morty_face(a) - morty_face(b));
+	Face *f_a = (Face *)a;
+	Face *f_b = (Face *)b;
+	uint64_t ma = morty_face(f_a);
+	uint64_t mb = morty_face(f_b);
+	if (ma > mb)
+		return 1;
+	if (ma == mb)
+		return 0;
+	if (ma < mb)
+		return -1;
 }
 
 void set_bounds(Box *B, Face *Faces)
@@ -147,6 +116,7 @@ void tree_down(Box *Boxes, Face *Faces, uint64_t *codes, int index, int depth)
 {
 	//take Boxes[index] and split it in 8, recurse on em
 	//find midpoint w binary search (barrier between 011 and 100)
+	printf("depth %d\n", depth);
 	if (Boxes[index].start == Boxes[index].end)
 	{
 		next_spot--;
@@ -159,7 +129,7 @@ void tree_down(Box *Boxes, Face *Faces, uint64_t *codes, int index, int depth)
 		int step = (Boxes[index].end - Boxes[index].start) >> 1;
 		int i = Boxes[index].start + step;
 
-		if (step < 8 || depth > 20)
+		if (step < 2 || depth > 20)
 			return ;
 		while(step > 0)
 		{
@@ -199,6 +169,20 @@ void tree_down(Box *Boxes, Face *Faces, uint64_t *codes, int index, int depth)
 	Boxes[index].children_count = count;
 }
 
+void box_deets(Box b, int i)
+{
+	printf("~~~~~~Box %d~~~~~~\n", i);
+	printf("min: ");
+	print_clf3(b.min);
+	printf("max: ");
+	print_clf3(b.max);
+	printf("start %d end %d (%d)\n", b.start, b.end, b.end - b.start);
+	printf("%d children: ", b.children_count);
+	for (int i = 0; i < b.children_count; i++)
+		printf("%d ", b.children[i]);
+	printf("\n");
+}
+
 void gpu_bvh(Scene *S)
 {
 	//REMEMBER this can be optimized later, for now just make it work
@@ -232,4 +216,6 @@ void gpu_bvh(Scene *S)
 	S->box_count = next_spot + 1;
 
 	printf("I think we did the boxes. %d of them\n", S->box_count);
+	// for (int i = 0; i < S->box_count; i++)
+	// 	box_deets(Boxes[i], i);
 }

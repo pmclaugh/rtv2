@@ -184,7 +184,7 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 	cl_float3 *V = calloc(v_count, sizeof(cl_float3));
 	cl_float3 *VN = calloc(vn_count, sizeof(cl_float3));
 	cl_float3 *VT = calloc(vt_count, sizeof(cl_float3));
-	Face *faces = calloc(face_count, sizeof(Face));
+	Face *faces = calloc(face_count + 1, sizeof(Face));
 
 	v_count = 0;
 	vn_count = 0;
@@ -265,6 +265,7 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 			faces[face_count++] = f;
 		}
 	}
+
 	S->faces = faces;
 	S->face_count = face_count;
 

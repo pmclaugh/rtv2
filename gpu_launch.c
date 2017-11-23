@@ -47,6 +47,8 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 	static int obj_count;
 	static int first = 1;
 
+	cl_float3 *h_output = calloc(xdim * ydim, sizeof(cl_float3));
+
 	if (first)
 	{
 		cl_uint numPlatforms;
@@ -125,7 +127,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 		clEnqueueWriteBuffer(commands, d_mats, CL_TRUE, 0, sizeof(gpu_mat) * s->mat_count, simple_mats, 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_seeds, CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_boxes, CL_TRUE, 0, sizeof(Box) * s->box_count, s->boxes, 0, NULL, NULL);
-		//clEnqueueWriteBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
+		clEnqueueWriteBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 
 		clRetainContext(context);
 		clRetainCommandQueue(commands);
@@ -138,7 +140,6 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 
 	// Create the compute kernel from the program (this can't be retained for some reason)
 	cl_kernel k = clCreateKernel(p, "render_kernel", NULL);
-	cl_float3 *h_output = calloc(xdim * ydim, sizeof(cl_float3));
 	int i_xdim = xdim;
 	int i_ydim = ydim;
 	size_t resolution = xdim * ydim;

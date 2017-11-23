@@ -13,8 +13,8 @@
 
 #include "mlx/mlx.h"
 
-#define xdim 400
-#define ydim 400
+#define xdim 800
+#define ydim 800
 
 #define UNIT_X (cl_float3){1, 0, 0}
 #define UNIT_Y (cl_float3){0, 1, 0}

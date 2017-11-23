@@ -84,7 +84,7 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 	return (res.f - 2.0f) / 2.0f;
 }
 
-static int intersect_sphere(const Ray ray, const Object sph, float *t)
+static const int intersect_sphere(const Ray ray, const Object sph, float *t)
 {
 	float3 toCenter = sph.v[0] - ray.origin;
 	float b = dot(toCenter, ray.direction);
@@ -108,7 +108,7 @@ static int intersect_sphere(const Ray ray, const Object sph, float *t)
 	return 0;
 }
 
-static int intersect_triangle(const Ray ray, const Object tri, float *t)
+static const int intersect_triangle(const Ray ray, const Object tri, float *t)
 {
 	float3 e1 = tri.v[1] - tri.v[0];
 	float3 e2 = tri.v[2] - tri.v[0];
@@ -137,7 +137,7 @@ static int intersect_triangle(const Ray ray, const Object tri, float *t)
 		return (0);
 }
 
-static int intersect_triangle_raw(const Ray ray, const float3 v0, const float3 v1, const float3 v2, float *t)
+static const int intersect_triangle_raw(const Ray ray, const float3 v0, const float3 v1, const float3 v2, float *t)
 {
 	float3 e1 = v1 - v0;
 	float3 e2 = v2 - v0;
@@ -167,16 +167,16 @@ static int intersect_triangle_raw(const Ray ray, const float3 v0, const float3 v
 }
 
 //intersect_box
-static int intersect_box(const Ray ray, const Box box, float *t_out)
+static const int intersect_box(const Ray ray, const Box box, float *t_out)
 {
 	
-	float tx0 = (box.min.x - ray.origin.x) / ray.direction.x;
-	float tx1 = (box.max.x - ray.origin.x) /ray.direction.x;
+	float tx0 = (box.min.x - ray.origin.x) * ray.inv_dir.x;
+	float tx1 = (box.max.x - ray.origin.x) * ray.inv_dir.x;
 	float tmin = fmin(tx0, tx1);
 	float tmax = fmax(tx0, tx1);
 
-	float ty0 = (box.min.y - ray.origin.y) /ray.direction.y;
-	float ty1 = (box.max.y - ray.origin.y) /ray.direction.y;
+	float ty0 = (box.min.y - ray.origin.y) * ray.inv_dir.y;
+	float ty1 = (box.max.y - ray.origin.y) * ray.inv_dir.y;
 	float tymin = fmin(ty0, ty1);
 	float tymax = fmax(ty0, ty1);
 
@@ -186,8 +186,8 @@ static int intersect_box(const Ray ray, const Box box, float *t_out)
 	tmin = fmax(tymin, tmin);
 	tmax = fmin(tymax, tmax);
 
-	float tz0 = (box.min.z - ray.origin.z) /ray.direction.z;
-	float tz1 = (box.max.z - ray.origin.z) /ray.direction.z;
+	float tz0 = (box.min.z - ray.origin.z) * ray.inv_dir.z;
+	float tz1 = (box.max.z - ray.origin.z) * ray.inv_dir.z;
 	float tzmin = fmin(tz0, tz1);
 	float tzmax = fmax(tz0, tz1);
 
@@ -207,7 +207,7 @@ static int intersect_box(const Ray ray, const Box box, float *t_out)
 
 
 //intersect_object
-static int intersect_object(const Ray ray, const Object obj, float *t)
+static const int intersect_object(const Ray ray, const Object obj, float *t)
 {
 	if (obj.shape == SPHERE)
 		return intersect_sphere(ray, obj, t);
@@ -263,7 +263,7 @@ static int hit_bvh(const Ray ray, __global const Object *scene, __global const B
 
 		int candidate_ind = tail.children[child_ind];
 		const Box candidate = boxes[candidate_ind];
-		if (intersect_box(ray, candidate, &box_t) && box_t <= best_t)
+		if (intersect_box(ray, candidate, &box_t) && box_t <= best_t) //this can cause errors if inside box
 		{
 			//if candidate has children
 			if (candidate.children_count)
@@ -292,7 +292,7 @@ static int hit_bvh(const Ray ray, __global const Object *scene, __global const B
 	return best_ind;
 }
 
-static float3 trace(Ray ray, __global Object *scene, __global Material *mats, __global Box *boxes, unsigned int *seed0, unsigned int *seed1)
+static float3 trace(Ray ray, __global const Object *scene, __global const Material *mats, __global const Box *boxes, unsigned int *seed0, unsigned int *seed1)
 {
 
 	float3 color = BLACK;
@@ -300,7 +300,7 @@ static float3 trace(Ray ray, __global Object *scene, __global Material *mats, __
 
 	const float stop_prob = 0.5f;
 
-	for (int j = 0; j < 2 || get_random(seed0, seed1) <= stop_prob; j++)
+	for (int j = 0; j < 5; j++)
 	{
 		float rrFactor =  j >= 5 ? 1.0 - stop_prob : 1.0;
 		
@@ -308,14 +308,13 @@ static float3 trace(Ray ray, __global Object *scene, __global Material *mats, __
 		float t;
 		int hit_ind = hit_bvh(ray, scene, boxes, &t);
 		if (hit_ind == -1)
-			break ;
-		else
 		{
-			color = (float3)((float)hit_ind, (float)hit_ind, (float)hit_ind);
 			break ;
 		}
 		Object hit = scene[hit_ind];
 		Material mat = mats[hit.mat_ind];
+		color = (float3)((float)hit.mat_ind / 26.0f, (float)hit.mat_ind / 26.0f, (float)hit.mat_ind / 26.0f);
+		break;
 
 		float3 hit_point = ray.origin + ray.direction * t;
 
@@ -325,8 +324,6 @@ static float3 trace(Ray ray, __global Object *scene, __global Material *mats, __
 			N = normalize(hit_point - hit.v[0]);
 		else
 			N = hit.N; // later this is a smoothing kind of thing
-
-		//color += mask * mat.Ke;
 
 		float3 new_dir;
 
@@ -345,8 +342,7 @@ static float3 trace(Ray ray, __global Object *scene, __global Material *mats, __
 
 			//combine for new direction
 			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
-			color += mask * WHITE;
-			mask *= dot(new_dir, N) * mat.Kd * rrFactor; //////////////
+			mask *= dot(new_dir, N) * rrFactor; //////////////
 			ray.origin = hit_point + N * NORMAL_SHIFT;
 		}
 		else if (hit.mat_type == MAT_SPECULAR)
@@ -363,7 +359,7 @@ static float3 trace(Ray ray, __global Object *scene, __global Material *mats, __
 		else // MAT_NULL
 		{
 			//we hit the light
-			color += (100.0f * mask);
+			color += (10.0f * mask);
 			break ;
 		}
 
@@ -383,9 +379,9 @@ static Ray ray_from_cam(const Camera cam, float x, float y)
 	return ray;
 }
 
-__kernel void render_kernel(__global Object *scene,
-							__global Material *mats,
-							__global Box *boxes,
+__kernel void render_kernel(__global const Object *scene,
+							__global const Material *mats,
+							__global const Box *boxes,
 							const float3 cam_origin,
 							const float3 cam_focus,
 							const float3 cam_dx,
