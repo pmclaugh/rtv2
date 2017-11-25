@@ -262,7 +262,7 @@ static const int intersect_object(const Ray ray, const Object obj, float *t)
 		return (0);
 }
 
-static int hit_bvh(const Ray ray, __global const Object *scene, __global const Box *boxes, int index, float *t_out)
+static int hit_bvh(const Ray ray, __constant Object *scene, __constant Box *boxes, int index, float *t_out)
 {
 
 	int2 stack[32];
@@ -320,7 +320,7 @@ static int hit_bvh(const Ray ray, __global const Object *scene, __global const B
 	return best_ind;
 }
 
-static int hit_meta_bvh(const Ray ray, __global const Object *scene, __global const Box *boxes, __constant C_Box *object_boxes, const uint obj_count, float *t_out)
+static int hit_meta_bvh(const Ray ray, __constant Object *scene, __constant Box *boxes, __constant C_Box *object_boxes, const uint obj_count, float *t_out)
 {
 	//this is a temporary test implementation, meta bvh is just a list. showed 2x speedup even this way. very promising.
 	float best_t = FLT_MAX;
@@ -346,7 +346,7 @@ static int hit_meta_bvh(const Ray ray, __global const Object *scene, __global co
 	return best_ind;
 }
 
-static float3 trace(Ray ray, __global const Object *scene, __global const Material *mats, __global const Box *boxes, __constant C_Box *object_boxes, const uint obj_count, unsigned int *seed0, unsigned int *seed1)
+static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats, __constant Box *boxes, __constant C_Box *object_boxes, const uint obj_count, unsigned int *seed0, unsigned int *seed1)
 {
 
 	float3 color = BLACK;
@@ -433,9 +433,9 @@ static Ray ray_from_cam(const Camera cam, float x, float y)
 	return ray;
 }
 
-__kernel void render_kernel(__global const Object *scene,
-							__global const Material *mats,
-							__global const Box *boxes,
+__kernel void render_kernel(__constant Object *scene,
+							__constant Material *mats,
+							__constant Box *boxes,
 							const float3 cam_origin,
 							const float3 cam_focus,
 							const float3 cam_dx,
