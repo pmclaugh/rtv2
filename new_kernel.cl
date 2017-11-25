@@ -66,6 +66,13 @@ typedef struct s_box
 	int children_count;
 }				Box;
 
+typedef struct compact_box
+{
+	float3 min;
+	float3 max;
+	int key;
+}				C_Box;
+
 static float get_random(unsigned int *seed0, unsigned int *seed1) {
 
 	/* hash the seeds using bitwise AND operations and bitshifts */
@@ -166,17 +173,40 @@ static const int intersect_triangle_raw(const Ray ray, const float3 v0, const fl
 		return (0);
 }
 
-//intersect_box
-static const int intersect_box(const Ray ray, const Box box, float *t_out)
+static int inside_box(const float3 pt, const Box box, float *t)
 {
-	
-	float tx0 = (box.min.x - ray.origin.x) * ray.inv_dir.x;
-	float tx1 = (box.max.x - ray.origin.x) * ray.inv_dir.x;
+	if (box.min.x <= pt.x && pt.x <= box.max.x)
+		if (box.min.y <= pt.y && pt.y <= box.max.y)
+			if (box.min.z <= pt.z && pt.z <= box.max.z)
+			{
+				*t = 0.0f;
+				return 1;
+			}
+	return 0;
+}
+
+static int inside_bounds(const float3 pt, const float3 bmin, const float3 bmax, float *t)
+{
+	if (bmin.x <= pt.x && pt.x <= bmax.x)
+		if (bmin.y <= pt.y && pt.y <= bmax.y)
+			if (bmin.z <= pt.z && pt.z <= bmax.z)
+			{
+				*t = 0.0f;
+				return 1;
+			}
+	return 0;
+}
+
+//intersect_box
+static const int intersect_box(const Ray ray, const float3 bmin, const float3 bmax, float *t_out)
+{	
+	float tx0 = (bmin.x - ray.origin.x) * ray.inv_dir.x;
+	float tx1 = (bmax.x - ray.origin.x) * ray.inv_dir.x;
 	float tmin = fmin(tx0, tx1);
 	float tmax = fmax(tx0, tx1);
 
-	float ty0 = (box.min.y - ray.origin.y) * ray.inv_dir.y;
-	float ty1 = (box.max.y - ray.origin.y) * ray.inv_dir.y;
+	float ty0 = (bmin.y - ray.origin.y) * ray.inv_dir.y;
+	float ty1 = (bmax.y - ray.origin.y) * ray.inv_dir.y;
 	float tymin = fmin(ty0, ty1);
 	float tymax = fmax(ty0, ty1);
 
@@ -186,8 +216,8 @@ static const int intersect_box(const Ray ray, const Box box, float *t_out)
 	tmin = fmax(tymin, tmin);
 	tmax = fmin(tymax, tmax);
 
-	float tz0 = (box.min.z - ray.origin.z) * ray.inv_dir.z;
-	float tz1 = (box.max.z - ray.origin.z) * ray.inv_dir.z;
+	float tz0 = (bmin.z - ray.origin.z) * ray.inv_dir.z;
+	float tz1 = (bmax.z - ray.origin.z) * ray.inv_dir.z;
 	float tzmin = fmin(tz0, tz1);
 	float tzmax = fmax(tz0, tz1);
 
@@ -232,8 +262,7 @@ static const int intersect_object(const Ray ray, const Object obj, float *t)
 		return (0);
 }
 
-
-static int hit_bvh(const Ray ray, __global const Object *scene, __global const Box *boxes, float *t_out)
+static int hit_bvh(const Ray ray, __global const Object *scene, __global const Box *boxes, int index, float *t_out)
 {
 
 	int2 stack[32];
@@ -241,10 +270,7 @@ static int hit_bvh(const Ray ray, __global const Object *scene, __global const B
 	float best_t = FLT_MAX;
 
 	float box_t;
-	Box top = boxes[0];
-	if (!intersect_box(ray, top, &box_t))
-		return (-1);
-	stack[0][0] = 0;
+	stack[0][0] = index;
 	stack[0][1] = 0;
 	int count = 1;
 	
@@ -263,27 +289,29 @@ static int hit_bvh(const Ray ray, __global const Object *scene, __global const B
 
 		int candidate_ind = tail.children[child_ind];
 		const Box candidate = boxes[candidate_ind];
-		if (intersect_box(ray, candidate, &box_t) && box_t <= best_t) //this can cause errors if inside box
+		if (inside_box(ray.origin, candidate, &box_t) || intersect_box(ray, candidate.min, candidate.max, &box_t))
 		{
-			//if candidate has children
-			if (candidate.children_count)
+			if (box_t <= best_t)
 			{
-				stack[count][0] = boxes[tail_ind].children[child_ind];
-				stack[count][1] = 0;
-				count++;
-			}
-			else //if leaf, try intersect faces
-			{
-				float t;
-				for (int i = candidate.start; i < candidate.end; i++)
+				if (candidate.children_count)
 				{
-					Object obj = scene[i];
-					if (intersect_object(ray, obj, &t))
-						if (t < best_t)
-						{
-							best_t = t;
-							best_ind = i;
-						}
+					stack[count][0] = boxes[tail_ind].children[child_ind];
+					stack[count][1] = 0;
+					count++;
+				}
+				else //if leaf, try intersect faces
+				{
+					float t;
+					for (int i = candidate.start; i < candidate.end; i++)
+					{
+						Object obj = scene[i];
+						if (intersect_object(ray, obj, &t))
+							if (t < best_t)
+							{
+								best_t = t;
+								best_ind = i;
+							}
+					}
 				}
 			}
 		}
@@ -292,29 +320,55 @@ static int hit_bvh(const Ray ray, __global const Object *scene, __global const B
 	return best_ind;
 }
 
-static float3 trace(Ray ray, __global const Object *scene, __global const Material *mats, __global const Box *boxes, unsigned int *seed0, unsigned int *seed1)
+static int hit_meta_bvh(const Ray ray, __global const Object *scene, __global const Box *boxes, __constant C_Box *object_boxes, const uint obj_count, float *t_out)
+{
+	//this is a temporary test implementation, meta bvh is just a list. showed 2x speedup even this way. very promising.
+	float best_t = FLT_MAX;
+	int best_ind = -1;
+	for (int i = 0; i < obj_count; i++)
+	{
+		float t;
+		C_Box cb = object_boxes[i];
+		if (inside_bounds(ray.origin, cb.min, cb.max, &t) || intersect_box(ray, cb.min, cb.max, &t))
+		{
+			if (t < best_t)
+			{
+				int ret = hit_bvh(ray, scene, boxes, cb.key, &t);
+				if (ret != -1 && t < best_t)
+				{
+					best_t = t;
+					best_ind = ret;
+				}
+			}
+		}
+	}
+	*t_out = best_t;
+	return best_ind;
+}
+
+static float3 trace(Ray ray, __global const Object *scene, __global const Material *mats, __global const Box *boxes, __constant C_Box *object_boxes, const uint obj_count, unsigned int *seed0, unsigned int *seed1)
 {
 
 	float3 color = BLACK;
 	float3 mask = WHITE;
 
-	const float stop_prob = 0.5f;
+	const float stop_prob = 0.2f;
 
-	for (int j = 0; j < 5; j++)
+	for (int j = 0; j < 5 || get_random(seed0, seed1) <= stop_prob; j++)
 	{
-		float rrFactor =  j >= 5 ? 1.0 - stop_prob : 1.0;
+		float rrFactor = j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
 		
 		//collide
 		float t;
-		int hit_ind = hit_bvh(ray, scene, boxes, &t);
+		int hit_ind = hit_meta_bvh(ray, scene, boxes, object_boxes, obj_count, &t);
 		if (hit_ind == -1)
 		{
+			if (j != 0)
+				color += 100.0f * mask;
 			break ;
 		}
-		Object hit = scene[hit_ind];
-		Material mat = mats[hit.mat_ind];
-		color = (float3)((float)hit.mat_ind / 26.0f, (float)hit.mat_ind / 26.0f, (float)hit.mat_ind / 26.0f);
-		break;
+		const Object hit = scene[hit_ind];
+		//const Material mat = mats[hit.mat_ind];
 
 		float3 hit_point = ray.origin + ray.direction * t;
 
@@ -389,13 +443,15 @@ __kernel void render_kernel(__global const Object *scene,
 							const int width,
 							__global float3* output,
 							__global uint* seeds,
-							const uint sample_count)
+							const uint sample_count,
+							__constant C_Box *object_boxes,
+							const uint obj_count)
 {
 	unsigned int pixel_id = get_global_id(0);
 	unsigned int x = pixel_id % width;
 	unsigned int y = pixel_id / width;
 
-	unsigned int seed0 = seeds[pixel_id * 2] + get_global_id(0);
+	unsigned int seed0 = seeds[pixel_id * 2];
 	unsigned int seed1 = seeds[pixel_id * 2 + 1];
 
 	float3 sum_color = (float3)(0.0f, 0.0f, 0.0f);
@@ -411,10 +467,10 @@ __kernel void render_kernel(__global const Object *scene,
 		float x_coord = (float)x + get_random(&seed0, &seed1);
 		float y_coord = (float)y + get_random(&seed0, &seed1);
 		Ray ray = ray_from_cam(cam, x_coord, y_coord);
-		sum_color += trace(ray, scene, mats, boxes, &seed0, &seed1) / (float)sample_count;
+		sum_color += trace(ray, scene, mats, boxes, object_boxes, obj_count, &seed0, &seed1) / (float)sample_count;
 	}
 
 	seeds[pixel_id * 2] = seed0;
 	seeds[pixel_id * 2 + 1] = seed1;
-	output[pixel_id] = sum_color;
+	output[pixel_id] += sum_color;
 }

@@ -44,13 +44,14 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 	static cl_mem d_seeds;
 	static cl_mem d_mats;
 	static cl_mem d_boxes;
-	static int obj_count;
+	static cl_mem d_const_boxes;
 	static int first = 1;
 
 	cl_float3 *h_output = calloc(xdim * ydim, sizeof(cl_float3));
 
 	if (first)
 	{
+		printf("doing the heavy stuff\n");
 		cl_uint numPlatforms;
 	    int err;
 
@@ -76,7 +77,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 	    context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
 
 	    // Create a command queue
-	    commands = clCreateCommandQueue(context, device_id, 0, &err);
+	    commands = clCreateCommandQueue(context, device_id, CL_QUEUE_PROFILING_ENABLE, &err);
 	    //printf("setup context\n");
 
 
@@ -122,11 +123,13 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 		d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
 		d_seeds = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
 		d_boxes = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(Box) * s->box_count, NULL, NULL);
+		d_const_boxes = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(C_Box) * s->c_box_count, NULL, NULL);
 
 		clEnqueueWriteBuffer(commands, d_scene, CL_TRUE, 0, sizeof(Face) * s->face_count, s->faces, 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_mats, CL_TRUE, 0, sizeof(gpu_mat) * s->mat_count, simple_mats, 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_seeds, CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_boxes, CL_TRUE, 0, sizeof(Box) * s->box_count, s->boxes, 0, NULL, NULL);
+		clEnqueueWriteBuffer(commands, d_const_boxes, CL_TRUE, 0, sizeof(C_Box) * s->c_box_count, &s->c_boxes[1], 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 
 		clRetainContext(context);
@@ -144,8 +147,9 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 	int i_ydim = ydim;
 	size_t resolution = xdim * ydim;
 	size_t groupsize = 256;
+	cl_int obj_count = 1;
 
-	cl_uint total_samples = 1;
+	cl_uint total_samples = 32;
 	cl_float3 gpu_cam_origin = tfloat_to_cl(cam.origin);
 	cl_float3 gpu_cam_focus = tfloat_to_cl(cam.focus);
 	cl_float3 gpu_cam_dx = tfloat_to_cl(cam.d_x);
@@ -163,13 +167,21 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 	clSetKernelArg(k, 8, sizeof(cl_mem), &d_output);
 	clSetKernelArg(k, 9, sizeof(cl_mem), &d_seeds);
 	clSetKernelArg(k, 10, sizeof(cl_uint), &total_samples);
+	clSetKernelArg(k, 11, sizeof(cl_mem), &d_const_boxes);
+	clSetKernelArg(k, 12, sizeof(cl_uint), &obj_count);
 
 	printf("about to fire\n");
 	//pull the trigger
 
-	clEnqueueNDRangeKernel(commands, k, 1, 0, &resolution, &groupsize, 0, NULL, NULL);
+	cl_event render;
+	cl_int err = clEnqueueNDRangeKernel(commands, k, 1, 0, &resolution, &groupsize, 0, NULL, &render);
 	clFinish(commands);
 	clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 
+	cl_ulong start, end;
+	clGetEventProfilingInfo(render, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+	clGetEventProfilingInfo(render, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+
+	printf("kernel took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
 	return h_output;
 }

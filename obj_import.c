@@ -155,11 +155,12 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 
 	Scene *S = calloc(1, sizeof(Scene));
 
-	//First loop: counting v, vn, vt, grabbing materials file path
+	//First loop: counting v, vn, vt, grabbing materials file path, count objects
 	int v_count = 0;
 	int vn_count = 0;
 	int vt_count = 0;
 	int face_count = 0;
+	int obj_count = 0;
 	while(fgets(line, 512, fp))
 	{
 		if (strncmp(line, "mtllib ", 7) == 0)
@@ -172,6 +173,8 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 			vt_count++;
 		else if (strncmp(line, "f ", 2) == 0)
 			face_count++;
+		else if (strncmp(line, "g ", 2) == 0)
+			obj_count++;
 	}
 
 	//load mats
@@ -190,6 +193,10 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 	vn_count = 0;
 	vt_count = 0;
 	face_count = 0;
+
+	printf("I counted %d objects\n", obj_count);
+	int *obj_indices = calloc(obj_count, sizeof(int));
+	obj_count = 0;
 
 	int mat_ind = -1;
 	int smoothing = 0;
@@ -224,6 +231,11 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 					break;
 				}
 			}
+		}
+		else if (strncmp(line, "g ", 2) == 0)
+		{
+			obj_indices[obj_count] = face_count;
+			obj_count++;
 		}
 		else if (strncmp(line, "s ", 2) == 0)
 			sscanf(line, "s %d\n", &smoothing);
@@ -264,35 +276,24 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 			f.mat_ind = mat_ind;
 			faces[face_count++] = f;
 		}
+
 	}
 
 	S->faces = faces;
 	S->face_count = face_count;
 
 	printf("faces loaded\n");
-
 	fclose(fp);
-
 	free(V);
 	free(VN);
 	free(VT);
 
+	printf("I counted %d objects\n", obj_count);
+
+	printf("making BVH\n");
+
+	//gpu_bvh(S);
+	gpu_ready_bvh(S, obj_indices, obj_count);
+
 	return S;
 }
-
-
-
-/*
-	this has gone faster than expected and is very promising. still a lot of work to do before seeing it though.
-
-	things to think about:
-		I should build a very simple test case to try, on both CPU and GPU, that will help me verify basic assumptions about texturing.
-
-		this scene necessitates a BVH. I should redesign it for gpu use. maybe reconsider how i'm storing all this stuff.
-			i went to the trouble of making objects collections of faces but I think on the GPU it's going to just be a giant array? not sure.
-
-
-
-	UGGGHHH i guess i'm redoing this one more time. Just noticed different sets of faces in the same object can use different materials.
-		It's time to just make it one big array fuck distinguishing between objects. each face apparently has its own material value.
-*/

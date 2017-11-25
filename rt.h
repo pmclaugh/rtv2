@@ -13,8 +13,8 @@
 
 #include "mlx/mlx.h"
 
-#define xdim 800
-#define ydim 800
+#define xdim 512
+#define ydim 512
 
 #define UNIT_X (cl_float3){1, 0, 0}
 #define UNIT_Y (cl_float3){0, 1, 0}
@@ -229,6 +229,13 @@ typedef struct s_face
 	cl_float3 N;
 }				Face;
 
+typedef struct compact_box
+{
+	cl_float3 min;
+	cl_float3 max;
+	cl_int key;
+}				C_Box;
+
 typedef struct s_Box
 {
 	cl_float3 min; //spatial bounds of box
@@ -247,6 +254,8 @@ typedef struct s_new_scene
 	int face_count;
 	Box *boxes;
 	int box_count;
+	C_Box *c_boxes;
+	int c_box_count;
 }				Scene;
 
 Scene *scene_from_obj(char *rel_path, char *filename);
@@ -254,4 +263,6 @@ Scene *scene_from_obj(char *rel_path, char *filename);
 
 cl_float3 *gpu_render(Scene *scene, t_camera cam);
 void gpu_bvh(Scene *S);
+Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
+void gpu_ready_bvh(Scene *S, int *counts, int obj_count);
 void print_clf3(cl_float3 v);

@@ -7,6 +7,11 @@ typedef struct s_param
 	void *img;
 	int x;
 	int y;
+
+	Scene *scene;
+	t_camera cam;
+	cl_float3 *pixels;
+	int samplecount;
 }				t_param;
 
 #define rot_angle M_PI_2 * 4.0 / 90.0
@@ -21,19 +26,40 @@ void baby_tone_map(cl_float3 *pixels, int count)
 	}
 }
 
-// int loop_hook(void *param)
-// {
-// 	t_param *p = (t_param *)param;
+cl_float3 *baby_tone_dupe(cl_float3 *pixels, int count, int samplecount)
+{
+	cl_float3 *toned = calloc(count, sizeof(cl_float3));
+	for (int i = 0; i < count; i++)
+	{
+		pixels[i].x = pixels[i].x / (float)samplecount;
+		pixels[i].y = pixels[i].y / (float)samplecount;
+		pixels[i].z = pixels[i].z / (float)samplecount;
+		toned[i].x = pixels[i].x / (pixels[i].x + 1.0);
+		toned[i].y = pixels[i].y / (pixels[i].y + 1.0);
+		toned[i].z = pixels[i].z / (pixels[i].z + 1.0);
+	}
+	return toned;
+}
 
-// 	cl_float3 *pixels = gpu_render(p->scene, p->scene->camera);
-// 	baby_tone_map(pixels, xdim * ydim);
-// 	draw_pixels(p->img, p->x, p->y, pixels);
-// 	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
-// 	free(pixels);
-// 	p->scene->camera.center = vec_add(p->scene->camera.center, (cl_float3){0.0, 0.0, 0.1});
-// 	init_camera(&p->scene->camera, xdim, ydim);
-// 	return (1);
-// }
+int loop_hook(void *param)
+{
+	t_param *p = (t_param *)param;
+
+	if (!p->pixels)
+		p->pixels = calloc(xdim *ydim, sizeof(cl_float3));
+	cl_float3 *new = gpu_render(p->scene, p->cam);
+	p->samplecount++;
+	for (int i = 0; i < xdim * ydim; i++)
+		p->pixels[i] = vec_add(p->pixels[i], new[i]);
+
+	cl_float3 *draw = baby_tone_dupe(p->pixels, xdim * ydim, p->samplecount);
+	draw_pixels(p->img, p->x, p->y, draw);
+	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
+	free(draw);
+	free(new);
+	printf("%d samples\n", p->samplecount);
+	return (1);
+}
 
 #define H_FOV M_PI_2 * 60.0 / 90.0 	//60 degrees. eventually this will be dynamic with aspect
 									// V_FOV is implicit with aspect of view-plane
@@ -133,39 +159,39 @@ int main(int ac, char **av)
 {
 	srand(time(NULL));
 
+	//bvh construction now happens inside scene_from_obj
 	Scene *scene = scene_from_obj("objects/sponza/", "sponza.obj");
 
 	printf("loaded scene. it has %d faces and %d materials\n", scene->face_count, scene->mat_count);
 
-	// printf("THE CLAMPS\n");
-	// scene->face_count = 10000;
-
-	gpu_bvh(scene);
-
-	// t_camera cam;
-	// cam.center = (cl_float3){-1200.0, 150.0, 0.0};
-	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
-
-	// cam.normal = unit_vec(cam.normal);
-	// cam.width = 1.0;
-	// cam.height = 1.0;
-	// init_camera(&cam, xdim, ydim);
-
-	// cl_float3 *pixels = gpu_render(scene, cam);
-
-	// baby_tone_map(pixels, xdim * ydim);
-	// printf("tone mapped\n");
 	
-	// void *mlx = mlx_init();
-	// void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
-	// void *img = mlx_new_image(mlx, xdim, ydim);
-	// draw_pixels(img, xdim, ydim, pixels);
-	// mlx_put_image_to_window(mlx, win, img, 0, 0);
 
-	// t_param *param = calloc(1, sizeof(t_param));
-	// *param = (t_param){mlx, win, img, xdim, ydim};
+	t_camera cam;
+
+	//pointed right at the planter next to the big curtain
+	cam.center = (cl_float3){-400.0, 50.0, -220.0};
+	cam.normal = (cl_float3){1.0, 0.0, 0.0};
+
+	cam.normal = unit_vec(cam.normal);
+	cam.width = 1.0;
+	cam.height = 1.0;
+	init_camera(&cam, xdim, ydim);
+
+	cl_float3 *pixels = gpu_render(scene, cam);
+
+	baby_tone_map(pixels, xdim * ydim);
+	printf("tone mapped\n");
 	
-	// mlx_key_hook(win, key_hook, param);
-	// mlx_loop(mlx);
+	void *mlx = mlx_init();
+	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
+	void *img = mlx_new_image(mlx, xdim, ydim);
+	draw_pixels(img, xdim, ydim, pixels);
+	mlx_put_image_to_window(mlx, win, img, 0, 0);
 
+	t_param *param = calloc(1, sizeof(t_param));
+	*param = (t_param){mlx, win, img, xdim, ydim, scene, cam, NULL, 0};
+	
+	mlx_key_hook(win, key_hook, param);
+	//mlx_loop_hook(mlx, loop_hook, param);
+	mlx_loop(mlx);
 }

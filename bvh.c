@@ -12,6 +12,9 @@ float max3(float a, float b, float c)
 	return fmax(fmax(a, b), c);
 }
 
+cl_float3 bigmin;
+cl_float3 bigmax;
+
 
 uint64_t splitBy3(const unsigned int a)
 {
@@ -34,8 +37,9 @@ uint64_t mortonEncode_magicbits(const unsigned int x, const unsigned int y, cons
 
 uint64_t morton64(float x, float y, float z)
 {
-	if (max3(x,y,z) > 1 || min3(x,y,z) < 0)
-		printf("scaling is bad!\n");
+	// if (max3(x,y,z) > 1.001 || min3(x,y,z) < -0.001)
+	// 	printf("scaling is bad! %f %f %f\n", x, y, z);
+	
 	//printf("x %f y %f z %f\n", x, y, z);
 	//x, y, z are in [0, 1]. multiply by 2^21 to get 21 bits, confine to [0, 2^21 - 1]
     x = fmin(fmax(x * 2097152.0f, 0.0f), 2097151.0f);
@@ -43,9 +47,6 @@ uint64_t morton64(float x, float y, float z)
     z = fmin(fmax(z * 2097152.0f, 0.0f), 2097151.0f);
     return (mortonEncode_magicbits((unsigned int)x, (unsigned int)y, (unsigned int)z));
 }
-
-cl_float3 bigmin;
-cl_float3 bigmax;
 
 uint64_t morty_face(const Face *F)
 {
@@ -57,7 +58,18 @@ uint64_t morty_face(const Face *F)
 	//scale that to unit cube
 	c = vec_sub(c, bigmin);
 	cl_float3 span = vec_sub(bigmax, bigmin);
+	float scale = max3(span.x, span.y, span.z);
 	c = (cl_float3){c.x / span.x, c.y / span.y, c.z / span.z};
+
+	if (max3(c.x,c.y,c.z) > 1.001 || min3(c.x,c.y,c.z) < -0.001)
+	{
+		printf("scaling is bad! %f %f %f\n", c.x, c.y, c.z);
+		printf("bounds:\n");
+		print_clf3(bigmin);
+		print_clf3(bigmax);
+		for (int i = 0; i < F->shape; i++)
+			print_clf3(F->verts[i]);
+	}
 
 	return morton64(c.x, c.y, c.z);
 }
@@ -78,28 +90,30 @@ int face_cmp(const void *a, const void *b)
 
 void set_bounds(Box *B, Face *Faces)
 {
-	float max_x = FLT_MAX;
-	float max_y = FLT_MAX;
-	float max_z = FLT_MAX;
+	float max_x = -1.0 * FLT_MAX;
+	float max_y = -1.0 * FLT_MAX;
+	float max_z = -1.0 * FLT_MAX;
 
-	float min_x = -1.0 * FLT_MAX;
-	float min_y = -1.0 * FLT_MAX;
-	float min_z = -1.0 * FLT_MAX; //never forget
+	float min_x = FLT_MAX;
+	float min_y = FLT_MAX;
+	float min_z = FLT_MAX; //never forget
 
 	for (int i = B->start; i < B->end; i++)
+	{
 		for (int j = 0; j < Faces[i].shape; j++)
 		{
-			max_x = fmin(Faces[i].verts[j].x, max_x);
-			max_y = fmin(Faces[i].verts[j].y, max_y);
-			max_z = fmin(Faces[i].verts[j].z, max_z);
+			max_x = fmax(Faces[i].verts[j].x, max_x);
+			max_y = fmax(Faces[i].verts[j].y, max_y);
+			max_z = fmax(Faces[i].verts[j].z, max_z);
 
-			min_x = fmax(Faces[i].verts[j].x, min_x);
-			min_y = fmax(Faces[i].verts[j].y, min_y);
-			min_z = fmax(Faces[i].verts[j].z, min_z);
+			min_x = fmin(Faces[i].verts[j].x, min_x);
+			min_y = fmin(Faces[i].verts[j].y, min_y);
+			min_z = fmin(Faces[i].verts[j].z, min_z);
 		}
+	}
 
-	B->min = (cl_float3){min_x, min_y, min_z};
-	B->max = (cl_float3){max_x, max_y, max_z};
+	B->min = (cl_float3){min_x - 0.01f, min_y - 0.01f, min_z - 0.01f};
+	B->max = (cl_float3){max_x + 0.01f, max_y + 0.01f, max_z + 0.01f};
 }
 
 int next_spot;
@@ -112,11 +126,11 @@ unsigned int morton_digit(uint64_t code, int depth)
 	return code;
 }
 
-void tree_down(Box *Boxes, Face *Faces, uint64_t *codes, int index, int depth)
+void tree_down(Box *Boxes, Face *Faces, int index, int depth)
 {
 	//take Boxes[index] and split it in 8, recurse on em
 	//find midpoint w binary search (barrier between 011 and 100)
-	printf("depth %d\n", depth);
+	//printf("depth %d\n", depth);
 	if (Boxes[index].start == Boxes[index].end)
 	{
 		next_spot--;
@@ -129,7 +143,7 @@ void tree_down(Box *Boxes, Face *Faces, uint64_t *codes, int index, int depth)
 		int step = (Boxes[index].end - Boxes[index].start) >> 1;
 		int i = Boxes[index].start + step;
 
-		if (step < 2 || depth > 20)
+		if (step < 3 || depth > 20)
 			return ;
 		while(step > 0)
 		{
@@ -139,8 +153,10 @@ void tree_down(Box *Boxes, Face *Faces, uint64_t *codes, int index, int depth)
 				break;
 			}
 			step = step >> 1;
-			unsigned int d = morton_digit(codes[i], depth);
-			if (d <= c && morton_digit(codes[i + 1], depth) > c)
+			unsigned int d = morton_digit(morty_face(&Faces[i]), depth);
+			if (i + 1 == Boxes[index].end)
+				break ;
+			if (d <= c && morton_digit(morty_face(&Faces[i + 1]), depth) > c)
 				break ;
 			if (d <= c)
 				i += step;
@@ -156,7 +172,7 @@ void tree_down(Box *Boxes, Face *Faces, uint64_t *codes, int index, int depth)
 			i + 1
 		};
 		set_bounds(&Boxes[next_spot], Faces);
-		tree_down(Boxes, Faces, codes, next_spot, depth + 1);
+		tree_down(Boxes, Faces, next_spot, depth + 1);
 		start = i + 1;
 	}
 
@@ -169,9 +185,9 @@ void tree_down(Box *Boxes, Face *Faces, uint64_t *codes, int index, int depth)
 	Boxes[index].children_count = count;
 }
 
-void box_deets(Box b, int i)
+void box_deets(Box b)
 {
-	printf("~~~~~~Box %d~~~~~~\n", i);
+	printf("~~~~~~Box~~~~~~\n");
 	printf("min: ");
 	print_clf3(b.min);
 	printf("max: ");
@@ -183,39 +199,72 @@ void box_deets(Box b, int i)
 	printf("\n");
 }
 
-void gpu_bvh(Scene *S)
+Box *bvh_obj(Face *Faces, int start, int end, int *boxcount)
 {
-	//REMEMBER this can be optimized later, for now just make it work
-	Face *Faces = S->faces;
-	Box *Boxes = calloc(S->face_count, sizeof(Box));
-	uint64_t *codes = calloc(S->face_count, sizeof(uint64_t));
+	next_spot = 0;
+	int count = end - start;
+	Box *Boxes = calloc(count, sizeof(Box));
 
 	Boxes[0] = (Box){
 		ORIGIN,
 		ORIGIN,
-		0,
-		S->face_count
+		start,
+		end
 	};
 
 	set_bounds(&Boxes[0], Faces);
 	bigmin = Boxes[0].min;
 	bigmax = Boxes[0].max;
-	print_clf3(bigmin);
-	print_clf3(bigmax);
+
 	//morton sort the faces
-	qsort(Faces, S->face_count, sizeof(Face), face_cmp);
-	//cache codes
-	for (int i = 0; i < S->face_count; i++)
-		codes[i] = morty_face(&Faces[i]);
+	qsort(&Faces[start], count, sizeof(Face), face_cmp);
 
-	next_spot = 0;
+	tree_down(Boxes, Faces, 0, 0);
 
-	tree_down(Boxes, Faces, codes, 0, 0);
+	printf("%d faces %d boxes\n", count, next_spot + 1);
+	*boxcount = next_spot + 1;
+	return Boxes;
+}
 
-	S->boxes = Boxes;
-	S->box_count = next_spot + 1;
+void gpu_ready_bvh(Scene *S, int *counts, int obj_count)
+{
+	Face *Faces = S->faces;
 
-	printf("I think we did the boxes. %d of them\n", S->box_count);
-	// for (int i = 0; i < S->box_count; i++)
-	// 	box_deets(Boxes[i], i);
+	Box **obj_trees = calloc(obj_count, sizeof(Box *));
+	int box_total = 0;
+	for (int i = 0; i < obj_count; i++)
+	{
+		int boxcount;
+		if (i < obj_count - 1)
+			obj_trees[i] = bvh_obj(Faces, counts[i], counts[i + 1], &boxcount);
+		else
+			obj_trees[i] = bvh_obj(Faces, counts[i], S->face_count, &boxcount);
+		counts[i] = boxcount;
+		box_total += boxcount;
+	}
+	printf("total box count:%d\n", box_total);
+
+	//now we lay it flat and adjust child indices
+	Box *deep_bvh = calloc(box_total, sizeof(Box));
+	C_Box *shallow_bvh = calloc(obj_count, sizeof(C_Box));
+
+	int start = 0;
+	for (int i = 0; i < obj_count; i++)
+	{
+		for (int j = 0; j < counts[i]; j++)
+		{
+			Box b = obj_trees[i][j];
+			for (int k = 0; k < b.children_count; k++)
+				b.children[k] += start;
+			deep_bvh[start + j] = b;
+		}
+		free(obj_trees[i]);
+		shallow_bvh[i] = (C_Box){deep_bvh[start].min, deep_bvh[start].max, start};
+		start += counts[i];
+	}
+	free(obj_trees);
+	S->boxes = deep_bvh;
+	S->box_count = box_total;
+	S->c_boxes = shallow_bvh;
+	S->c_box_count = obj_count;
 }
