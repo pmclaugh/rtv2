@@ -82,9 +82,9 @@ int face_cmp(const void *a, const void *b)
 	uint64_t mb = morty_face(f_b);
 	if (ma > mb)
 		return 1;
-	if (ma == mb)
+	else if (ma == mb)
 		return 0;
-	if (ma < mb)
+	else
 		return -1;
 }
 

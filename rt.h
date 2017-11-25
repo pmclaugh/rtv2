@@ -12,13 +12,15 @@
 
 #ifdef __APPLE__
 # include <OpenCL/cl.h>
+# include "mac-mlx/mlx.h"
 #endif
 
 #ifndef __APPLE__
 # include <CL/cl.h>
+# include "linux-mlx/mlx.h"
 #endif
 
-#include "mlx/mlx.h"
+
 
 #define xdim 1024
 #define ydim 1024
