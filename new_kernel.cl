@@ -296,7 +296,7 @@ static const int intersect_object(const Ray ray, const Object obj, float *t, flo
 		return (0);
 }
 
-static int hit_bvh(const Ray ray, __global const Object *scene, __global const Box *boxes, int index, float *t_out, float *u_out, float *v_out, int *qf_out)
+static int hit_bvh(const Ray ray, __constant Object *scene, __constant Box *boxes, int index, float *t_out, float *u_out, float *v_out, int *qf_out)
 {
 
 	int2 stack[32];
@@ -363,7 +363,7 @@ static int hit_bvh(const Ray ray, __global const Object *scene, __global const B
 	return best_ind;
 }
 
-static int hit_meta_bvh(const Ray ray, __global const Object *scene, __global const Box *boxes, __constant C_Box *object_boxes, const uint obj_count, float *t_out, float *u_out, float *v_out, int *qf_out)
+static int hit_meta_bvh(const Ray ray, __constant Object *scene, __constant Box *boxes, __constant C_Box *object_boxes, const uint obj_count, float *t_out, float *u_out, float *v_out, int *qf_out)
 {
 	//this is a temporary test implementation, meta bvh is just a list. showed 2x speedup even this way. very promising.
 	float best_t = FLT_MAX;
