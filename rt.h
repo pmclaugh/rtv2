@@ -9,7 +9,7 @@
 #include <float.h>
 #include <time.h>
 #include <pthread.h>
-#include <OpenCL/cl.h>
+#include <CL/cl.h>
 
 #include "mlx/mlx.h"
 
