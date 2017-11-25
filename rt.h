@@ -9,7 +9,14 @@
 #include <float.h>
 #include <time.h>
 #include <pthread.h>
-#include <CL/cl.h>
+
+#ifdef __APPLE__
+# include <OpenCL/cl.h>
+#endif
+
+#ifndef __APPLE__
+# include <CL/cl.h>
+#endif
 
 #include "mlx/mlx.h"
 

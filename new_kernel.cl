@@ -115,7 +115,7 @@ static const int intersect_sphere(const Ray ray, const Object sph, float *t)
 	return 0;
 }
 
-static const int intersect_triangle(const Ray ray, const Object tri, float *t)
+static const int intersect_triangle(const Ray ray, const Object tri, float *t, float *u, float *v)
 {
 	float3 e1 = tri.v[1] - tri.v[0];
 	float3 e2 = tri.v[2] - tri.v[0];
@@ -127,12 +127,12 @@ static const int intersect_triangle(const Ray ray, const Object tri, float *t)
 		return 0;
 	float f = 1.0f / a;
 	float3 s = ray.origin - tri.v[0];
-	float u = f * dot(s, h);
-	if (u < 0.0 || u > 1.0)
+	*u = f * dot(s, h);
+	if (*u < 0.0 || *u > 1.0)
 		return 0;
 	float3 q = cross(s, e1);
-	float v = f * dot(ray.direction, q);
-	if (v < 0.0 || u + v > 1.0)
+	*v = f * dot(ray.direction, q);
+	if (*v < 0.0 || *u + *v > 1.0)
 		return 0;
 	float this_t = f * dot(e2, q);
 	if (this_t > COLLIDE_ERR)
@@ -144,7 +144,7 @@ static const int intersect_triangle(const Ray ray, const Object tri, float *t)
 		return (0);
 }
 
-static const int intersect_triangle_raw(const Ray ray, const float3 v0, const float3 v1, const float3 v2, float *t)
+static const int intersect_triangle_raw(const Ray ray, const float3 v0, const float3 v1, const float3 v2, float *t, float *u, float *v)
 {
 	float3 e1 = v1 - v0;
 	float3 e2 = v2 - v0;
@@ -156,12 +156,12 @@ static const int intersect_triangle_raw(const Ray ray, const float3 v0, const fl
 		return 0;
 	float f = 1.0f / a;
 	float3 s = ray.origin - v0;
-	float u = f * dot(s, h);
-	if (u < 0.0 || u > 1.0)
+	*u = f * dot(s, h);
+	if (*u < 0.0 || *u > 1.0)
 		return 0;
 	float3 q = cross(s, e1);
-	float v = f * dot(ray.direction, q);
-	if (v < 0.0 || u + v > 1.0)
+	*v = f * dot(ray.direction, q);
+	if (*v < 0.0 || *u + *v > 1.0)
 		return 0;
 	float this_t = f * dot(e2, q);
 	if (this_t > COLLIDE_ERR)
@@ -237,22 +237,56 @@ static const int intersect_box(const Ray ray, const float3 bmin, const float3 bm
 
 
 //intersect_object
-static const int intersect_object(const Ray ray, const Object obj, float *t)
+static const int intersect_object(const Ray ray, const Object obj, float *t, float *u_out, float *v_out, int *qf)
 {
 	if (obj.shape == SPHERE)
 		return intersect_sphere(ray, obj, t);
 	else if (obj.shape == TRIANGLE)
-		return intersect_triangle(ray, obj, t);
+	{
+		float u, v;
+		*qf = 0;
+		return intersect_triangle(ray, obj, t, &u, &v);
+	}
 	else if (obj.shape == QUAD)
 	{
 		int result_a, result_b;
 		float t_a = FLT_MAX;
 		float t_b = FLT_MAX;
-		result_a = intersect_triangle_raw(ray, obj.v[0], obj.v[1], obj.v[2], &t_a);
-		result_b = intersect_triangle_raw(ray, obj.v[0], obj.v[3], obj.v[2], &t_b);
-		if (result_a || result_b)
+		float ua, va, ub, vb;
+		result_a = intersect_triangle_raw(ray, obj.v[0], obj.v[1], obj.v[2], &t_a, &ua, &va);
+		result_b = intersect_triangle_raw(ray, obj.v[0], obj.v[3], obj.v[2], &t_b, &ub, &vb);
+		if (result_a && result_b)
 		{
-			*t = fmin(t_a, t_b);
+			if (t_a < t_b)
+			{
+				*t = t_a;
+				*u_out = ua;
+				*v_out = va;
+				*qf = 0;
+			}
+			else
+			{
+				*t = t_b;
+				*u_out = ub;
+				*v_out = vb;
+				*qf = 1;
+			}
+			return (1);
+		}
+		else if (result_a)
+		{
+			*t = t_a;
+			*u_out = ua;
+			*v_out = va;
+			*qf = 0;
+			return (1);
+		}
+		else if (result_b)
+		{
+			*t = t_b;
+			*u_out = ub;
+			*v_out = vb;
+			*qf = 1;
 			return (1);
 		}
 		else
@@ -262,12 +296,14 @@ static const int intersect_object(const Ray ray, const Object obj, float *t)
 		return (0);
 }
 
-static int hit_bvh(const Ray ray, __constant Object *scene, __constant Box *boxes, int index, float *t_out)
+static int hit_bvh(const Ray ray, __global const Object *scene, __global const Box *boxes, int index, float *t_out, float *u_out, float *v_out, int *qf_out)
 {
 
 	int2 stack[32];
 	int best_ind = -1;
 	float best_t = FLT_MAX;
+	float bu, bv;
+	int qf;
 
 	float box_t;
 	stack[0][0] = index;
@@ -301,15 +337,19 @@ static int hit_bvh(const Ray ray, __constant Object *scene, __constant Box *boxe
 				}
 				else //if leaf, try intersect faces
 				{
-					float t;
+					float t, u, v;
+					int quadflag;
 					for (int i = candidate.start; i < candidate.end; i++)
 					{
 						Object obj = scene[i];
-						if (intersect_object(ray, obj, &t))
+						if (intersect_object(ray, obj, &t, &u, &v, &quadflag))
 							if (t < best_t)
 							{
 								best_t = t;
 								best_ind = i;
+								bu = u;
+								bv = v;
+								qf = quadflag;
 							}
 					}
 				}
@@ -317,14 +357,19 @@ static int hit_bvh(const Ray ray, __constant Object *scene, __constant Box *boxe
 		}
 	}
 	*t_out = best_t;
+	*u_out = bu;
+	*v_out = bv;
+	*qf_out = qf;
 	return best_ind;
 }
 
-static int hit_meta_bvh(const Ray ray, __constant Object *scene, __constant Box *boxes, __constant C_Box *object_boxes, const uint obj_count, float *t_out)
+static int hit_meta_bvh(const Ray ray, __global const Object *scene, __global const Box *boxes, __constant C_Box *object_boxes, const uint obj_count, float *t_out, float *u_out, float *v_out, int *qf_out)
 {
 	//this is a temporary test implementation, meta bvh is just a list. showed 2x speedup even this way. very promising.
 	float best_t = FLT_MAX;
 	int best_ind = -1;
+	float bu, bv;
+	int qf;
 	for (int i = 0; i < obj_count; i++)
 	{
 		float t;
@@ -333,16 +378,24 @@ static int hit_meta_bvh(const Ray ray, __constant Object *scene, __constant Box 
 		{
 			if (t < best_t)
 			{
-				int ret = hit_bvh(ray, scene, boxes, cb.key, &t);
+				float u, v;
+				int quadflag;
+				int ret = hit_bvh(ray, scene, boxes, cb.key, &t, &u, &v, &quadflag);
 				if (ret != -1 && t < best_t)
 				{
 					best_t = t;
 					best_ind = ret;
+					bu = u;
+					bv = v;
+					qf = quadflag;
 				}
 			}
 		}
 	}
+	*u_out = bu;
+	*v_out = bv;
 	*t_out = best_t;
+	*qf_out = qf;
 	return best_ind;
 }
 
@@ -359,8 +412,9 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 		float rrFactor = j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
 		
 		//collide
-		float t;
-		int hit_ind = hit_meta_bvh(ray, scene, boxes, object_boxes, obj_count, &t);
+		float t, u, v;
+		int quadflag;
+		int hit_ind = hit_meta_bvh(ray, scene, boxes, object_boxes, obj_count, &t, &u, &v, &quadflag);
 		if (hit_ind == -1)
 		{
 			if (j != 0)
@@ -368,16 +422,33 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 			break ;
 		}
 		const Object hit = scene[hit_ind];
-		//const Material mat = mats[hit.mat_ind];
+		const Material mat = mats[hit.mat_ind];
 
 		float3 hit_point = ray.origin + ray.direction * t;
 
 		//get normal at collision point
 		float3 N;
+		float3 VT;
 		if (hit.shape == SPHERE)
 			N = normalize(hit_point - hit.v[0]);
-		else
-			N = hit.N; // later this is a smoothing kind of thing
+		else if (hit.shape == TRIANGLE)
+		{
+			N = u * hit.vn[0] + v * hit.vn[1] + (1 - u - v) * hit.vn[2];
+			VT = u * hit.vt[0] + v * hit.vt[1] + (1 - u - v) * hit.vt[2];
+		}
+		else if (hit.shape == QUAD)
+		{
+			if (quadflag)
+			{
+				N = u * (hit.vn[0] + hit.vn[1]) / 2.0 + v * hit.vn[3] + (1 - u - v) * (hit.vn[2] + hit.vn[1]) / 2.0;
+				VT = u * (hit.vt[0] + hit.vt[1]) / 2.0 + v * hit.vt[3] + (1 - u - v) * (hit.vt[2] + hit.vt[1]) / 2.0;
+			}
+			else
+			{
+				N = u * (hit.v[0] + hit.vn[3]) / 2.0 + v * hit.vn[1] + (1 - u - v) * (hit.vn[2] + hit.vn[3]) / 2.0;
+				VT = u * (hit.vt[0] + hit.vt[3]) / 2.0 + v * hit.vt[1] + (1 - u - v) * (hit.vt[2] + hit.vt[3]) / 2.0;
+			}
+		}
 
 		float3 new_dir;
 
@@ -396,7 +467,7 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 
 			//combine for new direction
 			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
-			mask *= dot(new_dir, N) * rrFactor; //////////////
+			mask *= dot(new_dir, N) * mat.Kd * rrFactor; //////////////
 			ray.origin = hit_point + N * NORMAL_SHIFT;
 		}
 		else if (hit.mat_type == MAT_SPECULAR)

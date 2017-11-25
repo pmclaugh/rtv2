@@ -2,7 +2,7 @@ NAME = raytrace
 
 
 SRCS = vec.c obj_import.c bvh.c main.c gpu_launch.c mlx_stuff.c
-OBJS = vec.o obj_import.o bvh.o main.o gpu_launch.o mlx_stuff.o mlx/libmlx_Linux.a
+OBJS = vec.o obj_import.o bvh.o main.o gpu_launch.o mlx_stuff.o mlx/libmlx.a
 
 
 FLAGS = -m64 -O3 -flto -march=native -funroll-loops
