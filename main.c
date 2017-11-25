@@ -41,25 +41,25 @@ cl_float3 *baby_tone_dupe(cl_float3 *pixels, int count, int samplecount)
 	return toned;
 }
 
-// int loop_hook(void *param)
-// {
-// 	t_param *p = (t_param *)param;
+int loop_hook(void *param)
+{
+	t_param *p = (t_param *)param;
 
-// 	if (!p->pixels)
-// 		p->pixels = calloc(xdim *ydim, sizeof(cl_float3));
-// 	cl_float3 *new = gpu_render(p->scene, p->cam);
-// 	p->samplecount++;
-// 	for (int i = 0; i < xdim * ydim; i++)
-// 		p->pixels[i] = vec_add(p->pixels[i], new[i]);
+	if (!p->pixels)
+		p->pixels = calloc(xdim *ydim, sizeof(cl_float3));
+	cl_float3 *new = gpu_render(p->scene, p->cam);
+	p->samplecount++;
+	for (int i = 0; i < xdim * ydim; i++)
+		p->pixels[i] = vec_add(p->pixels[i], new[i]);
 
-// 	cl_float3 *draw = baby_tone_dupe(p->pixels, xdim * ydim, p->samplecount);
-// 	draw_pixels(p->img, p->x, p->y, draw);
-// 	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
-// 	free(draw);
-// 	free(new);
-// 	printf("%d samples\n", p->samplecount);
-// 	return (1);
-// }
+	cl_float3 *draw = baby_tone_dupe(p->pixels, xdim * ydim, p->samplecount);
+	draw_pixels(p->img, p->x, p->y, draw);
+	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
+	free(draw);
+	free(new);
+	printf("%d samples\n", p->samplecount * 20);
+	return (1);
+}
 
 #define H_FOV M_PI_2 * 60.0 / 90.0 	//60 degrees. eventually this will be dynamic with aspect
 									// V_FOV is implicit with aspect of view-plane
@@ -168,9 +168,9 @@ int main(int ac, char **av)
 
 	t_camera cam;
 
-	//pointed right at the planter next to the big curtain
-	cam.center = (cl_float3){-400.0, 50.0, -220.0};
-	cam.normal = (cl_float3){1.0, 0.0, 0.0};
+	//pointed right at the lion
+	cam.center = (cl_float3){-200.0, 50.0, 100.0};
+	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	cam.normal = unit_vec(cam.normal);
 	cam.width = 1.0;
@@ -192,6 +192,6 @@ int main(int ac, char **av)
 	*param = (t_param){mlx, win, img, xdim, ydim, scene, cam, NULL, 0};
 	
 	mlx_key_hook(win, key_hook, param);
-	//mlx_loop_hook(mlx, loop_hook, param);
+	mlx_loop_hook(mlx, loop_hook, param);
 	mlx_loop(mlx);
 }

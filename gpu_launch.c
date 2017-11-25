@@ -129,7 +129,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 		clEnqueueWriteBuffer(commands, d_mats, CL_TRUE, 0, sizeof(gpu_mat) * s->mat_count, simple_mats, 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_seeds, CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_boxes, CL_TRUE, 0, sizeof(Box) * s->box_count, s->boxes, 0, NULL, NULL);
-		clEnqueueWriteBuffer(commands, d_const_boxes, CL_TRUE, 0, sizeof(C_Box) * s->c_box_count, &s->c_boxes[1], 0, NULL, NULL);
+		clEnqueueWriteBuffer(commands, d_const_boxes, CL_TRUE, 0, sizeof(C_Box) * s->c_box_count, s->c_boxes, 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 
 		clRetainContext(context);
