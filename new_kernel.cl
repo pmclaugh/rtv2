@@ -254,7 +254,7 @@ static const int intersect_object(const Ray ray, const Object obj, float *t, flo
 		float t_b = FLT_MAX;
 		float ua, va, ub, vb;
 		result_a = intersect_triangle_raw(ray, obj.v[0], obj.v[1], obj.v[2], &t_a, &ua, &va);
-		result_b = intersect_triangle_raw(ray, obj.v[0], obj.v[3], obj.v[2], &t_b, &ub, &vb);
+		result_b = intersect_triangle_raw(ray, obj.v[0], obj.v[2], obj.v[3], &t_b, &ub, &vb);
 		if (result_a && result_b)
 		{
 			if (t_a < t_b)
@@ -325,10 +325,8 @@ static int hit_bvh(const Ray ray, __constant Object *scene, __constant Box *boxe
 
 		int candidate_ind = tail.children[child_ind];
 		const Box candidate = boxes[candidate_ind];
-		if (inside_box(ray.origin, candidate, &box_t) || intersect_box(ray, candidate.min, candidate.max, &box_t))
+		if (intersect_box(ray, candidate.min, candidate.max, &box_t))
 		{
-			if (box_t <= best_t)
-			{
 				if (candidate.children_count)
 				{
 					stack[count][0] = boxes[tail_ind].children[child_ind];
@@ -353,7 +351,6 @@ static int hit_bvh(const Ray ray, __constant Object *scene, __constant Box *boxe
 							}
 					}
 				}
-			}
 		}
 	}
 	*t_out = best_t;
@@ -374,21 +371,18 @@ static int hit_meta_bvh(const Ray ray, __constant Object *scene, __constant Box 
 	{
 		float t;
 		C_Box cb = object_boxes[i];
-		if (inside_bounds(ray.origin, cb.min, cb.max, &t) || intersect_box(ray, cb.min, cb.max, &t))
+		if (intersect_box(ray, cb.min, cb.max, &t))
 		{
-			if (t < best_t)
+			float u, v;
+			int quadflag;
+			int ret = hit_bvh(ray, scene, boxes, cb.key, &t, &u, &v, &quadflag);
+			if (ret != -1 && t < best_t)
 			{
-				float u, v;
-				int quadflag;
-				int ret = hit_bvh(ray, scene, boxes, cb.key, &t, &u, &v, &quadflag);
-				if (ret != -1 && t < best_t)
-				{
-					best_t = t;
-					best_ind = ret;
-					bu = u;
-					bv = v;
-					qf = quadflag;
-				}
+				best_t = t;
+				best_ind = ret;
+				bu = u;
+				bv = v;
+				qf = quadflag;
 			}
 		}
 	}
@@ -397,6 +391,29 @@ static int hit_meta_bvh(const Ray ray, __constant Object *scene, __constant Box 
 	*t_out = best_t;
 	*qf_out = qf;
 	return best_ind;
+}
+
+float3 normal_sample_quad(const Object hit, float3 point)
+{
+	//area of a triangle is 1/2 mag(cross(e1, e2))
+	float3 e01 = hit.v[1] - hit.v[0];
+	float3 e03 = hit.v[3] - hit.v[0];
+
+	float3 e21 = hit.v[1] - hit.v[2];
+	float3 e23 = hit.v[3] - hit.v[2];
+
+	float3 e0p = point - hit.v[0];
+	float3 e2p = point - hit.v[2];
+
+	float a = 0.5f * length(cross(e01, e0p));
+	float d = 0.5f * length(cross(e0p, e03));
+	float b = 0.5f * length(cross(e21, e2p));
+	float c = 0.5f * length(cross(e2p, e23));
+
+	float q = a + b + c + d;
+
+	return (hit.vn[0] * (c + b) + hit.vn[1] * (c + d) + hit.vn[2] * (a + d) + hit.vn[3] * (a + b)) / q;
+
 }
 
 static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats, __constant Box *boxes, __constant C_Box *object_boxes, const uint obj_count, unsigned int *seed0, unsigned int *seed1)
@@ -409,7 +426,7 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 
 	for (int j = 0; j < 5 || get_random(seed0, seed1) <= stop_prob; j++)
 	{
-		float rrFactor = j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
+		float rrFactor = j >= 5 ? 1.0f - stop_prob : 1.0;
 		
 		//collide
 		float t, u, v;
@@ -418,8 +435,8 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 		if (hit_ind == -1)
 		{
 			if (j != 0)
-				color += 100.0f * mask;
-			break ;
+				color = 1.0f * mask;
+			break;
 		}
 		const Object hit = scene[hit_ind];
 		const Material mat = mats[hit.mat_ind];
@@ -428,28 +445,13 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 
 		//get normal at collision point
 		float3 N;
-		float3 VT;
 		if (hit.shape == SPHERE)
 			N = normalize(hit_point - hit.v[0]);
 		else if (hit.shape == TRIANGLE)
-		{
-			N = u * hit.vn[0] + v * hit.vn[1] + (1 - u - v) * hit.vn[2];
-			VT = u * hit.vt[0] + v * hit.vt[1] + (1 - u - v) * hit.vt[2];
-		}
-		else if (hit.shape == QUAD)
-		{
-			if (quadflag)
-			{
-				N = u * (hit.vn[0] + hit.vn[1]) / 2.0 + v * hit.vn[3] + (1 - u - v) * (hit.vn[2] + hit.vn[1]) / 2.0;
-				VT = u * (hit.vt[0] + hit.vt[1]) / 2.0 + v * hit.vt[3] + (1 - u - v) * (hit.vt[2] + hit.vt[1]) / 2.0;
-			}
-			else
-			{
-				N = u * (hit.v[0] + hit.vn[3]) / 2.0 + v * hit.vn[1] + (1 - u - v) * (hit.vn[2] + hit.vn[3]) / 2.0;
-				VT = u * (hit.vt[0] + hit.vt[3]) / 2.0 + v * hit.vt[1] + (1 - u - v) * (hit.vt[2] + hit.vt[3]) / 2.0;
-			}
-		}
-
+			N = normalize((1 - u - v) * hit.vn[0] + u * hit.vn[1] + v * hit.vn[2]);
+		else
+			N = normal_sample_quad(hit, hit_point);
+		
 		float3 new_dir;
 
 		if (hit.mat_type == MAT_DIFFUSE)
@@ -543,5 +545,5 @@ __kernel void render_kernel(__constant Object *scene,
 
 	seeds[pixel_id * 2] = seed0;
 	seeds[pixel_id * 2 + 1] = seed1;
-	output[pixel_id] += sum_color;
+	output[pixel_id] = sum_color / (float)sample_count;
 }

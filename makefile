@@ -22,7 +22,7 @@ all: $(NAME)
 $(NAME): $(OBJS)
 	gcc -o $(NAME) $(FLAGS) $(OBJS) $(LIBS)
 %.o: %.c rt.h
-	gcc $(FLAGS) -c -o $@ $< 
+	gcc $(FLAGS) -c -o $@ $< -lm
 mac-mlx/libmlx.a:
 	make -C mac-mlx
 linux-mlx/libmlx.a:

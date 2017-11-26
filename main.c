@@ -31,12 +31,14 @@ cl_float3 *baby_tone_dupe(cl_float3 *pixels, int count, int samplecount)
 	cl_float3 *toned = calloc(count, sizeof(cl_float3));
 	for (int i = 0; i < count; i++)
 	{
-		pixels[i].x = pixels[i].x / (float)samplecount;
-		pixels[i].y = pixels[i].y / (float)samplecount;
-		pixels[i].z = pixels[i].z / (float)samplecount;
-		toned[i].x = pixels[i].x / (pixels[i].x + 1.0);
-		toned[i].y = pixels[i].y / (pixels[i].y + 1.0);
-		toned[i].z = pixels[i].z / (pixels[i].z + 1.0);
+		toned[i].x = pixels[i].x / (float)samplecount;
+		toned[i].y = pixels[i].y / (float)samplecount;
+		toned[i].z = pixels[i].z / (float)samplecount;
+		if (toned[i].x > 1.0)
+			printf("how?\n");
+		// toned[i].x = toned[i].x / (toned[i].x + 1.0);
+		// toned[i].y = toned[i].y / (toned[i].y + 1.0);
+		// toned[i].z = toned[i].z / (toned[i].z + 1.0);
 	}
 	return toned;
 }
@@ -44,7 +46,8 @@ cl_float3 *baby_tone_dupe(cl_float3 *pixels, int count, int samplecount)
 int loop_hook(void *param)
 {
 	t_param *p = (t_param *)param;
-
+	if (p->samplecount == 10000)
+		return (1);
 	if (!p->pixels)
 		p->pixels = calloc(xdim *ydim, sizeof(cl_float3));
 	cl_float3 *new = gpu_render(p->scene, p->cam);
@@ -57,7 +60,7 @@ int loop_hook(void *param)
 	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
 	free(draw);
 	free(new);
-	printf("%d samples\n", p->samplecount * 20);
+	printf("%d samples\n", p->samplecount);
 	return (1);
 }
 
@@ -168,8 +171,28 @@ int main(int ac, char **av)
 
 	t_camera cam;
 
-	//pointed right at the lion
-	cam.center = (cl_float3){-200.0, 50.0, 100.0};
+	// //pointed at hanging vase
+	// cam.center = (cl_float3){-620.0, 130.0, 50.0};
+	// cam.normal = (cl_float3){0.0, 0.0, 1.0};
+
+	// //central view
+	// cam.center = (cl_float3){-100.0, 130.0, 0.0};
+	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+
+	// //central view with drape
+	// cam.center = (cl_float3){700.0, 500.0, 0.0};
+	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+
+	// //rounded column and some drape
+	// cam.center = (cl_float3){200.0, 650.0, -200.0};
+	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+
+	// //rounded column
+	// cam.center = (cl_float3){40.0, 600.0, -280.0};
+	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+
+	//lion
+	cam.center = (cl_float3){-1150.0, 160.0, -40.0};
 	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	cam.normal = unit_vec(cam.normal);
@@ -177,16 +200,15 @@ int main(int ac, char **av)
 	cam.height = 1.0;
 	init_camera(&cam, xdim, ydim);
 
-	cl_float3 *pixels = gpu_render(scene, cam);
+	//cl_float3 *pixels = gpu_render(scene, cam);
 
-	baby_tone_map(pixels, xdim * ydim);
-	printf("tone mapped\n");
+	//baby_tone_map(pixels, xdim * ydim);
 	
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
 	void *img = mlx_new_image(mlx, xdim, ydim);
-	draw_pixels(img, xdim, ydim, pixels);
-	mlx_put_image_to_window(mlx, win, img, 0, 0);
+	// draw_pixels(img, xdim, ydim, pixels);
+	// mlx_put_image_to_window(mlx, win, img, 0, 0);
 
 	t_param *param = calloc(1, sizeof(t_param));
 	*param = (t_param){mlx, win, img, xdim, ydim, scene, cam, NULL, 0};
