@@ -1,8 +1,8 @@
 
 __constant float PI = 3.14159265359f;
 __constant float REFRACTIVE_INDEX = 1.5;
-__constant float COLLIDE_ERR = 0.00001f;
-__constant float NORMAL_SHIFT = 0.00003f;
+__constant float COLLIDE_ERR = 0.0001f;
+__constant float NORMAL_SHIFT = 0.0001f;
 
 __constant float DIFFUSE_CONSTANT = 0.7;
 __constant float SPECULAR_CONSTANT = 0.9;
@@ -243,9 +243,8 @@ static const int intersect_object(const Ray ray, const Object obj, float *t, flo
 		return intersect_sphere(ray, obj, t);
 	else if (obj.shape == TRIANGLE)
 	{
-		float u, v;
 		*qf = 0;
-		return intersect_triangle(ray, obj, t, &u, &v);
+		return intersect_triangle(ray, obj, t, u_out, v_out);
 	}
 	else if (obj.shape == QUAD)
 	{
@@ -325,8 +324,10 @@ static int hit_bvh(const Ray ray, __constant Object *scene, __constant Box *boxe
 
 		int candidate_ind = tail.children[child_ind];
 		const Box candidate = boxes[candidate_ind];
-		if (intersect_box(ray, candidate.min, candidate.max, &box_t))
+		if ( intersect_box(ray, candidate.min, candidate.max, &box_t))
 		{
+			if (box_t <= best_t)
+			{
 				if (candidate.children_count)
 				{
 					stack[count][0] = boxes[tail_ind].children[child_ind];
@@ -351,6 +352,7 @@ static int hit_bvh(const Ray ray, __constant Object *scene, __constant Box *boxe
 							}
 					}
 				}
+			}
 		}
 	}
 	*t_out = best_t;
@@ -371,18 +373,21 @@ static int hit_meta_bvh(const Ray ray, __constant Object *scene, __constant Box 
 	{
 		float t;
 		C_Box cb = object_boxes[i];
-		if (intersect_box(ray, cb.min, cb.max, &t))
+		if (inside_bounds(ray.origin, cb.min, cb.max, &t) || intersect_box(ray, cb.min, cb.max, &t))
 		{
-			float u, v;
-			int quadflag;
-			int ret = hit_bvh(ray, scene, boxes, cb.key, &t, &u, &v, &quadflag);
-			if (ret != -1 && t < best_t)
+			if (t < best_t)
 			{
-				best_t = t;
-				best_ind = ret;
-				bu = u;
-				bv = v;
-				qf = quadflag;
+				float u, v;
+				int quadflag;
+				int ret = hit_bvh(ray, scene, boxes, cb.key, &t, &u, &v, &quadflag);
+				if (ret != -1 && t < best_t)
+				{
+					best_t = t;
+					best_ind = ret;
+					bu = u;
+					bv = v;
+					qf = quadflag;
+				}
 			}
 		}
 	}
@@ -435,7 +440,7 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 		if (hit_ind == -1)
 		{
 			if (j != 0)
-				color = 1.0f * mask;
+				color = 100.0f * mask;
 			break;
 		}
 		const Object hit = scene[hit_ind];
@@ -449,9 +454,14 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 			N = normalize(hit_point - hit.v[0]);
 		else if (hit.shape == TRIANGLE)
 			N = normalize((1 - u - v) * hit.vn[0] + u * hit.vn[1] + v * hit.vn[2]);
+		else if (!quadflag)
+			N = normalize((1 - u - v) * hit.vn[0] + u * hit.vn[1] + v * hit.vn[2]);
 		else
-			N = normal_sample_quad(hit, hit_point);
-		
+			N = normalize((1 - u - v) * hit.vn[0] + u * hit.vn[2] + v * hit.vn[3]);
+
+		// color = (N + 1.0f) / 2.0f;
+		// break;
+
 		float3 new_dir;
 
 		if (hit.mat_type == MAT_DIFFUSE)

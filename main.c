@@ -31,14 +31,12 @@ cl_float3 *baby_tone_dupe(cl_float3 *pixels, int count, int samplecount)
 	cl_float3 *toned = calloc(count, sizeof(cl_float3));
 	for (int i = 0; i < count; i++)
 	{
-		toned[i].x = pixels[i].x / (float)samplecount;
-		toned[i].y = pixels[i].y / (float)samplecount;
-		toned[i].z = pixels[i].z / (float)samplecount;
-		if (toned[i].x > 1.0)
-			printf("how?\n");
-		// toned[i].x = toned[i].x / (toned[i].x + 1.0);
-		// toned[i].y = toned[i].y / (toned[i].y + 1.0);
-		// toned[i].z = toned[i].z / (toned[i].z + 1.0);
+		toned[i].x = pixels[i].x / ((float)samplecount);
+		toned[i].y = pixels[i].y / ((float)samplecount);
+		toned[i].z = pixels[i].z / ((float)samplecount);
+		toned[i].x = toned[i].x / (toned[i].x + 1.0);
+		toned[i].y = toned[i].y / (toned[i].y + 1.0);
+		toned[i].z = toned[i].z / (toned[i].z + 1.0);
 	}
 	return toned;
 }
@@ -179,8 +177,12 @@ int main(int ac, char **av)
 	// cam.center = (cl_float3){-100.0, 130.0, 0.0};
 	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
-	// //central view with drape
-	// cam.center = (cl_float3){700.0, 500.0, 0.0};
+	//central view with drape
+	cam.center = (cl_float3){700.0, 500.0, 0.0};
+	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+
+	// //2nd floor hall right
+	// cam.center = (cl_float3){700.0, 500.0, 350.0};
 	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	// //rounded column and some drape
@@ -192,8 +194,8 @@ int main(int ac, char **av)
 	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	//lion
-	cam.center = (cl_float3){-1150.0, 160.0, -40.0};
-	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	// cam.center = (cl_float3){-1150.0, 160.0, -40.0};
+	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	cam.normal = unit_vec(cam.normal);
 	cam.width = 1.0;
@@ -207,8 +209,8 @@ int main(int ac, char **av)
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
 	void *img = mlx_new_image(mlx, xdim, ydim);
-	// draw_pixels(img, xdim, ydim, pixels);
-	// mlx_put_image_to_window(mlx, win, img, 0, 0);
+	//draw_pixels(img, xdim, ydim, pixels);
+	//mlx_put_image_to_window(mlx, win, img, 0, 0);
 
 	t_param *param = calloc(1, sizeof(t_param));
 	*param = (t_param){mlx, win, img, xdim, ydim, scene, cam, NULL, 0};
