@@ -271,7 +271,9 @@ Scene *scene_from_obj(char *rel_path, char *filename);
 
 
 cl_float3 *gpu_render(Scene *scene, t_camera cam);
-void gpu_bvh(Scene *S);
+
 Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
 void gpu_ready_bvh(Scene *S, int *counts, int obj_count);
 void print_clf3(cl_float3 v);
+
+void old_bvh(Scene *S);

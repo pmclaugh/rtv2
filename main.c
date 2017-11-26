@@ -169,6 +169,10 @@ int main(int ac, char **av)
 
 	t_camera cam;
 
+	// //city skyline
+	// cam.center = (cl_float3){300.0, 100.0, -300.0};
+	// cam.normal = (cl_float3){0.0, 0.0, 1.0};
+
 	// //pointed at hanging vase
 	// cam.center = (cl_float3){-620.0, 130.0, 50.0};
 	// cam.normal = (cl_float3){0.0, 0.0, 1.0};
@@ -178,7 +182,7 @@ int main(int ac, char **av)
 	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	//central view with drape
-	cam.center = (cl_float3){700.0, 500.0, 0.0};
+	cam.center = (cl_float3){800.0, 500.0, 0.0};
 	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	// //2nd floor hall right
@@ -193,8 +197,12 @@ int main(int ac, char **av)
 	// cam.center = (cl_float3){40.0, 600.0, -280.0};
 	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
-	//lion
+	// //lion
 	// cam.center = (cl_float3){-1150.0, 160.0, -40.0};
+	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+
+	// // //lion
+	// cam.center = (cl_float3){-750.0, 600.0, -40.0};
 	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	cam.normal = unit_vec(cam.normal);
@@ -209,8 +217,8 @@ int main(int ac, char **av)
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
 	void *img = mlx_new_image(mlx, xdim, ydim);
-	//draw_pixels(img, xdim, ydim, pixels);
-	//mlx_put_image_to_window(mlx, win, img, 0, 0);
+	// draw_pixels(img, xdim, ydim, pixels);
+	// mlx_put_image_to_window(mlx, win, img, 0, 0);
 
 	t_param *param = calloc(1, sizeof(t_param));
 	*param = (t_param){mlx, win, img, xdim, ydim, scene, cam, NULL, 0};

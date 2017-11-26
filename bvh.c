@@ -116,6 +116,32 @@ void set_bounds(Box *B, Face *Faces)
 	B->max = (cl_float3){max_x + 0.01f, max_y + 0.01f, max_z + 0.01f};
 }
 
+void box_bounds(C_Box *boxes, int count)
+{
+	float max_x = -1.0 * FLT_MAX;
+	float max_y = -1.0 * FLT_MAX;
+	float max_z = -1.0 * FLT_MAX;
+
+	float min_x = FLT_MAX;
+	float min_y = FLT_MAX;
+	float min_z = FLT_MAX; //never forget
+
+	for (int i = 0; i < count; i++)
+	{
+
+		max_x = fmax(boxes[i].max.x, max_x);
+		max_y = fmax(boxes[i].max.y, max_y);
+		max_z = fmax(boxes[i].max.z, max_z);
+
+		min_x = fmin(boxes[i].min.x, min_x);
+		min_y = fmin(boxes[i].min.y, min_y);
+		min_z = fmin(boxes[i].min.z, min_z);
+	}
+
+	bigmin = (cl_float3){min_x - 0.01f, min_y - 0.01f, min_z - 0.01f};
+	bigmax = (cl_float3){max_x + 0.01f, max_y + 0.01f, max_z + 0.01f};
+}
+
 int next_spot;
 
 unsigned int morton_digit(uint64_t code, int depth)
@@ -143,7 +169,7 @@ void tree_down(Box *Boxes, Face *Faces, int index, int depth)
 		int step = (Boxes[index].end - Boxes[index].start) >> 1;
 		int i = Boxes[index].start + step;
 
-		if (step < 3 || depth > 20)
+		if (step < 4 || depth > 20)
 			return ;
 		while(step > 0)
 		{
@@ -267,4 +293,45 @@ void gpu_ready_bvh(Scene *S, int *counts, int obj_count)
 	S->box_count = box_total;
 	S->c_boxes = shallow_bvh;
 	S->c_box_count = obj_count;
+}
+
+void meta_bvh(Scene *S)
+{
+	//scene already has c_boxes populated
+
+
+}
+
+void old_bvh(Scene *S)
+{
+	//REMEMBER this can be optimized later, for now just make it work
+	Face *Faces = S->faces;
+	Box *Boxes = calloc(2 * S->face_count, sizeof(Box));
+	//uint64_t *codes = calloc(S->face_count, sizeof(uint64_t));
+
+	Boxes[0] = (Box){
+		ORIGIN,
+		ORIGIN,
+		0,
+		S->face_count
+	};
+
+	set_bounds(&Boxes[0], Faces);
+	bigmin = Boxes[0].min;
+	bigmax = Boxes[0].max;
+	print_clf3(bigmin);
+	print_clf3(bigmax);
+	//morton sort the faces
+	qsort(Faces, S->face_count, sizeof(Face), face_cmp);
+
+	next_spot = 0;
+
+	tree_down(Boxes, Faces, 0, 0);
+
+	S->boxes = Boxes;
+	S->box_count = next_spot + 1;
+
+	printf("I think we did the boxes. %d of them\n", S->box_count);
+	// for (int i = 0; i < S->box_count; i++)
+	// 	box_deets(Boxes[i], i);
 }

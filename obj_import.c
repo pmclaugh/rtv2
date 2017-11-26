@@ -215,7 +215,8 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 		}
 		else if (strncmp(line, "vt", 2) == 0)
 		{
-			sscanf(line, "vt %f %f %f", &v.x, &v.y, &v.z);
+			sscanf(line, "vt %f %f", &v.x, &v.y);
+			v.z = 0.0;
 			VT[vt_count++] = v;
 		}
 		else if (strncmp(line, "usemtl ", 7) == 0)
@@ -292,7 +293,7 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 
 	printf("making BVH\n");
 
-	//gpu_bvh(S);
+	//old_bvh(S);
 	gpu_ready_bvh(S, obj_indices, obj_count);
 
 	return S;

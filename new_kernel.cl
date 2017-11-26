@@ -2,7 +2,7 @@
 __constant float PI = 3.14159265359f;
 __constant float REFRACTIVE_INDEX = 1.5;
 __constant float COLLIDE_ERR = 0.0001f;
-__constant float NORMAL_SHIFT = 0.0001f;
+__constant float NORMAL_SHIFT = 0.0003f;
 
 __constant float DIFFUSE_CONSTANT = 0.7;
 __constant float SPECULAR_CONSTANT = 0.9;
@@ -324,7 +324,7 @@ static int hit_bvh(const Ray ray, __constant Object *scene, __constant Box *boxe
 
 		int candidate_ind = tail.children[child_ind];
 		const Box candidate = boxes[candidate_ind];
-		if ( intersect_box(ray, candidate.min, candidate.max, &box_t))
+		if (inside_box(ray.origin, candidate, &box_t) || intersect_box(ray, candidate.min, candidate.max, &box_t))
 		{
 			if (box_t <= best_t)
 			{
@@ -398,40 +398,17 @@ static int hit_meta_bvh(const Ray ray, __constant Object *scene, __constant Box 
 	return best_ind;
 }
 
-float3 normal_sample_quad(const Object hit, float3 point)
-{
-	//area of a triangle is 1/2 mag(cross(e1, e2))
-	float3 e01 = hit.v[1] - hit.v[0];
-	float3 e03 = hit.v[3] - hit.v[0];
-
-	float3 e21 = hit.v[1] - hit.v[2];
-	float3 e23 = hit.v[3] - hit.v[2];
-
-	float3 e0p = point - hit.v[0];
-	float3 e2p = point - hit.v[2];
-
-	float a = 0.5f * length(cross(e01, e0p));
-	float d = 0.5f * length(cross(e0p, e03));
-	float b = 0.5f * length(cross(e21, e2p));
-	float c = 0.5f * length(cross(e2p, e23));
-
-	float q = a + b + c + d;
-
-	return (hit.vn[0] * (c + b) + hit.vn[1] * (c + d) + hit.vn[2] * (a + d) + hit.vn[3] * (a + b)) / q;
-
-}
-
 static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats, __constant Box *boxes, __constant C_Box *object_boxes, const uint obj_count, unsigned int *seed0, unsigned int *seed1)
 {
 
 	float3 color = BLACK;
 	float3 mask = WHITE;
 
-	const float stop_prob = 0.2f;
+	const float stop_prob = 0.1f;
 
 	for (int j = 0; j < 5 || get_random(seed0, seed1) <= stop_prob; j++)
 	{
-		float rrFactor = j >= 5 ? 1.0f - stop_prob : 1.0;
+		float rrFactor = j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
 		
 		//collide
 		float t, u, v;
@@ -440,7 +417,7 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 		if (hit_ind == -1)
 		{
 			if (j != 0)
-				color = 100.0f * mask;
+				color = 10.0f * mask;
 			break;
 		}
 		const Object hit = scene[hit_ind];
@@ -479,7 +456,7 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 
 			//combine for new direction
 			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
-			mask *= dot(new_dir, N) * mat.Kd * rrFactor; //////////////
+			mask *= dot(new_dir, N) * rrFactor; //////////////
 			ray.origin = hit_point + N * NORMAL_SHIFT;
 		}
 		else if (hit.mat_type == MAT_SPECULAR)
