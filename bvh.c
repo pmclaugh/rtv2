@@ -295,13 +295,6 @@ void gpu_ready_bvh(Scene *S, int *counts, int obj_count)
 	S->c_box_count = obj_count;
 }
 
-void meta_bvh(Scene *S)
-{
-	//scene already has c_boxes populated
-
-
-}
-
 void old_bvh(Scene *S)
 {
 	//REMEMBER this can be optimized later, for now just make it work

@@ -46,6 +46,9 @@ typedef struct s_material
 	float3 Ke;
 
 	//here's where texture and stuff goes
+	int index;
+	int height;
+	int width;
 }				Material;
 
 typedef struct s_camera
@@ -398,7 +401,20 @@ static int hit_meta_bvh(const Ray ray, __constant Object *scene, __constant Box 
 	return best_ind;
 }
 
-static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats, __constant Box *boxes, __constant C_Box *object_boxes, const uint obj_count, unsigned int *seed0, unsigned int *seed1)
+static float3 fetch_color(const float u, const float v, const Material mat, __constant uchar *tex)
+{
+	int offset = mat.index;
+	int x = floor(mat.width * u);
+	int y = floor(mat.height * v);
+
+	uchar R = tex[offset + (y * mat.width + x) * 3];
+	uchar G = tex[offset + (y * mat.width + x) * 3 + 1];
+	uchar B = tex[offset + (y * mat.width + x) * 3 + 2];
+
+	return (float3)((float)R, (float)G, (float)B);
+}
+
+static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats, __constant uchar *tex, __constant Box *boxes, __constant C_Box *object_boxes, const uint obj_count, unsigned int *seed0, unsigned int *seed1)
 {
 
 	float3 color = BLACK;
@@ -441,41 +457,22 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 
 		float3 new_dir;
 
-		if (hit.mat_type == MAT_DIFFUSE)
-		{
-			N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
-			//local orthonormal system
-			float3 axis = fabs(N.x) > fabs(N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-			float3 hem_x = cross(axis, N);
-			float3 hem_y = cross(N, hem_x);
+		//assuming diffuse for now
+		N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
+		//local orthonormal system
+		float3 axis = fabs(N.x) > fabs(N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+		float3 hem_x = cross(axis, N);
+		float3 hem_y = cross(N, hem_x);
 
-			//generate random direction on the unit hemisphere
-			float rsq = get_random(seed0, seed1);
-			float r = sqrt(rsq);
-			float theta = 2 * PI * get_random(seed0, seed1);
+		//generate random direction on the unit hemisphere
+		float rsq = get_random(seed0, seed1);
+		float r = sqrt(rsq);
+		float theta = 2 * PI * get_random(seed0, seed1);
 
-			//combine for new direction
-			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
-			mask *= dot(new_dir, N) * rrFactor; //////////////
-			ray.origin = hit_point + N * NORMAL_SHIFT;
-		}
-		else if (hit.mat_type == MAT_SPECULAR)
-		{
-			N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
-			new_dir = normalize(ray.direction - 2.0f * N * dot(ray.direction, N));
-			mask *= SPECULAR_CONSTANT * rrFactor;
-			ray.origin = hit_point + N * NORMAL_SHIFT;
-		}
-		else if (hit.mat_type == MAT_REFRACTIVE)
-		{
-			break ; //disabled for now
-		}
-		else // MAT_NULL
-		{
-			//we hit the light
-			color += (10.0f * mask);
-			break ;
-		}
+		//combine for new direction
+		new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
+		mask *= dot(new_dir, N) * fetch_color(u, v, mat, tex) * rrFactor; //////////////
+		ray.origin = hit_point + N * NORMAL_SHIFT;
 
 		ray.direction = new_dir;
 		ray.inv_dir = 1.0f / new_dir;
@@ -505,7 +502,8 @@ __kernel void render_kernel(__constant Object *scene,
 							__global uint* seeds,
 							const uint sample_count,
 							__constant C_Box *object_boxes,
-							const uint obj_count)
+							const uint obj_count,
+							const uchar *tex)
 {
 	unsigned int pixel_id = get_global_id(0);
 	unsigned int x = pixel_id % width;
@@ -527,7 +525,7 @@ __kernel void render_kernel(__constant Object *scene,
 		float x_coord = (float)x + get_random(&seed0, &seed1);
 		float y_coord = (float)y + get_random(&seed0, &seed1);
 		Ray ray = ray_from_cam(cam, x_coord, y_coord);
-		sum_color += trace(ray, scene, mats, boxes, object_boxes, obj_count, &seed0, &seed1) / (float)sample_count;
+		sum_color += trace(ray, scene, mats, tex, boxes, object_boxes, obj_count, &seed0, &seed1) / (float)sample_count;
 	}
 
 	seeds[pixel_id * 2] = seed0;

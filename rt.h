@@ -196,7 +196,7 @@ typedef struct s_map
 {
 	int height;
 	int width;
-	int *pixels;
+	cl_uchar *pixels;
 }				Map;
 
 typedef struct s_material
