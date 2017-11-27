@@ -177,13 +177,13 @@ int main(int ac, char **av)
 	// cam.center = (cl_float3){-620.0, 130.0, 50.0};
 	// cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
-	// //central view
-	// cam.center = (cl_float3){-100.0, 130.0, 0.0};
-	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
-
-	//central view with drape
-	cam.center = (cl_float3){800.0, 500.0, 0.0};
+	//central view
+	cam.center = (cl_float3){-100.0, 130.0, 0.0};
 	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+
+	// //central view with drape
+	// cam.center = (cl_float3){800.0, 600.0, 0.0};
+	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	// //2nd floor hall right
 	// cam.center = (cl_float3){700.0, 500.0, 350.0};
@@ -198,19 +198,16 @@ int main(int ac, char **av)
 	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	// //lion
-	// cam.center = (cl_float3){-1150.0, 160.0, -40.0};
+	// cam.center = (cl_float3){-1050.0, 160.0, -40.0};
 	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
-	// // //lion
-	// cam.center = (cl_float3){-750.0, 600.0, -40.0};
-	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	cam.normal = unit_vec(cam.normal);
 	cam.width = 1.0;
 	cam.height = 1.0;
 	init_camera(&cam, xdim, ydim);
 
-	//cl_float3 *pixels = gpu_render(scene, cam);
+	// cl_float3 *pixels = gpu_render(scene, cam);
 
 	//baby_tone_map(pixels, xdim * ydim);
 	

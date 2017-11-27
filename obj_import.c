@@ -1,7 +1,7 @@
 #include "rt.h"
 #include <string.h>
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 Map *load_map(char *rel_path, char *filename)
 {
@@ -27,7 +27,7 @@ Map *load_map(char *rel_path, char *filename)
 	//14-15 height
 	map->height = (unsigned char)header[14] + (unsigned char)header[15] * 256;
 
-	map->pixels = calloc(map->height * map->width, sizeof(unsigned char) * 3);
+	map->pixels = calloc(map->height * map->width, sizeof(cl_uchar) * 3);
 	unsigned char *raw_pixels = calloc(map->height * map->width, sizeof(unsigned char) * 3);
 	fread(raw_pixels, map->height * map->width, sizeof(unsigned char) * 3, fp);
 
@@ -115,18 +115,18 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			sscanf(line, "\tmap_Kd %s\n", m.map_Kd_path);
 			m.map_Kd = load_map(rel_path, m.map_Kd_path);
 		}
-		else if (strncmp(line, "\tmap_bump", 10) == 0)
-		{
-			m.map_bump_path = calloc(512, 1);
-			sscanf(line, "\tmap_bump %s\n", m.map_bump_path);
-			m.map_bump = load_map(rel_path, m.map_bump_path);
-		}
-		else if (strncmp(line, "\tmap_d", 6) == 0)
-		{
-			m.map_d_path = calloc(512, 1);
-			sscanf(line, "\tmap_d %s\n", m.map_d_path);
-			m.map_d = load_map(rel_path, m.map_d_path);
-		}
+		// else if (strncmp(line, "\tmap_bump", 10) == 0)
+		// {
+		// 	m.map_bump_path = calloc(512, 1);
+		// 	sscanf(line, "\tmap_bump %s\n", m.map_bump_path);
+		// 	m.map_bump = load_map(rel_path, m.map_bump_path);
+		// }
+		// else if (strncmp(line, "\tmap_d", 6) == 0)
+		// {
+		// 	m.map_d_path = calloc(512, 1);
+		// 	sscanf(line, "\tmap_d %s\n", m.map_d_path);
+		// 	m.map_d = load_map(rel_path, m.map_d_path);
+		// }
 	}
 	S->materials[mat_ind] = m;
 
@@ -215,8 +215,7 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 		}
 		else if (strncmp(line, "vt", 2) == 0)
 		{
-			sscanf(line, "vt %f %f", &v.x, &v.y);
-			v.z = 0.0;
+			sscanf(line, "vt %f %f %f", &v.x, &v.y, &v.z);
 			VT[vt_count++] = v;
 		}
 		else if (strncmp(line, "usemtl ", 7) == 0)
@@ -231,6 +230,8 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 					mat_ind = i;
 					break;
 				}
+				if (i == S->mat_count - 1)
+					printf("failed to match material\n");
 			}
 		}
 		else if (strncmp(line, "g ", 2) == 0)
@@ -263,11 +264,11 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 			if (f.shape == 4)
 				f.norms[3] = VN[vnd - 1];
 
-			f.tex[0] = VN[vta - 1];
-			f.tex[1] = VN[vtb - 1];
-			f.tex[2] = VN[vtc - 1];
+			f.tex[0] = VT[vta - 1];
+			f.tex[1] = VT[vtb - 1];
+			f.tex[2] = VT[vtc - 1];
 			if (f.shape == 4)
-				f.tex[3] = VN[vtd - 1];
+				f.tex[3] = VT[vtd - 1];
 
 			f.N = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
 			if (dot(f.N, f.norms[0]) < 0)

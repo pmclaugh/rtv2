@@ -401,17 +401,26 @@ static int hit_meta_bvh(const Ray ray, __constant Object *scene, __constant Box 
 	return best_ind;
 }
 
-static float3 fetch_color(const float u, const float v, const Material mat, __constant uchar *tex)
+static float3 fetch_color(const float u, const float v, int quadflag, const Object hit, const Material mat, __constant uchar *tex)
 {
+	if (mat.height == 0 && mat.width == 0)
+		return mat.Kd;
+	float3 txcrd;
+	if(!quadflag)
+		txcrd = (1 - u - v) * hit.vt[0] + u * hit.vt[1] + v * hit.vt[2];
+	else
+		txcrd = (1 - u - v) * hit.vt[0] + u * hit.vt[2] + v * hit.vt[3];
+
 	int offset = mat.index;
-	int x = floor(mat.width * u);
-	int y = floor(mat.height * v);
+	int x = floor((float)mat.width * txcrd.x);
+	int y = floor((float)mat.height * txcrd.y);
 
 	uchar R = tex[offset + (y * mat.width + x) * 3];
 	uchar G = tex[offset + (y * mat.width + x) * 3 + 1];
 	uchar B = tex[offset + (y * mat.width + x) * 3 + 2];
 
-	return (float3)((float)R, (float)G, (float)B);
+	float3 out = (float3)((float)R, (float)G, (float)B) / 255.0f * mat.Kd;
+	return out;
 }
 
 static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats, __constant uchar *tex, __constant Box *boxes, __constant C_Box *object_boxes, const uint obj_count, unsigned int *seed0, unsigned int *seed1)
@@ -433,13 +442,17 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 		if (hit_ind == -1)
 		{
 			if (j != 0)
-				color = 10.0f * mask;
+				color = 100.0f * mask;
 			break;
 		}
 		const Object hit = scene[hit_ind];
 		const Material mat = mats[hit.mat_ind];
 
 		float3 hit_point = ray.origin + ray.direction * t;
+
+		// color = fetch_color(u, v, quadflag, hit, mat, tex);
+		// // color = (float3)(u, v, 0);
+		// break;
 
 		//get normal at collision point
 		float3 N;
@@ -471,7 +484,7 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 
 		//combine for new direction
 		new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
-		mask *= dot(new_dir, N) * fetch_color(u, v, mat, tex) * rrFactor; //////////////
+		mask *= dot(new_dir, N) * fetch_color(u, v, quadflag, hit, mat, tex) * rrFactor; //////////////
 		ray.origin = hit_point + N * NORMAL_SHIFT;
 
 		ray.direction = new_dir;

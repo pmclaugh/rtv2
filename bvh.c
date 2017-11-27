@@ -247,7 +247,7 @@ Box *bvh_obj(Face *Faces, int start, int end, int *boxcount)
 
 	tree_down(Boxes, Faces, 0, 0);
 
-	printf("%d faces %d boxes\n", count, next_spot + 1);
+	//printf("%d faces %d boxes\n", count, next_spot + 1);
 	*boxcount = next_spot + 1;
 	return Boxes;
 }
