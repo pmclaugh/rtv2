@@ -29,11 +29,11 @@ Map *load_map(char *rel_path, char *filename)
 
 	map->pixels = calloc(map->height * map->width, sizeof(unsigned char) * 3);
 	unsigned char *raw_pixels = calloc(map->height * map->width, sizeof(unsigned char) * 3);
-	fread(raw_pixels, map->height * map->width, sizeof(char) * 3, fp);
+	fread(raw_pixels, map->height * map->width, sizeof(unsigned char) * 3, fp);
 
 	for (int i = 0; i < map->height * map->width; i++)
 	{
-		//convert to ints and remap from BGR to RGB
+		//remap from BGR to RGB
 		map->pixels[i * 3] = raw_pixels[i * 3 + 2];
 		map->pixels[i * 3 + 1] = raw_pixels[i * 3 + 1];
 		map->pixels[i * 3 + 2] = raw_pixels[i * 3];

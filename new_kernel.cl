@@ -503,7 +503,7 @@ __kernel void render_kernel(__constant Object *scene,
 							const uint sample_count,
 							__constant C_Box *object_boxes,
 							const uint obj_count,
-							const uchar *tex)
+							__constant uchar *tex)
 {
 	unsigned int pixel_id = get_global_id(0);
 	unsigned int x = pixel_id % width;

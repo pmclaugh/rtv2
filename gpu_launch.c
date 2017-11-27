@@ -111,13 +111,11 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 		for (int i = 0; i < xdim * ydim * 2; i++)
 			h_seeds[i] = rand();
 
+		printf("about to do textures\n");
 		int tex_size = 0;
-		int *tex_inds = calloc(s->mat_count, sizeof(int));
 		for (int i = 0; i < s->mat_count; i++)
-		{
-			tex_inds[i] = tex_size * 3;
-			tex_size += s->materials[i].map_Kd->height * s->materials[i].map_Kd->width;
-		}
+			if (s->materials[i].map_Kd)
+				tex_size += s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3;
 
 		cl_uchar *h_tex = calloc(sizeof(cl_uchar), tex_size);
 		tex_size = 0;
@@ -125,18 +123,33 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 		gpu_mat *simple_mats = calloc(s->mat_count, sizeof(gpu_mat));
 		for (int i = 0; i < s->mat_count; i++)
 		{
-			memcpy(&h_tex[tex_size * 3], s->materials[i].map_Kd->pixels, s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3);
-			simple_mats[i] = (gpu_mat){
-				s->materials[i].Ka,
-				s->materials[i].Kd,
-				s->materials[i].Ks,
-				s->materials[i].Ke,
-				tex_size,
-				s->materials[i].map_Kd->width,
-				s->materials[i].map_Kd->height
-			};
-			tex_size += s->materials[i].map_Kd->height * s->materials[i].map_Kd->width;
+			if (s->materials[i].map_Kd)
+			{
+				memcpy(&h_tex[tex_size], s->materials[i].map_Kd->pixels, s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3);
+				simple_mats[i] = (gpu_mat){
+					s->materials[i].Ka,
+					s->materials[i].Kd,
+					s->materials[i].Ks,
+					s->materials[i].Ke,
+					tex_size,
+					s->materials[i].map_Kd->width,
+					s->materials[i].map_Kd->height
+				};
+				tex_size += s->materials[i].map_Kd->height * s->materials[i].map_Kd->width;
+			}
+			else
+			{
+				simple_mats[i] = (gpu_mat){
+					s->materials[i].Ka,
+					s->materials[i].Kd,
+					s->materials[i].Ks,
+					s->materials[i].Ke,
+					0
+				};
+			}
 		}
+
+		printf("flattened textures\n");
 
 		d_scene = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(Face) * s->face_count, NULL, NULL);
 		d_mats = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(gpu_mat) * s->mat_count, NULL, NULL);
@@ -144,7 +157,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 		d_seeds = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
 		d_boxes = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(Box) * s->box_count, NULL, NULL);
 		d_const_boxes = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(C_Box) * s->c_box_count, NULL, NULL);
-		d_tex = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(cl_uchar) * tex_size, NULL, NULL);
+		d_tex = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(cl_uchar) * tex_size * 3, NULL, NULL);
 
 		clEnqueueWriteBuffer(commands, d_scene, CL_TRUE, 0, sizeof(Face) * s->face_count, s->faces, 0, NULL, NULL);
 		clEnqueueWriteBuffer(commands, d_mats, CL_TRUE, 0, sizeof(gpu_mat) * s->mat_count, simple_mats, 0, NULL, NULL);
