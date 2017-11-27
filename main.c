@@ -44,7 +44,7 @@ cl_float3 *baby_tone_dupe(cl_float3 *pixels, int count, int samplecount)
 int loop_hook(void *param)
 {
 	t_param *p = (t_param *)param;
-	if (p->samplecount == 10000)
+	if (p->samplecount == 100000)
 		return (1);
 	if (!p->pixels)
 		p->pixels = calloc(xdim *ydim, sizeof(cl_float3));
@@ -178,7 +178,7 @@ int main(int ac, char **av)
 	// cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
 	//central view
-	cam.center = (cl_float3){-100.0, 130.0, 0.0};
+	cam.center = (cl_float3){-100.0, 330.0, 0.0};
 	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	// //central view with drape
@@ -207,20 +207,20 @@ int main(int ac, char **av)
 	cam.height = 1.0;
 	init_camera(&cam, xdim, ydim);
 
-	cl_float3 *pixels = gpu_render(scene, cam);
+	//cl_float3 *pixels = gpu_render(scene, cam);
 
 	//baby_tone_map(pixels, xdim * ydim);
 	
-	// void *mlx = mlx_init();
-	// void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
-	// void *img = mlx_new_image(mlx, xdim, ydim);
-	// // draw_pixels(img, xdim, ydim, pixels);
-	// // mlx_put_image_to_window(mlx, win, img, 0, 0);
+	void *mlx = mlx_init();
+	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
+	void *img = mlx_new_image(mlx, xdim, ydim);
+	//draw_pixels(img, xdim, ydim, pixels);
+	//mlx_put_image_to_window(mlx, win, img, 0, 0);
 
-	// t_param *param = calloc(1, sizeof(t_param));
-	// *param = (t_param){mlx, win, img, xdim, ydim, scene, cam, NULL, 0};
+	t_param *param = calloc(1, sizeof(t_param));
+	*param = (t_param){mlx, win, img, xdim, ydim, scene, cam, NULL, 0};
 	
-	// mlx_key_hook(win, key_hook, param);
-	// mlx_loop_hook(mlx, loop_hook, param);
-	// mlx_loop(mlx);
+	mlx_key_hook(win, key_hook, param);
+	mlx_loop_hook(mlx, loop_hook, param);
+	mlx_loop(mlx);
 }

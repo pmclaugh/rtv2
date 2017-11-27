@@ -195,7 +195,8 @@ void tree_down(Box *Boxes, Face *Faces, int index, int depth)
 			ORIGIN,
 			ORIGIN,
 			start,
-			i + 1
+			i + 1,
+			0
 		};
 		set_bounds(&Boxes[next_spot], Faces);
 		tree_down(Boxes, Faces, next_spot, depth + 1);
@@ -229,18 +230,26 @@ Box *bvh_obj(Face *Faces, int start, int end, int *boxcount)
 {
 	next_spot = 0;
 	int count = end - start;
+	//printf("start is %d end is %d count is %d\n", start,end,count);
 	Box *Boxes = calloc(count, sizeof(Box));
 
 	Boxes[0] = (Box){
 		ORIGIN,
 		ORIGIN,
 		start,
-		end
+		end,
+		0
 	};
 
 	set_bounds(&Boxes[0], Faces);
 	bigmin = Boxes[0].min;
 	bigmax = Boxes[0].max;
+
+	if (count < 8)
+	{
+		*boxcount = 1;
+		return Boxes;
+	}
 
 	//morton sort the faces
 	qsort(&Faces[start], count, sizeof(Face), face_cmp);

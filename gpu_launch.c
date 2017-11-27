@@ -217,15 +217,15 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 	printf("about to fire\n");
 	//pull the trigger
 
-	// cl_event render;
-	// cl_int err = clEnqueueNDRangeKernel(commands, k, 1, 0, &resolution, &groupsize, 0, NULL, &render);
-	// clFinish(commands);
-	// clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
+	cl_event render;
+	cl_int err = clEnqueueNDRangeKernel(commands, k, 1, 0, &resolution, &groupsize, 0, NULL, &render);
+	clFinish(commands);
+	clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 
-	// cl_ulong start, end;
-	// clGetEventProfilingInfo(render, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-	// clGetEventProfilingInfo(render, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+	cl_ulong start, end;
+	clGetEventProfilingInfo(render, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+	clGetEventProfilingInfo(render, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 
-	// printf("kernel took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
+	printf("kernel took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
 	return h_output;
 }

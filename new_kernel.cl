@@ -411,6 +411,13 @@ static float3 fetch_color(const float u, const float v, int quadflag, const Obje
 	else
 		txcrd = (1 - u - v) * hit.vt[0] + u * hit.vt[2] + v * hit.vt[3];
 
+	txcrd.x -= floor(txcrd.x);
+	txcrd.y -= floor(txcrd.y);
+	if (txcrd.x < 0.0)
+		txcrd.x = 1.0 + txcrd.x;
+	if (txcrd.y < 0.0)
+		txcrd.y = 1.0 + txcrd.y;
+
 	int offset = mat.index;
 	int x = floor((float)mat.width * txcrd.x);
 	int y = floor((float)mat.height * txcrd.y);
