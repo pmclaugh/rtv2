@@ -207,20 +207,20 @@ int main(int ac, char **av)
 	cam.height = 1.0;
 	init_camera(&cam, xdim, ydim);
 
-	// cl_float3 *pixels = gpu_render(scene, cam);
+	cl_float3 *pixels = gpu_render(scene, cam);
 
 	//baby_tone_map(pixels, xdim * ydim);
 	
-	void *mlx = mlx_init();
-	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
-	void *img = mlx_new_image(mlx, xdim, ydim);
-	// draw_pixels(img, xdim, ydim, pixels);
-	// mlx_put_image_to_window(mlx, win, img, 0, 0);
+	// void *mlx = mlx_init();
+	// void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
+	// void *img = mlx_new_image(mlx, xdim, ydim);
+	// // draw_pixels(img, xdim, ydim, pixels);
+	// // mlx_put_image_to_window(mlx, win, img, 0, 0);
 
-	t_param *param = calloc(1, sizeof(t_param));
-	*param = (t_param){mlx, win, img, xdim, ydim, scene, cam, NULL, 0};
+	// t_param *param = calloc(1, sizeof(t_param));
+	// *param = (t_param){mlx, win, img, xdim, ydim, scene, cam, NULL, 0};
 	
-	mlx_key_hook(win, key_hook, param);
-	mlx_loop_hook(mlx, loop_hook, param);
-	mlx_loop(mlx);
+	// mlx_key_hook(win, key_hook, param);
+	// mlx_loop_hook(mlx, loop_hook, param);
+	// mlx_loop(mlx);
 }

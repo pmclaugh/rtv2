@@ -233,14 +233,13 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 				if (i == S->mat_count - 1)
 					printf("failed to match material\n");
 			}
+			printf("matched %s to %s\n", matstring, S->materials[mat_ind].friendly_name);
 		}
 		else if (strncmp(line, "g ", 2) == 0)
 		{
 			obj_indices[obj_count] = face_count;
 			obj_count++;
 		}
-		else if (strncmp(line, "s ", 2) == 0)
-			sscanf(line, "s %d\n", &smoothing);
 		else if (strncmp(line, "f ", 2) == 0)
 		{
 			Face f;
