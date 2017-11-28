@@ -199,7 +199,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 	size_t groupsize = 256;
 	cl_int obj_count = s->c_box_count;
 
-	cl_uint samples_per_device = 100;
+	cl_uint samples_per_device = 10;
 
 	for (int i = 0; i < numPlatforms; i++)
 	{
