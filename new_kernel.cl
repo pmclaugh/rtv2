@@ -449,7 +449,7 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 		if (hit_ind == -1)
 		{
 			if (j != 0)
-				color = 200.0f * mask * dot(ray.direction, (float3)(0.0, 1.0, 0.0));
+				color = 20000.0f * mask * dot(ray.direction, (float3)(0.0, 1.0, 0.0));
 			break;
 		}
 		const Object hit = scene[hit_ind];
@@ -465,14 +465,24 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 
 		//get normal at collision point
 		float3 N;
+		float3 geom_N;
 		if (hit.shape == SPHERE)
 			N = normalize(hit_point - hit.v[0]);
 		else if (hit.shape == TRIANGLE)
+		{
 			N = normalize((1 - u - v) * hit.vn[0] + u * hit.vn[1] + v * hit.vn[2]);
+			geom_N = normalize(cross(hit.v[1] - hit.v[0], hit.v[2] - hit.v[0]));
+		}
 		else if (!quadflag)
+		{
 			N = normalize((1 - u - v) * hit.vn[0] + u * hit.vn[1] + v * hit.vn[2]);
+			geom_N = normalize(cross(hit.v[1] - hit.v[0], hit.v[2] - hit.v[0]));
+		}
 		else
+		{
 			N = normalize((1 - u - v) * hit.vn[0] + u * hit.vn[2] + v * hit.vn[3]);
+			geom_N = normalize(cross(hit.v[3] - hit.v[0], hit.v[2] - hit.v[0]));
+		}
 
 		// color = (N + 1.0f) / 2.0f;
 		// break;
@@ -481,6 +491,7 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 
 		//assuming diffuse for now
 		N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
+		geom_N = dot(ray.direction, geom_N) < 0.0f ? geom_N : geom_N * (-1.0f);
 		//local orthonormal system
 		float3 axis = fabs(N.x) > fabs(N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
 		float3 hem_x = cross(axis, N);
@@ -494,7 +505,7 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 		//combine for new direction
 		new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
 		mask *= dot(new_dir, N) * fetch_color(u, v, quadflag, hit, mat, tex) * rrFactor; //////////////
-		ray.origin = hit_point + N * NORMAL_SHIFT;
+		ray.origin = hit_point + geom_N * NORMAL_SHIFT;
 
 		ray.direction = new_dir;
 		ray.inv_dir = 1.0f / new_dir;

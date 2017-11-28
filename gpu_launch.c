@@ -108,16 +108,16 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		for (int i = 0; i < xdim * ydim * 2 * numDevices; i++)
 			h_seeds[i] = rand();
 
-		printf("about to do textures\n");
+		//printf("about to do textures\n");
 		cl_int tex_size = 0;
 		for (int i = 0; i < s->mat_count; i++)
 		{
 			if (s->materials[i].map_Kd)
 				tex_size += s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3;
-			printf("%d\n", tex_size);
+			//printf("%d\n", tex_size);
 		}
 
-		printf("tex size? %d\n", tex_size);
+		//printf("tex size? %d\n", tex_size);
 		cl_uchar *h_tex = calloc(sizeof(cl_uchar), tex_size);
 		tex_size = 0;
 
@@ -201,7 +201,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 	size_t groupsize = 256;
 	cl_int obj_count = s->c_box_count;
 
-	cl_uint samples_per_device = 50;
+	cl_uint samples_per_device = 100;
 
 	for (int i = 0; i < numPlatforms; i++)
 	{
@@ -242,6 +242,10 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		}
 		offset += d;
 	}
+
+	for (int i = 0; i < numDevices; i++)
+		clFlush(commands[i]);
+
 	printf("all enqueued\n");
 	for (int i = 0; i < numDevices; i++)
 	{
@@ -276,14 +280,27 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		output_sum[j].y *= scale;
 		output_sum[j].z *= scale;
 
-		Lw += log(10.0 + 0.2126 * output_sum[j].x + 0.7152 * output_sum[j].y + 0.0722 * output_sum[j].z);
+		Lw += log(0.1 + 0.2126 * output_sum[j].x + 0.7152 * output_sum[j].y + 0.0722 * output_sum[j].z);
 	}
 	printf("Lw is %lf\n", Lw);
-	Lw = exp(Lw);
-	printf("Lw is %lf\n", Lw);
+	
 
 	Lw /= (double)resolution;
 	printf("Lw is %lf\n", Lw);
+
+	Lw = exp(Lw);
+	printf("Lw is %lf\n", Lw);
+
+	for (int j = 0; j < resolution; j++)
+	{
+		output_sum[j].x = output_sum[j].x * 0.36 / Lw;
+		output_sum[j].y = output_sum[j].y * 0.36 / Lw;
+		output_sum[j].z = output_sum[j].z * 0.36 / Lw;
+
+		output_sum[j].x = output_sum[j].x / (output_sum[j].x + 1.0);
+		output_sum[j].y = output_sum[j].y / (output_sum[j].y + 1.0);
+		output_sum[j].z = output_sum[j].z / (output_sum[j].z + 1.0);
+	}
 
 	//just a hack til i refactor stuff later down the pipeline to take doubles.
 	cl_float3 *float_sum = calloc(resolution, sizeof(cl_float3));
