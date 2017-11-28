@@ -201,7 +201,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 	size_t groupsize = 256;
 	cl_int obj_count = s->c_box_count;
 
-	cl_uint samples_per_device = 100;
+	cl_uint samples_per_device = 50;
 
 	for (int i = 0; i < numPlatforms; i++)
 	{
@@ -276,17 +276,20 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		output_sum[j].y *= scale;
 		output_sum[j].z *= scale;
 
-		Lw += log(0.0001 + 0.2126 * output_sum[j].x + 0.7152 * output_sum[j].y + 0.0722 * output_sum[j].z);
+		Lw += log(10.0 + 0.2126 * output_sum[j].x + 0.7152 * output_sum[j].y + 0.0722 * output_sum[j].z);
 	}
-	Lw = exp(Lw) / (double)resolution;
+	printf("Lw is %lf\n", Lw);
+	Lw = exp(Lw);
+	printf("Lw is %lf\n", Lw);
 
-	printf("%Lw is %lf\n", Lw);
+	Lw /= (double)resolution;
+	printf("Lw is %lf\n", Lw);
 
 	//just a hack til i refactor stuff later down the pipeline to take doubles.
 	cl_float3 *float_sum = calloc(resolution, sizeof(cl_float3));
 	for (int j = 0; j < resolution; j++)
 	{
-		float_sum[j].x = (float)output_sum[j].x
+		float_sum[j].x = (float)output_sum[j].x;
 		float_sum[j].y = (float)output_sum[j].y;
 		float_sum[j].z = (float)output_sum[j].z;
 	}
