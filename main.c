@@ -177,17 +177,17 @@ int main(int ac, char **av)
 	// cam.center = (cl_float3){-620.0, 130.0, 50.0};
 	// cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
-	//central view
-	cam.center = (cl_float3){-100.0, 330.0, 0.0};
-	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	// //central view
+	// cam.center = (cl_float3){-100.0, 330.0, 0.0};
+	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	// //central view with drape
 	// cam.center = (cl_float3){800.0, 600.0, 0.0};
 	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
-	// //2nd floor hall right
-	// cam.center = (cl_float3){700.0, 500.0, 350.0};
-	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	//2nd floor hall right
+	cam.center = (cl_float3){700.0, 500.0, 350.0};
+	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 	// //rounded column and some drape
 	// cam.center = (cl_float3){200.0, 650.0, -200.0};

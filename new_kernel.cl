@@ -436,9 +436,9 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 	float3 color = BLACK;
 	float3 mask = WHITE;
 
-	const float stop_prob = 0.1f;
+	const float stop_prob = 0.3f;
 
-	for (int j = 0; j < 5 || get_random(seed0, seed1) <= stop_prob; j++)
+	for (int j = 0; j < 5 || get_random(seed0, seed1) >= stop_prob; j++)
 	{
 		float rrFactor = j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
 		
@@ -449,7 +449,7 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 		if (hit_ind == -1)
 		{
 			if (j != 0)
-				color = 100.0f * mask;
+				color = 200.0f * mask * dot(ray.direction, (float3)(0.0, 1.0, 0.0));
 			break;
 		}
 		const Object hit = scene[hit_ind];
@@ -457,8 +457,10 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 
 		float3 hit_point = ray.origin + ray.direction * t;
 
+		// color = (float3)(u, v, 0);
+
 		// color = fetch_color(u, v, quadflag, hit, mat, tex);
-		// // color = (float3)(u, v, 0);
+		
 		// break;
 
 		//get normal at collision point
