@@ -33,8 +33,8 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 	static cl_command_queue *commands;
 	static cl_program *programs;
 	static cl_mem *d_scene;
-	static cl_mem *d_output;
-	static cl_mem *d_seeds;
+	static cl_mem **d_output;
+	static cl_mem **d_seeds;
 	static cl_mem *d_mats;
 	static cl_mem *d_boxes;
 	static cl_mem *d_const_boxes;
@@ -103,10 +103,9 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 
 	    printf("built programs\n");
 
-		//set up memory areas
-		cl_uint *h_seeds = calloc(xdim * ydim * 2, sizeof(cl_uint));
-
-		for (int i = 0; i < xdim * ydim * 2; i++)
+	    //seeds for random number generation (2 per thread per device)
+		cl_uint *h_seeds = calloc(xdim * ydim * 2 * numDevices, sizeof(cl_uint));
+		for (int i = 0; i < xdim * ydim * 2 * numDevices; i++)
 			h_seeds[i] = rand();
 
 		printf("about to do textures\n");
@@ -159,30 +158,33 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		offset = 0;
 		d_scene = calloc(numPlatforms, sizeof(cl_mem));
 		d_mats = calloc(numPlatforms, sizeof(cl_mem));
-		d_output = calloc(numPlatforms, sizeof(cl_mem));
-		d_seeds = calloc(numPlatforms, sizeof(cl_mem));
+		d_output = calloc(numPlatforms, sizeof(cl_mem *));
+		d_seeds = calloc(numPlatforms, sizeof(cl_mem *));
 		d_boxes = calloc(numPlatforms, sizeof(cl_mem));
 		d_const_boxes = calloc(numPlatforms, sizeof(cl_mem));
 		d_tex = calloc(numPlatforms, sizeof(cl_mem));
 		for (int i = 0; i < numPlatforms; i++)
 		{
+			cl_uint d;
+			clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_ALL, 0, NULL, &d);
+
+			d_output[i] = calloc(d, sizeof(cl_mem));
+			d_seeds[i] = calloc(d, sizeof(cl_mem));
 			d_scene[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(Face) * s->face_count, NULL, NULL);
 			d_mats[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(gpu_mat) * s->mat_count, NULL, NULL);
-			d_output[i] = clCreateBuffer(contexts[i], CL_MEM_WRITE_ONLY, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
-			d_seeds[i] = clCreateBuffer(contexts[i], CL_MEM_READ_WRITE, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
 			d_boxes[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(Box) * s->box_count, NULL, NULL);
 			d_const_boxes[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(C_Box) * s->c_box_count, NULL, NULL);
 			d_tex[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(cl_uchar) * tex_size, NULL, NULL);
-			cl_uint d;
-			clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_ALL, 0, NULL, &d);
+			
 			for (int j = 0; j < d; j++)
 			{
+				d_output[i][j] = clCreateBuffer(contexts[i], CL_MEM_WRITE_ONLY, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
+				d_seeds[i][j] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
 				clEnqueueWriteBuffer(commands[offset + j], d_scene[i], CL_TRUE, 0, sizeof(Face) * s->face_count, s->faces, 0, NULL, NULL);
 				clEnqueueWriteBuffer(commands[offset + j], d_mats[i], CL_TRUE, 0, sizeof(gpu_mat) * s->mat_count, simple_mats, 0, NULL, NULL);
-				clEnqueueWriteBuffer(commands[offset + j], d_seeds[i], CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_seeds[i][j], CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, &h_seeds[(offset + j) * xdim * ydim * 2], 0, NULL, NULL);
 				clEnqueueWriteBuffer(commands[offset + j], d_boxes[i], CL_TRUE, 0, sizeof(Box) * s->box_count, s->boxes, 0, NULL, NULL);
 				clEnqueueWriteBuffer(commands[offset + j], d_const_boxes[i], CL_TRUE, 0, sizeof(C_Box) * s->c_box_count, s->c_boxes, 0, NULL, NULL);
-				//clEnqueueWriteBuffer(commands[offset + j], d_output[i], CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 				clEnqueueWriteBuffer(commands[offset + j], d_tex[i], CL_TRUE, 0, sizeof(cl_uchar) * tex_size, h_tex, 0, NULL, NULL);
 			}
 			offset += d;
@@ -211,8 +213,8 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		clSetKernelArg(kernels[i], 5, sizeof(cl_float3), &cam.d_x);
 		clSetKernelArg(kernels[i], 6, sizeof(cl_float3), &cam.d_y);
 		clSetKernelArg(kernels[i], 7, sizeof(cl_int), &xdim);
-		clSetKernelArg(kernels[i], 8, sizeof(cl_mem), &d_output[i]);
-		clSetKernelArg(kernels[i], 9, sizeof(cl_mem), &d_seeds[i]);
+		// clSetKernelArg(kernels[i], 8, sizeof(cl_mem), &d_output[i]);
+		// clSetKernelArg(kernels[i], 9, sizeof(cl_mem), &d_seeds[i]);
 		clSetKernelArg(kernels[i], 10, sizeof(cl_uint), &samples_per_device);
 		clSetKernelArg(kernels[i], 11, sizeof(cl_mem), &d_const_boxes[i]);
 		clSetKernelArg(kernels[i], 12, sizeof(cl_uint), &obj_count);
@@ -232,9 +234,11 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_ALL, 0, NULL, &d);
 		for (int j = 0; j < d; j++)
 		{
+			clSetKernelArg(kernels[i], 8, sizeof(cl_mem), &d_output[i][j]);
+			clSetKernelArg(kernels[i], 9, sizeof(cl_mem), &d_seeds[i][j]);
 			outputs[offset + j] = calloc(xdim * ydim, sizeof(cl_float3));
 			cl_int err = clEnqueueNDRangeKernel(commands[offset + j], kernels[i], 1, 0, &resolution, &groupsize, 0, NULL, &render[offset + j]);
-			clEnqueueReadBuffer(commands[offset + j], d_output[i], CL_FALSE, 0, sizeof(cl_float3) * xdim * ydim, outputs[offset + j], 1, &render[offset + j], NULL);
+			clEnqueueReadBuffer(commands[offset + j], d_output[i][j], CL_FALSE, 0, sizeof(cl_float3) * xdim * ydim, outputs[offset + j], 1, &render[offset + j], NULL);
 		}
 		offset += d;
 	}
