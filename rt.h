@@ -20,11 +20,6 @@
 # include "linux-mlx/mlx.h"
 #endif
 
-
-
-#define xdim 1024
-#define ydim 1024
-
 #define UNIT_X (cl_float3){1, 0, 0}
 #define UNIT_Y (cl_float3){0, 1, 0}
 #define UNIT_Z (cl_float3){0, 0, 1}
@@ -270,7 +265,7 @@ typedef struct s_new_scene
 Scene *scene_from_obj(char *rel_path, char *filename);
 
 
-cl_float3 *gpu_render(Scene *scene, t_camera cam);
+cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim);
 
 Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
 void gpu_ready_bvh(Scene *S, int *counts, int obj_count);

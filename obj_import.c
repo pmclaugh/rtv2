@@ -1,7 +1,7 @@
 #include "rt.h"
 #include <string.h>
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 Map *load_map(char *rel_path, char *filename)
 {
@@ -79,7 +79,8 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			mat_ind++;
 			m.friendly_name = malloc(256);
 			sscanf(line, "newmtl %s\n", m.friendly_name);
-			printf("new mtl friendly name %s\n", m.friendly_name);
+			if (VERBOSE)
+				printf("new mtl friendly name %s\n", m.friendly_name);
 		}
 		else if (strncmp(line, "\tNs", 3) == 0)
 			sscanf(line, "\tNs %f", &m.Ns);
@@ -194,7 +195,7 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 	vt_count = 0;
 	face_count = 0;
 
-	printf("I counted %d objects\n", obj_count);
+	printf("%d objects\n", obj_count);
 	int *obj_indices = calloc(obj_count, sizeof(int));
 	obj_count = 0;
 
@@ -233,7 +234,6 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 				if (i == S->mat_count - 1)
 					printf("failed to match material\n");
 			}
-			printf("matched %s to %s\n", matstring, S->materials[mat_ind].friendly_name);
 		}
 		else if (strncmp(line, "g ", 2) == 0)
 		{
@@ -283,13 +283,10 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 	S->faces = faces;
 	S->face_count = face_count;
 
-	printf("faces loaded\n");
 	fclose(fp);
 	free(V);
 	free(VN);
 	free(VT);
-
-	printf("I counted %d objects\n", obj_count);
 
 	printf("making BVH\n");
 

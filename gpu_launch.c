@@ -16,11 +16,6 @@ typedef struct s_gpu_mat
 # define DEVICE CL_DEVICE_TYPE_DEFAULT
 # endif
 
-cl_float3 tfloat_to_cl(cl_float3 v)
-{
-	return (cl_float3){v.x, v.y, v.z};
-}
-
 void print_clf3(cl_float3 v)
 {
 	printf("%f %f %f\n", v.x, v.y, v.z);
@@ -36,7 +31,7 @@ char *load_cl_file(char *file)
 	return source;
 }
 
-cl_float3 *gpu_render(Scene *s, t_camera cam)
+cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 {
 
 	static cl_context context;
@@ -186,27 +181,21 @@ cl_float3 *gpu_render(Scene *s, t_camera cam)
 
 	// Create the compute kernel from the program (this can't be retained for some reason)
 	cl_kernel k = clCreateKernel(p, "render_kernel", NULL);
-	int i_xdim = xdim;
-	int i_ydim = ydim;
+
 	size_t resolution = xdim * ydim;
 	size_t groupsize = 256;
 	cl_int obj_count = s->c_box_count;
 
 	cl_uint total_samples = 1;
-	cl_float3 gpu_cam_origin = tfloat_to_cl(cam.origin);
-	cl_float3 gpu_cam_focus = tfloat_to_cl(cam.focus);
-	cl_float3 gpu_cam_dx = tfloat_to_cl(cam.d_x);
-	cl_float3 gpu_cam_dy = tfloat_to_cl(cam.d_y);
-
 
 	clSetKernelArg(k, 0, sizeof(cl_mem), &d_scene);
 	clSetKernelArg(k, 1, sizeof(cl_mem), &d_mats);
 	clSetKernelArg(k, 2, sizeof(cl_mem), &d_boxes);
-	clSetKernelArg(k, 3, sizeof(cl_float3), &gpu_cam_origin);
-	clSetKernelArg(k, 4, sizeof(cl_float3), &gpu_cam_focus);
-	clSetKernelArg(k, 5, sizeof(cl_float3), &gpu_cam_dx);
-	clSetKernelArg(k, 6, sizeof(cl_float3), &gpu_cam_dy);
-	clSetKernelArg(k, 7, sizeof(cl_int), &i_xdim);
+	clSetKernelArg(k, 3, sizeof(cl_float3), &cam.origin);
+	clSetKernelArg(k, 4, sizeof(cl_float3), &cam.focus);
+	clSetKernelArg(k, 5, sizeof(cl_float3), &cam.d_x);
+	clSetKernelArg(k, 6, sizeof(cl_float3), &cam.d_y);
+	clSetKernelArg(k, 7, sizeof(cl_int), &xdim);
 	clSetKernelArg(k, 8, sizeof(cl_mem), &d_output);
 	clSetKernelArg(k, 9, sizeof(cl_mem), &d_seeds);
 	clSetKernelArg(k, 10, sizeof(cl_uint), &total_samples);

@@ -1,11 +1,11 @@
 
-__constant float PI = 3.14159265359f;
-__constant float REFRACTIVE_INDEX = 1.5;
-__constant float COLLIDE_ERR = 0.0001f;
-__constant float NORMAL_SHIFT = 0.0003f;
+#define PI 3.14159265359f
+#define REFRACTIVE_INDEX 1.5
+#define COLLIDE_ERR 0.0001f
+#define NORMAL_SHIFT 0.0003f
 
-__constant float DIFFUSE_CONSTANT = 0.7;
-__constant float SPECULAR_CONSTANT = 0.9;
+#define DIFFUSE_CONSTANT 0.7
+#define SPECULAR_CONSTANT 0.9
 
 #define SPHERE 1
 #define TRIANGLE 3
