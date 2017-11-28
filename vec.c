@@ -100,51 +100,7 @@ t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b)
 	return rotation;
 }
 
-cl_float3 bounce(const cl_float3 in, const cl_float3 norm)
-{
-	return unit_vec(vec_add(vec_scale(norm, -2.0 * dot(in, norm)), in));
-}
-
-float dist(const cl_float3 a, const cl_float3 b)
-{
-	return vec_mag(vec_sub(a, b));
-}
-
 cl_float3 vec_rev(const cl_float3 v)
 {
 	return (cl_float3){v.x * -1.0, v.y * -1.0, v.z * -1.0};
-}
-
-cl_float3 vec_inv(const cl_float3 v)
-{
-	return (cl_float3){1.0 / v.x, 1.0 / v.y, 1.0 / v.z};
-}
-
-int vec_equ(const cl_float3 a, const cl_float3 b)
-{
-	if (a.x == b.x)
-		if (a.y == b.y)
-			if (a.z == b.z)
-				return (1);
-	return (0);
-}
-
-void orthonormal(cl_float3 a, cl_float3 *b, cl_float3 *c)
-{
-	if (fabs(a.x) > fabs(a.y))
-	{
-		float invLen = 1.0 / sqrt(a.x * a.x + a.z * a.z);
-		*b = (cl_float3){-1 * a.z * invLen, 0.0, a.x * invLen};
-	}
-	else
-	{
-		float invLen = 1.0 / sqrt(a.y * a.y + a.z * a.z);
-		*b = (cl_float3){0.0, a.z * invLen, -1.0 * a.y * invLen};
-	}
-	*c = cross(a, *b);
-}
-
-cl_float3 vec_had(const cl_float3 a, const cl_float3 b)
-{
-	return (cl_float3){a.x * b.x, a.y * b.y, a.z * b.z};
 }

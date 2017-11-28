@@ -11,11 +11,6 @@ typedef struct s_gpu_mat
 	cl_int tex_h;
 }				gpu_mat;
 
-
-# ifndef DEVICE
-# define DEVICE CL_DEVICE_TYPE_DEFAULT
-# endif
-
 void print_clf3(cl_float3 v)
 {
 	printf("%f %f %f\n", v.x, v.y, v.z);
@@ -34,71 +29,74 @@ char *load_cl_file(char *file)
 cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 {
 
-	static cl_context context;
-	static cl_command_queue commands;
-	static cl_program p;
-	static cl_mem d_scene;
-	static cl_mem d_output;
-	static cl_mem d_seeds;
-	static cl_mem d_mats;
-	static cl_mem d_boxes;
-	static cl_mem d_const_boxes;
-	static cl_mem d_tex;
+	static cl_context *contexts;
+	static cl_command_queue *commands;
+	static cl_program *programs;
+	static cl_mem *d_scene;
+	static cl_mem *d_output;
+	static cl_mem *d_seeds;
+	static cl_mem *d_mats;
+	static cl_mem *d_boxes;
+	static cl_mem *d_const_boxes;
+	static cl_mem *d_tex;
 	static int first = 1;
-
-	cl_float3 *h_output = calloc(xdim * ydim, sizeof(cl_float3));
+	static cl_uint numPlatforms;
+	static cl_uint numDevices;
+	static cl_platform_id *Platform;
 
 	if (first)
 	{
 		printf("doing the heavy stuff\n");
-		cl_uint numPlatforms;
 	    int err;
 
 	    // Find number of platforms
 	    err = clGetPlatformIDs(0, NULL, &numPlatforms);
 
 	    // Get all platforms
-	    cl_platform_id Platform[numPlatforms];
+	    Platform = calloc(numPlatforms, sizeof(cl_platform_id));
 	    err = clGetPlatformIDs(numPlatforms, Platform, NULL);
 
-	    // Secure a GPU
-	    cl_device_id device_id;
+	    //count devices
+	    numDevices = 0;
 	    for (int i = 0; i < numPlatforms; i++)
 	    {
-	        err = clGetDeviceIDs(Platform[i], DEVICE, 1, &device_id, NULL);
+	    	cl_uint d;
+	        err = clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_ALL, 0, NULL, &d);
 	        if (err == CL_SUCCESS)
-	        {
-	            break;
-	        }
+	            numDevices += d;
 	    }
 
-	    // Create a compute context
-	    context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
-
-	    // Create a command queue
-	    commands = clCreateCommandQueue(context, device_id, CL_QUEUE_PROFILING_ENABLE, &err);
-	    //printf("setup context\n");
-
-
+	    //get ids for devices and create (platforms) compute contexts, (devices) command queues
+	    cl_device_id device_ids[numDevices];
+	    cl_uint offset = 0;
+	    contexts = calloc(numPlatforms, sizeof(cl_context));
+	    commands = calloc(numDevices, sizeof(cl_command_queue));
+	    for (int i = 0; i < numPlatforms; i++)
+	    {
+	    	cl_uint d;
+	    	clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_GPU, numDevices, &device_ids[offset], &d);
+	    	contexts[i] = clCreateContext(0, d, &device_ids[offset], NULL, NULL, &err);
+	    	offset += d;
+	    	for (int j = 0; j < d; j++)
+	    		commands[i] = clCreateCommandQueue(contexts[i], device_ids[offset + j], CL_QUEUE_PROFILING_ENABLE, &err);
+	    }
+	    
 	    char *source = load_cl_file("new_kernel.cl");
 
-	    p = clCreateProgramWithSource(context, 1, (const char **) &source, NULL, &err);
 
-	    // Build the program
-	    err = clBuildProgram(p, 0, NULL, NULL, NULL, NULL);
-	    if (err != CL_SUCCESS)
+	    //create (platforms) programs and build them
+	    programs = calloc(numPlatforms, sizeof(cl_program));
+	    for (int i = 0; i < numPlatforms; i++)
 	    {
-	        size_t len;
-	        char buffer[8192];
-
-	        //printf("Error: Failed to build program executable!\n%s\n", err_code(err));
-	        clGetProgramBuildInfo(p, device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
-	        printf("%s\n", buffer);
-	        free(source);
-	        exit(0);
+	    	programs[i] = clCreateProgramWithSource(contexts[i], 1, (const char **) &source, NULL, &err);
+	    	err = clBuildProgram(programs[i], 0, NULL, NULL, NULL, NULL);
+	    	if (err != CL_SUCCESS)
+	    	{
+	    	 	printf("bad compile\n");
+	    	 	exit(0);
+	    	}
+		    free(source);
 	    }
-	    free(source);
-	    //printf("made kernel\n");
 
 		//set up memory areas
 		cl_uint *h_seeds = calloc(xdim * ydim * 2, sizeof(cl_uint));
@@ -153,34 +151,44 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 
 		printf("flattened textures, %d bytes\n", tex_size);
 
-		d_scene = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(Face) * s->face_count, NULL, NULL);
-		d_mats = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(gpu_mat) * s->mat_count, NULL, NULL);
-		d_output = clCreateBuffer(context, CL_MEM_WRITE_ONLY, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
-		d_seeds = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
-		d_boxes = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(Box) * s->box_count, NULL, NULL);
-		d_const_boxes = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(C_Box) * s->c_box_count, NULL, NULL);
-		d_tex = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(cl_uchar) * tex_size, NULL, NULL);
-
-		clEnqueueWriteBuffer(commands, d_scene, CL_TRUE, 0, sizeof(Face) * s->face_count, s->faces, 0, NULL, NULL);
-		clEnqueueWriteBuffer(commands, d_mats, CL_TRUE, 0, sizeof(gpu_mat) * s->mat_count, simple_mats, 0, NULL, NULL);
-		clEnqueueWriteBuffer(commands, d_seeds, CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
-		clEnqueueWriteBuffer(commands, d_boxes, CL_TRUE, 0, sizeof(Box) * s->box_count, s->boxes, 0, NULL, NULL);
-		clEnqueueWriteBuffer(commands, d_const_boxes, CL_TRUE, 0, sizeof(C_Box) * s->c_box_count, s->c_boxes, 0, NULL, NULL);
-		clEnqueueWriteBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
-		clEnqueueWriteBuffer(commands, d_tex, CL_TRUE, 0, sizeof(cl_uchar) * tex_size, h_tex, 0, NULL, NULL);
-
-		clRetainContext(context);
-		clRetainCommandQueue(commands);
-		clRetainProgram(p);
-		clRetainMemObject(d_scene);
-		clRetainMemObject(d_output);
-		clRetainMemObject(d_seeds);
-		clRetainMemObject(d_tex);
+		offset = 0;
+		d_scene = calloc(numPlatforms, sizeof(cl_mem));
+		d_mats = calloc(numPlatforms, sizeof(cl_mem));
+		d_output = calloc(numPlatforms, sizeof(cl_mem));
+		d_seeds = calloc(numPlatforms, sizeof(cl_mem));
+		d_boxes = calloc(numPlatforms, sizeof(cl_mem));
+		d_const_boxes = calloc(numPlatforms, sizeof(cl_mem));
+		d_tex = calloc(numPlatforms, sizeof(cl_mem));
+		for (int i = 0; i < numPlatforms; i++)
+		{
+			d_scene[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(Face) * s->face_count, NULL, NULL);
+			d_mats[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(gpu_mat) * s->mat_count, NULL, NULL);
+			d_output[i] = clCreateBuffer(contexts[i], CL_MEM_WRITE_ONLY, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
+			d_seeds[i] = clCreateBuffer(contexts[i], CL_MEM_READ_WRITE, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
+			d_boxes[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(Box) * s->box_count, NULL, NULL);
+			d_const_boxes[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(C_Box) * s->c_box_count, NULL, NULL);
+			d_tex[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(cl_uchar) * tex_size, NULL, NULL);
+			cl_uint d;
+			clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_ALL, 0, NULL, &d);
+			for (int j = 0; j < d; j++)
+			{
+				clEnqueueWriteBuffer(commands[offset + j], d_scene[i], CL_TRUE, 0, sizeof(Face) * s->face_count, s->faces, 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_mats[i], CL_TRUE, 0, sizeof(gpu_mat) * s->mat_count, simple_mats, 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_seeds[i], CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_boxes[i], CL_TRUE, 0, sizeof(Box) * s->box_count, s->boxes, 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_const_boxes[i], CL_TRUE, 0, sizeof(C_Box) * s->c_box_count, s->c_boxes, 0, NULL, NULL);
+				//clEnqueueWriteBuffer(commands[offset + j], d_output[i], CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_tex[i], CL_TRUE, 0, sizeof(cl_uchar) * tex_size, h_tex, 0, NULL, NULL);
+				offset += d;
+			}
+		}
 		first = 0;
 	}
 
 	// Create the compute kernel from the program (this can't be retained for some reason)
-	cl_kernel k = clCreateKernel(p, "render_kernel", NULL);
+	cl_kernel *kernels = calloc(numPlatforms, sizeof(cl_kernel));
+	for (int i = 0; i < numPlatforms; i++)
+		kernels[i] = clCreateKernel(programs[i], "render_kernel", NULL);
 
 	size_t resolution = xdim * ydim;
 	size_t groupsize = 256;
@@ -188,33 +196,60 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 
 	cl_uint total_samples = 1;
 
-	clSetKernelArg(k, 0, sizeof(cl_mem), &d_scene);
-	clSetKernelArg(k, 1, sizeof(cl_mem), &d_mats);
-	clSetKernelArg(k, 2, sizeof(cl_mem), &d_boxes);
-	clSetKernelArg(k, 3, sizeof(cl_float3), &cam.origin);
-	clSetKernelArg(k, 4, sizeof(cl_float3), &cam.focus);
-	clSetKernelArg(k, 5, sizeof(cl_float3), &cam.d_x);
-	clSetKernelArg(k, 6, sizeof(cl_float3), &cam.d_y);
-	clSetKernelArg(k, 7, sizeof(cl_int), &xdim);
-	clSetKernelArg(k, 8, sizeof(cl_mem), &d_output);
-	clSetKernelArg(k, 9, sizeof(cl_mem), &d_seeds);
-	clSetKernelArg(k, 10, sizeof(cl_uint), &total_samples);
-	clSetKernelArg(k, 11, sizeof(cl_mem), &d_const_boxes);
-	clSetKernelArg(k, 12, sizeof(cl_uint), &obj_count);
-	clSetKernelArg(k, 13, sizeof(cl_mem), &d_tex);
+	for (int i = 0; i < numPlatforms; i++)
+	{
+		clSetKernelArg(kernels[i], 0, sizeof(cl_mem), &d_scene[i]);
+		clSetKernelArg(kernels[i], 1, sizeof(cl_mem), &d_mats[i]);
+		clSetKernelArg(kernels[i], 2, sizeof(cl_mem), &d_boxes[i]);
+		clSetKernelArg(kernels[i], 3, sizeof(cl_float3), &cam.origin);
+		clSetKernelArg(kernels[i], 4, sizeof(cl_float3), &cam.focus);
+		clSetKernelArg(kernels[i], 5, sizeof(cl_float3), &cam.d_x);
+		clSetKernelArg(kernels[i], 6, sizeof(cl_float3), &cam.d_y);
+		clSetKernelArg(kernels[i], 7, sizeof(cl_int), &xdim);
+		clSetKernelArg(kernels[i], 8, sizeof(cl_mem), &d_output[i]);
+		clSetKernelArg(kernels[i], 9, sizeof(cl_mem), &d_seeds[i]);
+		clSetKernelArg(kernels[i], 10, sizeof(cl_uint), &total_samples);
+		clSetKernelArg(kernels[i], 11, sizeof(cl_mem), &d_const_boxes[i]);
+		clSetKernelArg(kernels[i], 12, sizeof(cl_uint), &obj_count);
+		clSetKernelArg(kernels[i], 13, sizeof(cl_mem), &d_tex[i]);
+	}
 
 	printf("about to fire\n");
 	//pull the trigger
 
-	cl_event render;
-	cl_int err = clEnqueueNDRangeKernel(commands, k, 1, 0, &resolution, &groupsize, 0, NULL, &render);
-	clFinish(commands);
-	clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
+	cl_event render[numDevices];
 
-	cl_ulong start, end;
-	clGetEventProfilingInfo(render, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-	clGetEventProfilingInfo(render, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+	cl_float3 **outputs = calloc(numDevices, sizeof(cl_float3 *));
+	cl_uint offset = 0;
+	for (int i = 0; i < numPlatforms; i++)
+	{
+		cl_uint d;
+		clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_ALL, 0, NULL, &d);
+		for (int j = 0; j < d; j++)
+		{
+			outputs[offset + j] = calloc(xdim * ydim, sizeof(cl_float3));
+			cl_int err = clEnqueueNDRangeKernel(commands[offset + j], kernels[i], 1, 0, &resolution, &groupsize, 0, NULL, &render[offset + j]);
+			clEnqueueReadBuffer(commands[offset + j], d_output[i], CL_FALSE, 0, sizeof(cl_float3) * xdim * ydim, &outputs[offset + j], 1, &render[offset + j], NULL);
+		}
+		offset += d;
+	}
+	for (int i = 0; i < numDevices; i++)
+	{
+		clFinish(commands[i]);
+		cl_ulong start, end;
+		clGetEventProfilingInfo(render[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+		clGetEventProfilingInfo(render[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+		printf("kernel %d took %.3f seconds\n", i, (float)(end - start) / 1000000000.0f);
+	}
 
-	printf("kernel took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
-	return h_output;
+	cl_float3 *output_sum = calloc(resolution, sizeof(cl_float3));
+	for (int i = 0; i < numDevices; i++)
+	{
+		for (int j = 0; j < resolution; j++)
+			output_sum[j] = vec_add(output_sum[j], outputs[i][j]);
+		free(outputs[i]);
+	}
+
+	free(kernels);
+	return output_sum;
 }

@@ -116,18 +116,18 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			sscanf(line, "\tmap_Kd %s\n", m.map_Kd_path);
 			m.map_Kd = load_map(rel_path, m.map_Kd_path);
 		}
-		// else if (strncmp(line, "\tmap_bump", 10) == 0)
-		// {
-		// 	m.map_bump_path = calloc(512, 1);
-		// 	sscanf(line, "\tmap_bump %s\n", m.map_bump_path);
-		// 	m.map_bump = load_map(rel_path, m.map_bump_path);
-		// }
-		// else if (strncmp(line, "\tmap_d", 6) == 0)
-		// {
-		// 	m.map_d_path = calloc(512, 1);
-		// 	sscanf(line, "\tmap_d %s\n", m.map_d_path);
-		// 	m.map_d = load_map(rel_path, m.map_d_path);
-		// }
+		else if (strncmp(line, "\tmap_bump", 10) == 0)
+		{
+			m.map_bump_path = calloc(512, 1);
+			sscanf(line, "\tmap_bump %s\n", m.map_bump_path);
+			m.map_bump = load_map(rel_path, m.map_bump_path);
+		}
+		else if (strncmp(line, "\tmap_d", 6) == 0)
+		{
+			m.map_d_path = calloc(512, 1);
+			sscanf(line, "\tmap_d %s\n", m.map_d_path);
+			m.map_d = load_map(rel_path, m.map_d_path);
+		}
 	}
 	S->materials[mat_ind] = m;
 

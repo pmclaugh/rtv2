@@ -18,11 +18,11 @@ cl_float3 bigmax;
 
 uint64_t splitBy3(const unsigned int a)
 {
-    uint64_t x = a & 0x1fffff; // we only look at the first 21 bits
-    x = (x | x << 32) & 0x1f00000000ffff;  // shift left 32 bits, OR with self, and 00011111000000000000000000000000000000001111111111111111
-    x = (x | x << 16) & 0x1f0000ff0000ff;  // shift left 32 bits, OR with self, and 00011111000000000000000011111111000000000000000011111111
-    x = (x | x << 8) & 0x100f00f00f00f00f; // shift left 32 bits, OR with self, and 0001000000001111000000001111000000001111000000001111000000000000
-    x = (x | x << 4) & 0x10c30c30c30c30c3; // shift left 32 bits, OR with self, and 0001000011000011000011000011000011000011000011000011000100000000
+    uint64_t x = a & 0x1fffff;
+    x = (x | x << 32) & 0x1f00000000ffff;
+    x = (x | x << 16) & 0x1f0000ff0000ff;
+    x = (x | x << 8) & 0x100f00f00f00f00f;
+    x = (x | x << 4) & 0x10c30c30c30c30c3;
     x = (x | x << 2) & 0x1249249249249249;
     return x;
 }
@@ -37,11 +37,6 @@ uint64_t mortonEncode_magicbits(const unsigned int x, const unsigned int y, cons
 
 uint64_t morton64(float x, float y, float z)
 {
-	// if (max3(x,y,z) > 1.001 || min3(x,y,z) < -0.001)
-	// 	printf("scaling is bad! %f %f %f\n", x, y, z);
-	
-	//printf("x %f y %f z %f\n", x, y, z);
-	//x, y, z are in [0, 1]. multiply by 2^21 to get 21 bits, confine to [0, 2^21 - 1]
     x = fmin(fmax(x * 2097152.0f, 0.0f), 2097151.0f);
     y = fmin(fmax(y * 2097152.0f, 0.0f), 2097151.0f);
     z = fmin(fmax(z * 2097152.0f, 0.0f), 2097151.0f);
@@ -116,47 +111,17 @@ void set_bounds(Box *B, Face *Faces)
 	B->max = (cl_float3){max_x + 0.01f, max_y + 0.01f, max_z + 0.01f};
 }
 
-void box_bounds(C_Box *boxes, int count)
-{
-	float max_x = -1.0 * FLT_MAX;
-	float max_y = -1.0 * FLT_MAX;
-	float max_z = -1.0 * FLT_MAX;
-
-	float min_x = FLT_MAX;
-	float min_y = FLT_MAX;
-	float min_z = FLT_MAX; //never forget
-
-	for (int i = 0; i < count; i++)
-	{
-
-		max_x = fmax(boxes[i].max.x, max_x);
-		max_y = fmax(boxes[i].max.y, max_y);
-		max_z = fmax(boxes[i].max.z, max_z);
-
-		min_x = fmin(boxes[i].min.x, min_x);
-		min_y = fmin(boxes[i].min.y, min_y);
-		min_z = fmin(boxes[i].min.z, min_z);
-	}
-
-	bigmin = (cl_float3){min_x - 0.01f, min_y - 0.01f, min_z - 0.01f};
-	bigmax = (cl_float3){max_x + 0.01f, max_y + 0.01f, max_z + 0.01f};
-}
-
 int next_spot;
 
 unsigned int morton_digit(uint64_t code, int depth)
 {
 	code = code << (1 + 3 * depth);
 	code = code >> 61;
-	//printf("sample morton code: %u\n", code);
 	return code;
 }
 
 void tree_down(Box *Boxes, Face *Faces, int index, int depth)
 {
-	//take Boxes[index] and split it in 8, recurse on em
-	//find midpoint w binary search (barrier between 011 and 100)
-	//printf("depth %d\n", depth);
 	if (Boxes[index].start == Boxes[index].end)
 	{
 		next_spot--;
@@ -302,38 +267,4 @@ void gpu_ready_bvh(Scene *S, int *counts, int obj_count)
 	S->box_count = box_total;
 	S->c_boxes = shallow_bvh;
 	S->c_box_count = obj_count;
-}
-
-void old_bvh(Scene *S)
-{
-	//REMEMBER this can be optimized later, for now just make it work
-	Face *Faces = S->faces;
-	Box *Boxes = calloc(2 * S->face_count, sizeof(Box));
-	//uint64_t *codes = calloc(S->face_count, sizeof(uint64_t));
-
-	Boxes[0] = (Box){
-		ORIGIN,
-		ORIGIN,
-		0,
-		S->face_count
-	};
-
-	set_bounds(&Boxes[0], Faces);
-	bigmin = Boxes[0].min;
-	bigmax = Boxes[0].max;
-	print_clf3(bigmin);
-	print_clf3(bigmax);
-	//morton sort the faces
-	qsort(Faces, S->face_count, sizeof(Face), face_cmp);
-
-	next_spot = 0;
-
-	tree_down(Boxes, Faces, 0, 0);
-
-	S->boxes = Boxes;
-	S->box_count = next_spot + 1;
-
-	printf("I think we did the boxes. %d of them\n", S->box_count);
-	// for (int i = 0; i < S->box_count; i++)
-	// 	box_deets(Boxes[i], i);
 }
