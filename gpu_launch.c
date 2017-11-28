@@ -66,6 +66,8 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 	            numDevices += d;
 	    }
 
+	    printf("%u devices, %u platforms\n", numDevices, numPlatforms);
+
 	    //get ids for devices and create (platforms) compute contexts, (devices) command queues
 	    cl_device_id device_ids[numDevices];
 	    cl_uint offset = 0;
@@ -76,11 +78,12 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 	    	cl_uint d;
 	    	clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_GPU, numDevices, &device_ids[offset], &d);
 	    	contexts[i] = clCreateContext(0, d, &device_ids[offset], NULL, NULL, &err);
-	    	offset += d;
 	    	for (int j = 0; j < d; j++)
-	    		commands[i] = clCreateCommandQueue(contexts[i], device_ids[offset + j], CL_QUEUE_PROFILING_ENABLE, &err);
+	    		commands[offset + j] = clCreateCommandQueue(contexts[i], device_ids[offset + j], CL_QUEUE_PROFILING_ENABLE, &err);
+	    	offset += d;
 	    }
-	    
+	    printf("made contexts and CQs\n");
+
 	    char *source = load_cl_file("new_kernel.cl");
 
 
@@ -97,6 +100,8 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 	    	}
 		    free(source);
 	    }
+
+	    printf("built programs\n");
 
 		//set up memory areas
 		cl_uint *h_seeds = calloc(xdim * ydim * 2, sizeof(cl_uint));
@@ -179,8 +184,8 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 				clEnqueueWriteBuffer(commands[offset + j], d_const_boxes[i], CL_TRUE, 0, sizeof(C_Box) * s->c_box_count, s->c_boxes, 0, NULL, NULL);
 				//clEnqueueWriteBuffer(commands[offset + j], d_output[i], CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 				clEnqueueWriteBuffer(commands[offset + j], d_tex[i], CL_TRUE, 0, sizeof(cl_uchar) * tex_size, h_tex, 0, NULL, NULL);
-				offset += d;
 			}
+			offset += d;
 		}
 		first = 0;
 	}
@@ -194,7 +199,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 	size_t groupsize = 256;
 	cl_int obj_count = s->c_box_count;
 
-	cl_uint total_samples = 1;
+	cl_uint samples_per_device = 100;
 
 	for (int i = 0; i < numPlatforms; i++)
 	{
@@ -208,7 +213,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		clSetKernelArg(kernels[i], 7, sizeof(cl_int), &xdim);
 		clSetKernelArg(kernels[i], 8, sizeof(cl_mem), &d_output[i]);
 		clSetKernelArg(kernels[i], 9, sizeof(cl_mem), &d_seeds[i]);
-		clSetKernelArg(kernels[i], 10, sizeof(cl_uint), &total_samples);
+		clSetKernelArg(kernels[i], 10, sizeof(cl_uint), &samples_per_device);
 		clSetKernelArg(kernels[i], 11, sizeof(cl_mem), &d_const_boxes[i]);
 		clSetKernelArg(kernels[i], 12, sizeof(cl_uint), &obj_count);
 		clSetKernelArg(kernels[i], 13, sizeof(cl_mem), &d_tex[i]);
@@ -229,10 +234,11 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		{
 			outputs[offset + j] = calloc(xdim * ydim, sizeof(cl_float3));
 			cl_int err = clEnqueueNDRangeKernel(commands[offset + j], kernels[i], 1, 0, &resolution, &groupsize, 0, NULL, &render[offset + j]);
-			clEnqueueReadBuffer(commands[offset + j], d_output[i], CL_FALSE, 0, sizeof(cl_float3) * xdim * ydim, &outputs[offset + j], 1, &render[offset + j], NULL);
+			clEnqueueReadBuffer(commands[offset + j], d_output[i], CL_FALSE, 0, sizeof(cl_float3) * xdim * ydim, outputs[offset + j], 1, &render[offset + j], NULL);
 		}
 		offset += d;
 	}
+	printf("all enqueued\n");
 	for (int i = 0; i < numDevices; i++)
 	{
 		clFinish(commands[i]);
@@ -241,7 +247,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		clGetEventProfilingInfo(render[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 		printf("kernel %d took %.3f seconds\n", i, (float)(end - start) / 1000000000.0f);
 	}
-
+	printf("done?\n");
 	cl_float3 *output_sum = calloc(resolution, sizeof(cl_float3));
 	for (int i = 0; i < numDevices; i++)
 	{
@@ -249,6 +255,9 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 			output_sum[j] = vec_add(output_sum[j], outputs[i][j]);
 		free(outputs[i]);
 	}
+
+	for (int i = 0; i < resolution; i++)
+		output_sum[i] = vec_scale(output_sum[i], 1.0f / (float)(samples_per_device * numDevices));
 
 	free(kernels);
 	return output_sum;

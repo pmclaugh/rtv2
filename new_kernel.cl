@@ -552,5 +552,5 @@ __kernel void render_kernel(__constant Object *scene,
 
 	seeds[pixel_id * 2] = seed0;
 	seeds[pixel_id * 2 + 1] = seed1;
-	output[pixel_id] = sum_color / (float)sample_count;
+	output[pixel_id] = sum_color;
 }
