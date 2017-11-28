@@ -547,10 +547,8 @@ __kernel void render_kernel(__constant Object *scene,
 		float x_coord = (float)x + get_random(&seed0, &seed1);
 		float y_coord = (float)y + get_random(&seed0, &seed1);
 		Ray ray = ray_from_cam(cam, x_coord, y_coord);
-		sum_color += trace(ray, scene, mats, tex, boxes, object_boxes, obj_count, &seed0, &seed1) / (float)sample_count;
+		sum_color += trace(ray, scene, mats, tex, boxes, object_boxes, obj_count, &seed0, &seed1);
 	}
 
-	seeds[pixel_id * 2] = seed0;
-	seeds[pixel_id * 2 + 1] = seed1;
 	output[pixel_id] = sum_color;
 }

@@ -182,7 +182,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 				d_seeds[i][j] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
 				clEnqueueWriteBuffer(commands[offset + j], d_scene[i], CL_TRUE, 0, sizeof(Face) * s->face_count, s->faces, 0, NULL, NULL);
 				clEnqueueWriteBuffer(commands[offset + j], d_mats[i], CL_TRUE, 0, sizeof(gpu_mat) * s->mat_count, simple_mats, 0, NULL, NULL);
-				clEnqueueWriteBuffer(commands[offset + j], d_seeds[i][j], CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, &h_seeds[(offset + j) * xdim * ydim * 2], 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_seeds[i][offset + j], CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, &h_seeds[(offset + j) * xdim * ydim * 2], 0, NULL, NULL);
 				clEnqueueWriteBuffer(commands[offset + j], d_boxes[i], CL_TRUE, 0, sizeof(Box) * s->box_count, s->boxes, 0, NULL, NULL);
 				clEnqueueWriteBuffer(commands[offset + j], d_const_boxes[i], CL_TRUE, 0, sizeof(C_Box) * s->c_box_count, s->c_boxes, 0, NULL, NULL);
 				clEnqueueWriteBuffer(commands[offset + j], d_tex[i], CL_TRUE, 0, sizeof(cl_uchar) * tex_size, h_tex, 0, NULL, NULL);
@@ -201,7 +201,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 	size_t groupsize = 256;
 	cl_int obj_count = s->c_box_count;
 
-	cl_uint samples_per_device = 10;
+	cl_uint samples_per_device = 100;
 
 	for (int i = 0; i < numPlatforms; i++)
 	{
@@ -234,8 +234,8 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_ALL, 0, NULL, &d);
 		for (int j = 0; j < d; j++)
 		{
-			clSetKernelArg(kernels[i], 8, sizeof(cl_mem), &d_output[i][j]);
-			clSetKernelArg(kernels[i], 9, sizeof(cl_mem), &d_seeds[i][j]);
+			clSetKernelArg(kernels[i], 8, sizeof(cl_mem), &d_output[i][offset + j]);
+			clSetKernelArg(kernels[i], 9, sizeof(cl_mem), &d_seeds[i][offset + j]);
 			outputs[offset + j] = calloc(xdim * ydim, sizeof(cl_float3));
 			cl_int err = clEnqueueNDRangeKernel(commands[offset + j], kernels[i], 1, 0, &resolution, &groupsize, 0, NULL, &render[offset + j]);
 			clEnqueueReadBuffer(commands[offset + j], d_output[i][j], CL_FALSE, 0, sizeof(cl_float3) * xdim * ydim, outputs[offset + j], 1, &render[offset + j], NULL);
@@ -252,17 +252,43 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		printf("kernel %d took %.3f seconds\n", i, (float)(end - start) / 1000000000.0f);
 	}
 	printf("done?\n");
-	cl_float3 *output_sum = calloc(resolution, sizeof(cl_float3));
+
+	//sum samples. do all transformations and sums in doubles because values may be quite different sizes
+	//I am not sure if this is necessary but it can't hurt.
+	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
 	for (int i = 0; i < numDevices; i++)
 	{
 		for (int j = 0; j < resolution; j++)
-			output_sum[j] = vec_add(output_sum[j], outputs[i][j]);
+		{
+			output_sum[j].x += (double)outputs[i][j].x;
+			output_sum[j].y += (double)outputs[i][j].y;
+			output_sum[j].z += (double)outputs[i][j].z;
+		}
 		free(outputs[i]);
 	}
 
-	for (int i = 0; i < resolution; i++)
-		output_sum[i] = vec_scale(output_sum[i], 1.0f / (float)(samples_per_device * numDevices));
+	//average samples and apply tone mapping
+	for (int j = 0;j < resolution; j++)
+	{
+		double scale = 1.0 / (double)(samples_per_device * numDevices);
+		output_sum[j].x *= scale;
+		output_sum[j].y *= scale;
+		output_sum[j].z *= scale;
+
+		
+	}
+
+
+	cl_float3 *float_sum = calloc(resolution, sizeof(cl_float3));
+	for (int j = 0; j < resolution; j++)
+	{
+		double scale = 1.0 / (double)(samples_per_device * numDevices);
+		float_sum[j].x = (float)(output_sum[j].x * scale);
+		float_sum[j].y = (float)(output_sum[j].y * scale);
+		float_sum[j].z = (float)(output_sum[j].z * scale);
+	}
 
 	free(kernels);
-	return output_sum;
+	free(output_sum);
+	return float_sum;
 }
