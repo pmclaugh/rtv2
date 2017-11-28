@@ -268,6 +268,7 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 	}
 
 	//average samples and apply tone mapping
+	double Lw = 0.0;
 	for (int j = 0;j < resolution; j++)
 	{
 		double scale = 1.0 / (double)(samples_per_device * numDevices);
@@ -275,17 +276,19 @@ cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 		output_sum[j].y *= scale;
 		output_sum[j].z *= scale;
 
-		
+		Lw += log(0.0001 + 0.2126 * output_sum[j].x + 0.7152 * output_sum[j].y + 0.0722 * output_sum[j].z);
 	}
+	Lw = exp(Lw) / (double)resolution;
 
+	printf("%Lw is %lf\n", Lw);
 
+	//just a hack til i refactor stuff later down the pipeline to take doubles.
 	cl_float3 *float_sum = calloc(resolution, sizeof(cl_float3));
 	for (int j = 0; j < resolution; j++)
 	{
-		double scale = 1.0 / (double)(samples_per_device * numDevices);
-		float_sum[j].x = (float)(output_sum[j].x * scale);
-		float_sum[j].y = (float)(output_sum[j].y * scale);
-		float_sum[j].z = (float)(output_sum[j].z * scale);
+		float_sum[j].x = (float)output_sum[j].x
+		float_sum[j].y = (float)output_sum[j].y;
+		float_sum[j].z = (float)output_sum[j].z;
 	}
 
 	free(kernels);
