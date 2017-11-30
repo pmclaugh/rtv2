@@ -6,12 +6,12 @@ typedef struct bvh_struct
 {
 	cl_float3 min; //spatial boundary
 	cl_float3 max; //spatial boundary
-	struct tree_box *left; 
-	struct tree_box *right;
+	struct bvh_struct *left; 
+	struct bvh_struct *right;
 	Face *faces;
 	int count;
 	//maybe more?
-	tree_box *next; //for tree building not for tracing
+	struct bvh_struct *next; //for tree building not for tracing
 }				tree_box;
 
 void push(tree_box **BVH, tree_box *node)
@@ -42,17 +42,17 @@ void set_bounds(Face *faces, int count, cl_float3 *min, cl_float3 *max)
 	float min_y = FLT_MAX;
 	float min_z = FLT_MAX; //never forget
 
-	for (int i = 0; i < B->count; i++)
+	for (int i = 0; i < count; i++)
 	{
-		for (int j = 0; j < B->faces[i].shape; j++)
+		for (int j = 0; j < faces[i].shape; j++)
 		{
-			max_x = fmax(Faces[i].verts[j].x, max_x);
-			max_y = fmax(Faces[i].verts[j].y, max_y);
-			max_z = fmax(Faces[i].verts[j].z, max_z);
+			max_x = fmax(faces[i].verts[j].x, max_x);
+			max_y = fmax(faces[i].verts[j].y, max_y);
+			max_z = fmax(faces[i].verts[j].z, max_z);
 
-			min_x = fmin(Faces[i].verts[j].x, min_x);
-			min_y = fmin(Faces[i].verts[j].y, min_y);
-			min_z = fmin(Faces[i].verts[j].z, min_z);
+			min_x = fmin(faces[i].verts[j].x, min_x);
+			min_y = fmin(faces[i].verts[j].y, min_y);
+			min_z = fmin(faces[i].verts[j].z, min_z);
 		}
 	}
 
@@ -109,7 +109,7 @@ int y_cmp(const void *a, const void *b)
 		return (0);
 }
 
-int y_cmp(const void *a, const void *b)
+int z_cmp(const void *a, const void *b)
 {
 	Face *fa = (Face *)a;
 	Face *fb = (Face *)b;
@@ -205,7 +205,7 @@ void split(tree_box *B)
 
 	tree_box *R = calloc(1, sizeof(tree_box));
 	R->faces = &B->faces[p];
-	R->count = B->face_count - p;
+	R->count = B->count - p;
 	if (R->count)
 	{
 		set_bounds_box(R);
@@ -250,4 +250,5 @@ void build_sbvh(Scene *S)
 /*
 stray thoughts / optimization ideas:
 track wich axis sorted by, use ray direction sign to go L->R or R->L
+with just left/right children, can consider a simple [2n], [2n + 1] style array structure
 */
