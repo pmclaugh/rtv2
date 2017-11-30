@@ -2,18 +2,6 @@
 
 #define BIN_COUNT 8
 
-typedef struct bvh_struct
-{
-	cl_float3 min; //spatial boundary
-	cl_float3 max; //spatial boundary
-	struct bvh_struct *left; 
-	struct bvh_struct *right;
-	Face *faces;
-	int count;
-	//maybe more?
-	struct bvh_struct *next; //for tree building not for tracing
-}				tree_box;
-
 void push(tree_box **BVH, tree_box *node)
 {
 	if (*BVH)
@@ -244,6 +232,7 @@ void build_sbvh(Scene *S)
 			push(&Q, B->right);
 	}
 
+	//set S->bvh
 }
 
 

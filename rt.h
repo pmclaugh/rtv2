@@ -113,6 +113,7 @@ typedef struct s_face
 	cl_float3 N;
 
 	cl_float3 center;
+	struct s_face *next;
 }				Face;
 
 typedef struct compact_box
@@ -146,7 +147,20 @@ typedef struct s_new_scene
 
 /////New stuff
 
+typedef struct bvh_struct
+{
+	cl_float3 min; //spatial boundary
+	cl_float3 max; //spatial boundary
+	struct bvh_struct *left; 
+	struct bvh_struct *right;
+	Face *faces;
+	int count;
+	//maybe more?
+	struct bvh_struct *next; //for tree building not for tracing
+}				tree_box;
+
 void build_sbvh(Scene *S);
+Face *ply_import(char *ply_file);
 
 ////Old stuff
 void draw_pixels(void *img, int xres, int yres, cl_float3 *pixels);

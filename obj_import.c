@@ -288,10 +288,5 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 	free(VN);
 	free(VT);
 
-	printf("making BVH\n");
-
-	//old_bvh(S);
-	gpu_ready_bvh(S, obj_indices, obj_count);
-
 	return S;
 }
