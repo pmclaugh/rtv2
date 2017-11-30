@@ -60,12 +60,12 @@ float sah(tree_box *B, int pivot)
 	set_bounds(B->faces, pivot, &lmin, &lmax);
 	set_bounds(&B->faces[pivot], B->count - pivot, &rmin, &rmax);
 
-	cl_float3 Bspan = vec_sub(B->max, B->min);
 	cl_float3 lspan = vec_sub(lmax, lmin);
 	cl_float3 rspan = vec_sub(rmax, rmin);
 	float left_SA = 2 * lspan.x * lspan.y + 2 * lspan.y * lspan.z + 2 * lspan.x * lspan.z;
 	float right_SA = 2 * rspan.x * rspan.y + 2 * rspan.y * rspan.z + 2 * rspan.x * rspan.z;
 
+	cl_float3 Bspan = vec_sub(B->max, B->min);
 	float B_SA = 2 * Bspan.x * Bspan.y + 2 * Bspan.y * Bspan.z + 2 * Bspan.x * Bspan.z;
 
 	return left_SA * (float)pivot / B_SA + right_SA * (B->count - pivot) / B_SA;
@@ -128,7 +128,7 @@ int find_pivot(tree_box *B)
 			}
 		}
 	else
-		for (int i = 1; i < B->count; i++)
+		for (int i = 1; i < B->count - 1; i++)
 		{
 			float SAH = sah(B, i);
 			if (SAH < best_SAH)
@@ -165,20 +165,25 @@ void split(tree_box *B)
 	qsort(B->faces, B->count, sizeof(Face), z_cmp);
 	int pz = find_pivot(B);
 	float SAHz = sah(B, pz);
-
+ 
 	int p;
 	if (SAHx < SAHy && SAHx < SAHz)
 	{
 		qsort(B->faces, B->count, sizeof(Face), x_cmp);
 		p = px;
+		// printf("splitting along x axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHx);
 	}
 	else if (SAHy < SAHx && SAHy < SAHz)
 	{
 		qsort(B->faces, B->count, sizeof(Face), y_cmp);
 		p = py;
+		// printf("splitting along y axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHy);
 	}
 	else
+	{
 		p = pz;
+		// printf("splitting along z axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHz);
+	}
 
 	tree_box *L = calloc(1, sizeof(tree_box));
 	L->faces = B->faces;
@@ -223,9 +228,16 @@ void build_sbvh(Scene *S)
 
 	tree_box *Q = root_box;
 	tree_box *B = NULL;
+
+	int box_count = 1;
+
 	while ((B = pop(&Q)))
 	{
 		split(B);
+		if (B->left)
+			box_count++;
+		if (B->right)
+			box_count++;
 		if (B->left && B->left->count > 1)
 			push(&Q, B->left);
 		if (B->right && B->right->count > 1)
@@ -233,6 +245,7 @@ void build_sbvh(Scene *S)
 	}
 
 	//set S->bvh
+	printf("%d boxes\n", box_count);
 }
 
 

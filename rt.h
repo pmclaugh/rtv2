@@ -159,8 +159,9 @@ typedef struct bvh_struct
 	struct bvh_struct *next; //for tree building not for tracing
 }				tree_box;
 
-void build_sbvh(Scene *S);
 Face *ply_import(char *ply_file);
+void flatten(Scene *S);
+void build_sbvh(Scene *S);
 
 ////Old stuff
 void draw_pixels(void *img, int xres, int yres, cl_float3 *pixels);

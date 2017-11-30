@@ -65,5 +65,10 @@ int main(int ac, char **av)
 {
 	srand(time(NULL));
 
-	
+	Face *bunny = ply_import("objects/ply/bunny.ply");
+	Scene *S = calloc(1, sizeof(Scene));
+	S->faces = bunny;
+	flatten(S);
+	printf("flattened scene array has %d faces\n", S->face_count);
+	build_sbvh(S);
 }

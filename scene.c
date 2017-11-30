@@ -9,6 +9,20 @@ void tesselate(Face *faces)
 
 void flatten(Scene *S)
 {
-	//count S->faces and then flatten the list to an array.
-	//this is for BVH construction, S will be flattened even more in gpu_launch (separated V, N, T, etc)
+	int count = 0;
+	for (Face *f = S->faces; f; f = f->next)
+		count++;
+	
+	S->face_count = count;
+	Face *flat = calloc(count, sizeof(Face));
+
+	Face *f = S->faces;
+	for (int i = 0; i < count; i++)
+	{
+		flat[i] = *f;
+		Face *tmp = f;
+		f = f->next;
+		free(tmp);	
+	}
+	S->faces = flat;
 }

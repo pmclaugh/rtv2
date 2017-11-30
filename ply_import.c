@@ -27,7 +27,7 @@ Face *ply_import(char *ply_file)
 			break ;
 	}
 
-	printf("%d vertices, %d faces\n", v_total, f_total);
+	printf("%s: %d vertices, %d faces\n", ply_file, v_total, f_total);
 
 	cl_float3 *V = calloc(v_total, sizeof(cl_float3));
 	//the ply files i'm using only have triangles
@@ -59,11 +59,5 @@ Face *ply_import(char *ply_file)
 		list = face;
 	}
 	free(V);
-	printf("great success\n");
 	return list;
-}
-
-int main(void)
-{
-	ply_import("objects/ply/bunny.ply");
 }
