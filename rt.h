@@ -32,6 +32,8 @@
 #define BLUE (cl_float3){0.2, 0.2, 1.0}
 #define WHITE (cl_float3){1.0, 1.0, 1.0}
 
+#define ORIGIN (cl_float3){0.0f, 0.0f, 0.0f}
+
 
 #define GPU_MAT_DIFFUSE 1
 #define GPU_MAT_SPECULAR 2
@@ -109,6 +111,8 @@ typedef struct s_face
 	cl_float3 norms[4];
 	cl_float3 tex[4];
 	cl_float3 N;
+
+	cl_float3 center;
 }				Face;
 
 typedef struct compact_box
@@ -140,6 +144,11 @@ typedef struct s_new_scene
 	int c_box_count;
 }				Scene;
 
+/////New stuff
+
+void build_sbvh(Scene *S);
+
+////Old stuff
 void draw_pixels(void *img, int xres, int yres, cl_float3 *pixels);
 
 void init_camera(t_camera *camera, int xres, int yres);
@@ -152,8 +161,9 @@ void old_bvh(Scene *S);
 Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
 void gpu_ready_bvh(Scene *S, int *counts, int obj_count);
 
-
-
+uint64_t splitBy3(const unsigned int a);
+uint64_t mortonEncode_magicbits(const unsigned int x, const unsigned int y, const unsigned int z);
+uint64_t morton64(float x, float y, float z);
 
 //vector helpers
 float vec_mag(const cl_float3 vec);
