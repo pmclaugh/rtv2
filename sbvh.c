@@ -1,6 +1,7 @@
 #include "rt.h"
 
 #define BIN_COUNT 8
+#define LEAF_THRESHOLD 16
 
 void push(tree_box **BVH, tree_box *node)
 {
@@ -44,8 +45,8 @@ void set_bounds(Face *faces, int count, cl_float3 *min, cl_float3 *max)
 		}
 	}
 
-	*min = (cl_float3){min_x, min_y, min_z};
-	*max = (cl_float3){max_x, max_y, max_z};
+	*min = (cl_float3){min_x - ERROR, min_y - ERROR, min_z - ERROR};
+	*max = (cl_float3){max_x + ERROR, max_y + ERROR, max_z + ERROR};
 }
 
 void set_bounds_box(tree_box *B)
@@ -128,7 +129,7 @@ int find_pivot(tree_box *B)
 			}
 		}
 	else
-		for (int i = 1; i < B->count - 1; i++)
+		for (int i = 0; i < B->count; i++)
 		{
 			float SAH = sah(B, i);
 			if (SAH < best_SAH)
@@ -208,7 +209,7 @@ void split(tree_box *B)
 		free(R);
 }
 
-void build_sbvh(Scene *S)
+tree_box *build_sbvh(Face *faces, int count, int *box_count)
 {
 	//S->faces is a flat array of cpu-side faces (ie they have their VNs and VTs with them)
 
@@ -222,35 +223,43 @@ void build_sbvh(Scene *S)
 	//this design should allow for the split function to be entirely modular
 
 	tree_box *root_box = calloc(1, sizeof(tree_box));
-	root_box->faces = S->faces;
-	root_box->count = S->face_count;
+	root_box->faces = faces;
+	root_box->count = count;
 	set_bounds_box(root_box);
 
 	tree_box *Q = root_box;
 	tree_box *B = NULL;
 
-	int box_count = 1;
+	int bcount = 1;
 
 	while ((B = pop(&Q)))
 	{
 		split(B);
 		if (B->left)
-			box_count++;
+			bcount++;
 		if (B->right)
-			box_count++;
-		if (B->left && B->left->count > 1)
+			bcount++;
+		if (B->left && B->left->count > LEAF_THRESHOLD)
 			push(&Q, B->left);
-		if (B->right && B->right->count > 1)
+		if (B->right && B->right->count > LEAF_THRESHOLD)
 			push(&Q, B->right);
 	}
 
 	//set S->bvh
-	printf("%d boxes\n", box_count);
+
+	printf("%d boxes\n", bcount);
+	*box_count = bcount;
+	return root_box;
 }
 
 
 /*
 stray thoughts / optimization ideas:
-track wich axis sorted by, use ray direction sign to go L->R or R->L
+track which axis sorted by, use ray direction sign to go L->R or R->L
 with just left/right children, can consider a simple [2n], [2n + 1] style array structure
+
+"BVH Lab"
+	generate many pairs of points on sphere that has BVH inscribed in it
+	ray going from point a to point b
+	how many boxes do I check against? how many boxes do i need to actually intersect?
 */

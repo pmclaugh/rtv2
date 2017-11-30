@@ -160,8 +160,8 @@ typedef struct bvh_struct
 }				tree_box;
 
 Face *ply_import(char *ply_file);
-void flatten(Scene *S);
-void build_sbvh(Scene *S);
+Face *object_flatten(Face *faces, int *face_count);
+tree_box *build_sbvh(Face *faces, int count, int *box_count);
 
 ////Old stuff
 void draw_pixels(void *img, int xres, int yres, cl_float3 *pixels);

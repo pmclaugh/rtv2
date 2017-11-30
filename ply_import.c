@@ -50,6 +50,9 @@ Face *ply_import(char *ply_file)
 		face->verts[0] = V[a];
 		face->verts[1] = V[b];
 		face->verts[2] = V[c];
+
+		face->center = vec_scale(vec_add(vec_add(V[a], V[b]), V[c]), 1.0 / 3.0);
+
 		cl_float3 N = cross(vec_sub(V[b], V[a]), vec_sub(V[c], V[a]));
 		face->norms[0] = N;
 		face->norms[1] = N;

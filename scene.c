@@ -7,16 +7,15 @@ void tesselate(Face *faces)
 	//also optionally split up big triangles
 }
 
-void flatten(Scene *S)
+Face *object_flatten(Face *faces, int *face_count)
 {
 	int count = 0;
-	for (Face *f = S->faces; f; f = f->next)
+	for (Face *f = faces; f; f = f->next)
 		count++;
-	
-	S->face_count = count;
+
 	Face *flat = calloc(count, sizeof(Face));
 
-	Face *f = S->faces;
+	Face *f = faces;
 	for (int i = 0; i < count; i++)
 	{
 		flat[i] = *f;
@@ -24,5 +23,8 @@ void flatten(Scene *S)
 		f = f->next;
 		free(tmp);	
 	}
-	S->faces = flat;
+	*face_count = count;
+	return flat;
 }
+
+//also want a scene_flatten function
