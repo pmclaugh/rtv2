@@ -3,14 +3,14 @@
 #define BIN_COUNT 8
 #define LEAF_THRESHOLD 16
 
-void push(tree_box **BVH, tree_box *node)
+static void push(tree_box **BVH, tree_box *node)
 {
 	if (*BVH)
 		node->next = *BVH;
 	*BVH = node;
 }
 
-tree_box *pop(tree_box **BVH)
+static tree_box *pop(tree_box **BVH)
 {
 	tree_box *popped = NULL;
 	if (*BVH)
@@ -21,7 +21,7 @@ tree_box *pop(tree_box **BVH)
 	return popped;
 }
 
-void set_bounds(Face *faces, int count, cl_float3 *min, cl_float3 *max)
+static void set_bounds(Face *faces, int count, cl_float3 *min, cl_float3 *max)
 {
 	float max_x = -1.0 * FLT_MAX;
 	float max_y = -1.0 * FLT_MAX;
@@ -49,12 +49,12 @@ void set_bounds(Face *faces, int count, cl_float3 *min, cl_float3 *max)
 	*max = (cl_float3){max_x + ERROR, max_y + ERROR, max_z + ERROR};
 }
 
-void set_bounds_box(tree_box *B)
+static void set_bounds_box(tree_box *B)
 {
 	set_bounds(B->faces, B->count, &B->min, &B->max);
 }
 
-float sah(tree_box *B, int pivot)
+static float sah(tree_box *B, int pivot)
 {
 	//returns the surface area heuristic for proposed split of B->faces at index [pivot]
 	cl_float3 lmin, lmax, rmin, rmax;
@@ -72,7 +72,7 @@ float sah(tree_box *B, int pivot)
 	return left_SA * (float)pivot / B_SA + right_SA * (B->count - pivot) / B_SA;
 }
 
-int x_cmp(const void *a, const void *b)
+static int x_cmp(const void *a, const void *b)
 {
 	Face *fa = (Face *)a;
 	Face *fb = (Face *)b;
@@ -85,7 +85,7 @@ int x_cmp(const void *a, const void *b)
 		return (0);
 }
 
-int y_cmp(const void *a, const void *b)
+static int y_cmp(const void *a, const void *b)
 {
 	Face *fa = (Face *)a;
 	Face *fb = (Face *)b;
@@ -98,7 +98,7 @@ int y_cmp(const void *a, const void *b)
 		return (0);
 }
 
-int z_cmp(const void *a, const void *b)
+static int z_cmp(const void *a, const void *b)
 {
 	Face *fa = (Face *)a;
 	Face *fb = (Face *)b;
@@ -111,7 +111,7 @@ int z_cmp(const void *a, const void *b)
 		return (0);
 }
 
-int find_pivot(tree_box *B)
+static int find_pivot(tree_box *B)
 {
 	//find best pivot in B->faces
 	float best_SAH = FLT_MAX;
@@ -141,7 +141,7 @@ int find_pivot(tree_box *B)
 	return best_ind;
 }
 
-void split(tree_box *B)
+static void split(tree_box *B)
 {
 	//aspects of how i'm doing this are wildly inefficient.
 	//however, this way is easy to think about and maintain.
@@ -216,7 +216,7 @@ tree_box *build_sbvh(Face *faces, int count, int *box_count)
 	//make root tree box
 	//it is its own queue
 	//pop queue, split, push results to queue
-	//does not get pushed if 1 or 0 elements
+	//does not get pushed if small enough
 	//stop when queue empty
 	//original root is now head of whole, nice tree
 
@@ -251,6 +251,7 @@ tree_box *build_sbvh(Face *faces, int count, int *box_count)
 	*box_count = bcount;
 	return root_box;
 }
+
 
 
 /*
