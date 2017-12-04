@@ -163,18 +163,18 @@ static void split(meta_box *B)
 	{
 		qsort(B->boxes, B->count, sizeof(tree_box), x_cmp);
 		p = px;
-		 printf("splitting along x axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHx);
+		 // printf("splitting along x axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHx);
 	}
 	else if (SAHy <= SAHx && SAHy <= SAHz)
 	{
 		qsort(B->boxes, B->count, sizeof(tree_box), y_cmp);
 		p = py;
-		 printf("splitting along y axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHy);
+		 // printf("splitting along y axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHy);
 	}
 	else
 	{
 		p = pz;
-		 printf("splitting along z axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHz);
+		 // printf("splitting along z axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHz);
 	}
 
 	meta_box *L = calloc(1, sizeof(meta_box));
