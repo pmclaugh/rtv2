@@ -1,5 +1,11 @@
 #include "rt.h"
 
+#ifndef __APPLE__
+# define quit_key 113
+#else
+# define quit_key 12
+#endif
+
 typedef struct s_param
 {
 	void *mlx;
@@ -7,29 +13,60 @@ typedef struct s_param
 	void *img;
 	int x;
 	int y;
-	t_scene *scene;
+
+	Scene *scene;
+	t_camera cam;
+	cl_float3 *pixels;
+	int samplecount;
 }				t_param;
 
 #define rot_angle M_PI_2 * 4.0 / 90.0
 
-int loop_hook(void *param)
+cl_float3 *baby_tone_dupe(cl_float3 *pixels, int count, int samplecount)
 {
-	t_param *p = (t_param *)param;
+	cl_float3 *toned = calloc(count, sizeof(cl_float3));
+	for (int i = 0; i < count; i++)
+	{
+		toned[i].x = pixels[i].x / ((float)samplecount);
+		toned[i].y = pixels[i].y / ((float)samplecount);
+		toned[i].z = pixels[i].z / ((float)samplecount);
+		toned[i].x = toned[i].x / (toned[i].x + 1.0);
+		toned[i].y = toned[i].y / (toned[i].y + 1.0);
+		toned[i].z = toned[i].z / (toned[i].z + 1.0);
+	}
+	return toned;
+}
 
-	cl_float3 *pixels = gpu_render(p->scene, p->scene->camera);
-	draw_pixels(p->img, p->x, p->y, pixels);
-	mlx_put_image_to_window(p->mlx, p->win, p->img, 0, 0);
-	free(pixels);
-	p->scene->camera.center = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.center);
-	p->scene->camera.normal = angle_axis_rot(rot_angle, UNIT_Y, p->scene->camera.normal);
-	return (1);
+#define H_FOV M_PI_2 * 60.0 / 90.0 	//60 degrees. eventually this will be dynamic with aspect
+									// V_FOV is implicit with aspect of view-plane
+
+void init_camera(t_camera *camera, int xres, int yres)
+{
+	//printf("init camera %d %d\n", xres, yres);
+	//determine a focus point in front of the view-plane
+	//such that the edge-focus-edge vertex has angle H_FOV
+	float d = (camera->width / 2.0) / tan(H_FOV / 2.0);
+	camera->focus = vec_add(camera->center, vec_scale(camera->normal, d));
+
+	//now i need unit vectors on the plane
+	t_3x3 camera_matrix = rotation_matrix(UNIT_Z, camera->normal);
+	cl_float3 camera_x, camera_y;
+	camera_x = mat_vec_mult(camera_matrix, UNIT_X);
+	camera_y = mat_vec_mult(camera_matrix, UNIT_Y);
+
+	//pixel deltas
+	camera->d_x = vec_scale(camera_x, camera->width / (float)xres);
+	camera->d_y = vec_scale(camera_y, camera->height / (float)yres);
+
+	//start at bottom corner (the plane's "origin")
+	camera->origin = vec_sub(camera->center, vec_scale(camera_x, camera->width / 2.0));
+	camera->origin = vec_sub(camera->origin, vec_scale(camera_y, camera->height / 2.0));
 }
 
 int key_hook(int keycode, void *param)
 {
 	t_param *p = (t_param *)param;
-
-	if (keycode == 12)
+	if (keycode == quit_key)
 	{
 		mlx_destroy_image(p->mlx, p->img);
 		mlx_destroy_window(p->mlx, p->win);
@@ -38,135 +75,92 @@ int key_hook(int keycode, void *param)
 	return (1);
 }
 
-#define ROOMSIZE 10.0
-
-float vmag(cl_float3 v)
-{
-	return sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-}
-
-float vsum(cl_float3 v)
-{
-	return v.x + v.y + v.z;
-}
-
-float vmax(cl_float3 v)
-{
-	return fmax(fmax(v.x, v.y), v.z);
-}
-
-void reinhard_tone_map(cl_float3 *pixels, int count)
-{
-	//get greyscale luminance values for all pixels,
-	//and pixels become color masks
-	float *lums = calloc(count, sizeof(float));
-	for (int i = 0; i < count; i++)
-	{
-		lums[i] = vmag(pixels[i]);
-		pixels[i].x /= lums[i];
-		pixels[i].y /= lums[i];
-		pixels[i].z /= lums[i];
-	}
-
-	//debug: print some lums
-	printf("%f %f %f %f\n", lums[0], lums[1], lums[2], lums[300]);
-	printf("%f %f %f\n", pixels[1].x, pixels[1].y, pixels[1].z);
-
-	//compute log average of luminances
-	double lavg = 0.0;
-	for (int i = 0; i < count; i++)
-		lavg += log(lums[i] + 0.001);
-	printf("lavg before exp: %lf\n", lavg);
-	lavg = exp(lavg / (double)count);
-
-	printf("lavg: %lf\n", lavg);
-	//map so log-average value is now mid-gray
-	for (int i = 0; i < count; i++)
-		lums[i] = lums[i] * 0.3 / lavg;
-
-	//compress high luminances
-	for (int i = 0; i < count; i++)
-		lums[i] = lums[i] / (lums[i] + 1.0);
-
-	//re-color
-	for (int i = 0; i < count; i++)
-	{
-		pixels[i].x *= lums[i];
-		pixels[i].y *= lums[i];
-		pixels[i].z *= lums[i];
-	}
-}
-
 int main(int ac, char **av)
 {
 	srand(time(NULL));
 
-	t_scene *scene = calloc(1, sizeof(t_scene));
+	//bvh construction now happens inside scene_from_obj
+	Scene *scene = scene_from_obj("objects/sponza/", "sponza.obj");
 
-	t_import import;
+	printf("loaded scene. it has %d faces and %d materials\n", scene->face_count, scene->mat_count);
 
-	// import = load_file(ac, av, GREEN, MAT_DIFFUSE, 0.0);
-	// unit_scale(import, (t_float3){0, -3, 0}, 3);
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	// import = load_file(ac, av, WHITE, MAT_DIFFUSE, 0.0);
-	// unit_scale(import, (t_float3){-3, -3, 0}, 3);
-	// import.tail->next = scene->objects;
-	// scene->objects = import.head;
-
-	t_float3 left_bot_back = (t_float3){-1 * ROOMSIZE / 2, -1 * ROOMSIZE / 2, -1 *ROOMSIZE / 2};
-	t_float3 left_bot_front = (t_float3){-1 * ROOMSIZE / 2, -1 * ROOMSIZE / 2, ROOMSIZE / 2};
-	t_float3 left_top_back = (t_float3){-1 * ROOMSIZE / 2, ROOMSIZE / 2, -1 *ROOMSIZE / 2};
-	t_float3 left_top_front = (t_float3){-1 * ROOMSIZE / 2, ROOMSIZE / 2, ROOMSIZE / 2};
-	t_float3 right_bot_back = (t_float3){ROOMSIZE / 2, -1 * ROOMSIZE / 2, -1 *ROOMSIZE / 2};
-	t_float3 right_bot_front = (t_float3){ROOMSIZE / 2, -1 * ROOMSIZE / 2, ROOMSIZE / 2};
-	t_float3 right_top_back = (t_float3){ROOMSIZE / 2, ROOMSIZE / 2, -1 *ROOMSIZE / 2};
-	t_float3 right_top_front = (t_float3){ROOMSIZE / 2, ROOMSIZE / 2, ROOMSIZE / 2};
-
-	new_plane(scene, left_bot_back, left_bot_front, left_top_front, RED, MAT_DIFFUSE, 0.0); //left wall
-	//new_plane(scene, left_bot_back, right_bot_back, right_top_back, WHITE, MAT_DIFFUSE, 0.0); // front wall
-	new_plane(scene, left_bot_back, left_bot_front, right_bot_front, WHITE, MAT_DIFFUSE, 0.0); // floor
-	new_plane(scene, right_bot_back, right_bot_front, right_top_front, BLUE, MAT_DIFFUSE, 0.0); //right wall
-	new_plane(scene, left_top_front, right_top_front, right_top_back, WHITE, MAT_DIFFUSE, 0.0); //ceiling
-	new_plane(scene, left_bot_front, left_top_front, right_top_front, GREEN, MAT_DIFFUSE, 0.0); //back wall
-
-	new_sphere(scene, (t_float3){0.0, -2.0, 0.0}, 1.0, WHITE, MAT_DIFFUSE, 0.0);
-
-	// new_sphere(scene, (t_float3){2.0, -2.0, 1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-
-	// new_sphere(scene, (t_float3){-2.0, -2.0, 1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-
-	// new_sphere(scene, (t_float3){0.0, -2.0, -1.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-
-	// new_sphere(scene, (t_float3){0.0, -2.0, 3.0}, 1.0, WHITE, MAT_REFRACTIVE, 0.0);
-
-
-	//***** IMPORTANT ********
-	//for now the light needs to be the last object added and there can only be one light.
-	new_sphere(scene, (t_float3){0, 4, 1.0}, 1.0, WHITE, MAT_NULL, 10000.0);
-
-	//make_bvh(scene);
-
+	int xdim, ydim;
+	if (ac < 2)
+	{
+		xdim = 512;
+		ydim = 512;
+	}
+	else
+	{
+		xdim = atoi(av[1]);
+		ydim = atoi(av[2]);
+	}
 
 	t_camera cam;
-	cam.center = (t_float3){0, 0.0, -14.0};
-	cam.normal = (t_float3){0, 0, 1};
+
+	if (ac <= 3)
+	{
+		//default view
+		cam.center = (cl_float3){800.0, 600.0, 0.0};
+		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	}
+	//pointed at hanging vase
+	if (strcmp(av[3], "vase") == 0)
+	{
+		cam.center = (cl_float3){-620.0, 130.0, 50.0};
+		cam.normal = (cl_float3){0.0, 0.0, 1.0};
+	}
+
+	//central view
+	if (strcmp(av[3], "center") == 0)
+	{
+		cam.center = (cl_float3){-100.0, 330.0, 0.0};
+		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	}
+
+	//central view with drape
+	if (strcmp(av[3], "drape") == 0)
+	{
+		cam.center = (cl_float3){800.0, 600.0, 0.0};
+		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	}
+
+	//2nd floor hall right
+	if (strcmp(av[3], "hall") == 0)
+	{
+		cam.center = (cl_float3){700.0, 500.0, 350.0};
+		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	}
+
+	//rounded column and some drape
+	if (strcmp(av[3], "mix") == 0)
+	{
+		cam.center = (cl_float3){200.0, 650.0, -200.0};
+		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	}
+	//rounded column
+	if (strcmp(av[3], "column") == 0)
+	{
+		cam.center = (cl_float3){40.0, 600.0, -280.0};
+		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	}
+
+	//lion
+	if (strcmp(av[3], "lion") == 0)
+	{
+		cam.center = (cl_float3){-1050.0, 160.0, -40.0};
+		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	}
+
+	cam.normal = unit_vec(cam.normal);
 	cam.width = 1.0;
 	cam.height = 1.0;
-	scene->camera = cam;
-	init_camera(&scene->camera, xdim, ydim);
+	init_camera(&cam, xdim, ydim);
 
-	t_ray r = ray_from_camera(scene->camera, 0.0, 0.0);
-	print_ray(r);
-	//debug_render(scene, 300, xdim, 300, ydim);
-	cl_float3 *pixels = gpu_render(scene, scene->camera);
-	printf("left render\n");
+	cl_float3 *pixels = gpu_render(scene, cam, xdim, ydim);
 
-	reinhard_tone_map(pixels, xdim * ydim);
-	printf("tone mapped\n");
+	//baby_tone_map(pixels, xdim * ydim);
 	
-
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
 	void *img = mlx_new_image(mlx, xdim, ydim);
@@ -174,11 +168,9 @@ int main(int ac, char **av)
 	mlx_put_image_to_window(mlx, win, img, 0, 0);
 
 	t_param *param = calloc(1, sizeof(t_param));
-	*param = (t_param){mlx, win, img, xdim, ydim, scene};
-
-	//mlx_loop_hook(mlx, loop_hook, param);
+	*param = (t_param){mlx, win, img, xdim, ydim, scene, cam, NULL, 0};
 	
 	mlx_key_hook(win, key_hook, param);
+	//mlx_loop_hook(mlx, loop_hook, param);
 	mlx_loop(mlx);
-
 }

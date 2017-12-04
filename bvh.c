@@ -1,12 +1,28 @@
 #include "rt.h"
 
+#define ORIGIN (cl_float3){0.0f, 0.0f, 0.0f}
+
+float min3(float a, float b, float c)
+{
+	return fmin(fmin(a, b), c);
+}
+
+float max3(float a, float b, float c)
+{
+	return fmax(fmax(a, b), c);
+}
+
+cl_float3 bigmin;
+cl_float3 bigmax;
+
+
 uint64_t splitBy3(const unsigned int a)
 {
-    uint64_t x = a & 0x1fffff; // we only look at the first 21 bits
-    x = (x | x << 32) & 0x1f00000000ffff;  // shift left 32 bits, OR with self, and 00011111000000000000000000000000000000001111111111111111
-    x = (x | x << 16) & 0x1f0000ff0000ff;  // shift left 32 bits, OR with self, and 00011111000000000000000011111111000000000000000011111111
-    x = (x | x << 8) & 0x100f00f00f00f00f; // shift left 32 bits, OR with self, and 0001000000001111000000001111000000001111000000001111000000000000
-    x = (x | x << 4) & 0x10c30c30c30c30c3; // shift left 32 bits, OR with self, and 0001000011000011000011000011000011000011000011000011000100000000
+    uint64_t x = a & 0x1fffff;
+    x = (x | x << 32) & 0x1f00000000ffff;
+    x = (x | x << 16) & 0x1f0000ff0000ff;
+    x = (x | x << 8) & 0x100f00f00f00f00f;
+    x = (x | x << 4) & 0x10c30c30c30c30c3;
     x = (x | x << 2) & 0x1249249249249249;
     return x;
 }
@@ -21,176 +37,53 @@ uint64_t mortonEncode_magicbits(const unsigned int x, const unsigned int y, cons
 
 uint64_t morton64(float x, float y, float z)
 {
-	if (max3(x,y,z) > 1 || min3(x,y,z) < 0)
-		printf("scaling is bad!\n");
-	//printf("x %f y %f z %f\n", x, y, z);
-	//x, y, z are in [0, 1]. multiply by 2^21 to get 21 bits, confine to [0, 2^21 - 1]
     x = fmin(fmax(x * 2097152.0f, 0.0f), 2097151.0f);
     y = fmin(fmax(y * 2097152.0f, 0.0f), 2097151.0f);
     z = fmin(fmax(z * 2097152.0f, 0.0f), 2097151.0f);
     return (mortonEncode_magicbits((unsigned int)x, (unsigned int)y, (unsigned int)z));
 }
 
-uint64_t mortonize(t_float3 pos, t_box *bounds)
+uint64_t morty_face(const Face *F)
 {
-	t_float3 ranges = vec_sub(bounds->max, bounds->min);
-    return morton64((pos.x - bounds->min.x) / (ranges.x), 
-    				(pos.y - bounds->min.y) / (ranges.y), 
-    				(pos.z - bounds->min.z) / (ranges.z));
-}
+	cl_float3 c = ORIGIN;
+	for (int i = 0; i < F->shape; i++)
+		c = vec_add(c, F->verts[i]);
+	c = vec_scale(c, 1.0f / (float)F->shape);
 
-int morton_digit(uint64_t code, int depth)
-{
-	code = code << (1 + depth * 3);
-	code = code >> 61;
-	return (int)code;
-}
+	//scale that to unit cube
+	c = vec_sub(c, bigmin);
+	cl_float3 span = vec_sub(bigmax, bigmin);
+	float scale = max3(span.x, span.y, span.z);
+	c = (cl_float3){c.x / span.x, c.y / span.y, c.z / span.z};
 
-void print_box(const t_box *box)
-{
-	printf("===========\n");
-	printf("Box is %p\n", box);
-	if (box)
+	if (max3(c.x,c.y,c.z) > 1.001 || min3(c.x,c.y,c.z) < -0.001)
 	{
-		printf("min, mid, max\n");
-		print_vec(box->min);
-		print_vec(box->mid);
-		print_vec(box->max);
-		printf("children is %p\nchildren_count is %d\nobject is %p\n",
-				box->children, box->children_count, box->object);
-		if (box->object)
-			print_object(box->object);
+		printf("scaling is bad! %f %f %f\n", c.x, c.y, c.z);
+		printf("bounds:\n");
+		print_clf3(bigmin);
+		print_clf3(bigmax);
+		for (int i = 0; i < F->shape; i++)
+			print_clf3(F->verts[i]);
 	}
-	printf("===========\n");
+
+	return morton64(c.x, c.y, c.z);
 }
 
-int intersect_box(t_ray const * const ray, t_box const * const box, float *t)
+int face_cmp(const void *a, const void *b)
 {
-	float tx0 = (box->min.x - ray->origin.x) * ray->inv_dir.x;
-	float tx1 = (box->max.x - ray->origin.x) * ray->inv_dir.x;
-	float tmin = fmin(tx0, tx1);
-	float tmax = fmax(tx0, tx1);
-
-	float ty0 = (box->min.y - ray->origin.y) * ray->inv_dir.y;
-	float ty1 = (box->max.y - ray->origin.y) * ray->inv_dir.y;
-	float tymin = fmin(ty0, ty1);
-	float tymax = fmax(ty0, ty1);
-
-	if ((tmin >= tymax) || (tymin >= tmax))
-		return (0);
-
-	tmin = fmax(tymin, tmin);
-	tmax = fmin(tymax, tmax);
-
-	float tz0 = (box->min.z - ray->origin.z) * ray->inv_dir.z;
-	float tz1 = (box->max.z - ray->origin.z) * ray->inv_dir.z;
-	float tzmin = fmin(tz0, tz1);
-	float tzmax = fmax(tz0, tz1);
-
-	if ((tmin >= tzmax) || (tzmin >= tmax))
-		return (0);
-
-    tmin = fmax(tzmin, tmin);
-	tmax = fmin(tzmax, tmax);
-	if (tmin <= 0.0 && tmax <= 0.0)
-		return (0);
-	if (t)
-	{
-		if (tmin > 0.0)
-			*t = tmin;
-		else
-			*t = tmax;
-	}
-	return (1);
-}
-
-float min3(float a, float b, float c)
-{
-	return fmin(fmin(a, b), c);
-}
-
-float max3(float a, float b, float c)
-{
-	return fmax(fmax(a, b), c);
-}
-
-t_box AABB_from_triangle(t_object *triangle)
-{
-	t_box box;
-	//variable name change
-	const t_float3 v0 = triangle->position;
-	const t_float3 v1 = triangle->normal;
-	const t_float3 v2 = triangle->corner;
-
-	box.min.x = min3(v0.x, v1.x, v2.x) - ERROR;
-	box.min.y = min3(v0.y, v1.y, v2.y) - ERROR;
-	box.min.z = min3(v0.z, v1.z, v2.z) - ERROR;
-
-	box.max.x = max3(v0.x, v1.x, v2.x) + ERROR;
-	box.max.y = max3(v0.y, v1.y, v2.y) + ERROR;
-	box.max.z = max3(v0.z, v1.z, v2.z) + ERROR;
-
-	box.mid = (t_float3){	(box.max.x + box.min.x) / 2,
-							(box.max.y + box.min.y) / 2,
-							(box.max.z + box.min.z) / 2};
-
-	box.object = triangle;
-	box.children_count = 0;
-	box.children = NULL;
-	return box;
-}
-
-t_box AABB_from_sphere(t_object *sphere)
-{
-	t_box box;
-	box.mid = sphere->position;
-	//remember sphere's radius is stored in "normal" bc reasons
-	box.max = (t_float3){	sphere->position.x + sphere->normal.x,
-							sphere->position.y + sphere->normal.x,
-							sphere->position.z + sphere->normal.x};
-	box.min = (t_float3){	sphere->position.x - sphere->normal.x,
-							sphere->position.y - sphere->normal.x,
-							sphere->position.z - sphere->normal.x};
-	box.object = sphere;
-	box.children_count = 0;
-	box.children = NULL;
-	return box;					
-}
-
-t_box AABB_from_plane(t_object *plane)
-{
-	printf("AABB_from_plane\n");
-	t_box box;
-	box.max = plane->corner;
-	box.mid = plane->position;
-	box.min = vec_add(plane->position, vec_sub(plane->position, plane->corner));
-
-	box.object = plane;
-	box.children_count = 0;
-	box.children = NULL;
-	print_box(&box);
-	return box;
-}
-
-t_box AABB_from_obj(t_object *object)
-{
-	if (object->shape == TRIANGLE)
-		return AABB_from_triangle(object);
-	else if (object->shape == SPHERE)
-		return AABB_from_sphere(object);
+	Face *f_a = (Face *)a;
+	Face *f_b = (Face *)b;
+	uint64_t ma = morty_face(f_a);
+	uint64_t mb = morty_face(f_b);
+	if (ma > mb)
+		return 1;
+	else if (ma == mb)
+		return 0;
 	else
-		return AABB_from_plane(object);
+		return -1;
 }
 
-int box_cmp(const void *a, const void *b)
-{
-	t_box *box_a = (t_box *)a;
-	t_box *box_b = (t_box *)b;
-
-	return (box_a->morton - box_b->morton);
-}
-
-t_box BB_from_boxes(t_box *boxes, int count)
+void set_bounds(Box *B, Face *Faces)
 {
 	float max_x = -1.0 * FLT_MAX;
 	float max_y = -1.0 * FLT_MAX;
@@ -198,174 +91,180 @@ t_box BB_from_boxes(t_box *boxes, int count)
 
 	float min_x = FLT_MAX;
 	float min_y = FLT_MAX;
-	float min_z = FLT_MAX;
+	float min_z = FLT_MAX; //never forget
 
-	for (int i = 0; i < count; i++)
+	for (int i = B->start; i < B->end; i++)
 	{
-		min_x = fmin(boxes[i].min.x, min_x);
-		max_x = fmax(boxes[i].max.x, max_x);
+		for (int j = 0; j < Faces[i].shape; j++)
+		{
+			max_x = fmax(Faces[i].verts[j].x, max_x);
+			max_y = fmax(Faces[i].verts[j].y, max_y);
+			max_z = fmax(Faces[i].verts[j].z, max_z);
 
-		min_y = fmin(boxes[i].min.y, min_y);
-		max_y = fmax(boxes[i].max.y, max_y);
-
-		min_z = fmin(boxes[i].min.z, min_z);
-		max_z = fmax(boxes[i].max.z, max_z);
+			min_x = fmin(Faces[i].verts[j].x, min_x);
+			min_y = fmin(Faces[i].verts[j].y, min_y);
+			min_z = fmin(Faces[i].verts[j].z, min_z);
+		}
 	}
 
-	t_box box;
-
-	box.min = (t_float3){min_x, min_y, min_z};
-	box.max = (t_float3){max_x, max_y, max_z};
-	box.mid = (t_float3){	(box.max.x + box.min.x) / 2,
-							(box.max.y + box.min.y) / 2,
-							(box.max.z + box.min.z) / 2};
-	box.children_count = 0;
-	box.object = NULL;
-	return box;
+	B->min = (cl_float3){min_x - 0.01f, min_y - 0.01f, min_z - 0.01f};
+	B->max = (cl_float3){max_x + 0.01f, max_y + 0.01f, max_z + 0.01f};
 }
 
-int g_boxcount = 0;
-int g_maxdepth = 0;
-void tree_down(t_box *boxes, int box_count, t_box *parent, t_box *work_array, int depth)
+int next_spot;
+
+unsigned int morton_digit(uint64_t code, int depth)
 {
-	if (depth > g_maxdepth)
-		g_maxdepth = depth;
-	if (depth > 30)
+	code = code << (1 + 3 * depth);
+	code = code >> 61;
+	return code;
+}
+
+void tree_down(Box *Boxes, Face *Faces, int index, int depth)
+{
+	if (Boxes[index].start == Boxes[index].end)
 	{
-		printf("deep cancel\n");
-		parent->children_count = 0;
+		next_spot--;
 		return;
 	}
 
-	int counts[8];
-	int indexes[8];
-	bzero(counts, 8 * sizeof(int));
-	bzero(indexes, 8 * sizeof(int));
-	for (int i = 0; i < box_count; i++)
-		counts[morton_digit(boxes[i].morton, depth)]++;
-	for (int i = 1; i < 8; i++)
-		indexes[i] = indexes[i - 1] + counts[i - 1];
-	for (int i = 0; i < box_count; i++)
-		work_array[indexes[morton_digit(boxes[i].morton, depth)]++] = boxes[i];
-	for (int i = 0; i < box_count; i++)
-		boxes[i] = work_array[i];
-	int start = 0;
-	t_box *children = malloc(8 * sizeof(t_box));
-	bzero(children, sizeof(t_box) * 8);
-	int child_ind = 0;
-	for (int i = 0; i < 8; i++)
+	int start = Boxes[index].start;
+	for (int c = 0; c < 8; c++)
 	{
-		if (counts[i] == 0)
-			continue ;
-		else if (counts[i] == 1)
-		{
-			children[child_ind] = boxes[start];
+		int step = (Boxes[index].end - Boxes[index].start) >> 1;
+		int i = Boxes[index].start + step;
 
-		}
-		else if (counts[i] == 2 && vec_equ(boxes[0].mid, boxes[1].mid))
+		if (step < 4 || depth > 20)
+			return ;
+		while(step > 0)
 		{
-			//printf("dupe fudge\n");
-			children[child_ind++] = boxes[start];
-			children[child_ind] = boxes[start + 1];
+			if (c == 7)
+			{
+				i = Boxes[index].end - 1;
+				break;
+			}
+			step = step >> 1;
+			unsigned int d = morton_digit(morty_face(&Faces[i]), depth);
+			if (i + 1 == Boxes[index].end)
+				break ;
+			if (d <= c && morton_digit(morty_face(&Faces[i + 1]), depth) > c)
+				break ;
+			if (d <= c)
+				i += step;
+			else
+				i -= step;
 		}
+		next_spot++;
+		Boxes[index].children[c] = next_spot;
+		Boxes[next_spot] = (Box){
+			ORIGIN,
+			ORIGIN,
+			start,
+			i + 1,
+			0
+		};
+		set_bounds(&Boxes[next_spot], Faces);
+		tree_down(Boxes, Faces, next_spot, depth + 1);
+		start = i + 1;
+	}
+
+	int unique[8];
+	int count = 0;
+	for (int i = 0; i < 8; i++)
+		if (count == 0 || Boxes[index].children[i] != unique[count - 1])
+			unique[count++] = Boxes[index].children[i];
+	memcpy(&Boxes[index].children, &unique, sizeof(int) * 8);
+	Boxes[index].children_count = count;
+}
+
+void box_deets(Box b)
+{
+	printf("~~~~~~Box~~~~~~\n");
+	printf("min: ");
+	print_clf3(b.min);
+	printf("max: ");
+	print_clf3(b.max);
+	printf("start %d end %d (%d)\n", b.start, b.end, b.end - b.start);
+	printf("%d children: ", b.children_count);
+	for (int i = 0; i < b.children_count; i++)
+		printf("%d ", b.children[i]);
+	printf("\n");
+}
+
+Box *bvh_obj(Face *Faces, int start, int end, int *boxcount)
+{
+	next_spot = 0;
+	int count = end - start;
+	//printf("start is %d end is %d count is %d\n", start,end,count);
+	Box *Boxes = calloc(count, sizeof(Box));
+
+	Boxes[0] = (Box){
+		ORIGIN,
+		ORIGIN,
+		start,
+		end,
+		0
+	};
+
+	set_bounds(&Boxes[0], Faces);
+	bigmin = Boxes[0].min;
+	bigmax = Boxes[0].max;
+
+	if (count < 8)
+	{
+		*boxcount = 1;
+		return Boxes;
+	}
+
+	//morton sort the faces
+	qsort(&Faces[start], count, sizeof(Face), face_cmp);
+
+	tree_down(Boxes, Faces, 0, 0);
+
+	//printf("%d faces %d boxes\n", count, next_spot + 1);
+	*boxcount = next_spot + 1;
+	return Boxes;
+}
+
+void gpu_ready_bvh(Scene *S, int *counts, int obj_count)
+{
+	Face *Faces = S->faces;
+
+	Box **obj_trees = calloc(obj_count, sizeof(Box *));
+	int box_total = 0;
+	for (int i = 0; i < obj_count; i++)
+	{
+		int boxcount;
+		if (i < obj_count - 1)
+			obj_trees[i] = bvh_obj(Faces, counts[i], counts[i + 1], &boxcount);
 		else
+			obj_trees[i] = bvh_obj(Faces, counts[i], S->face_count, &boxcount);
+		counts[i] = boxcount;
+		box_total += boxcount;
+	}
+	printf("total box count:%d\n", box_total);
+
+	//now we lay it flat and adjust child indices
+	Box *deep_bvh = calloc(box_total, sizeof(Box));
+	C_Box *shallow_bvh = calloc(obj_count, sizeof(C_Box));
+
+	int start = 0;
+	for (int i = 0; i < obj_count; i++)
+	{
+		for (int j = 0; j < counts[i]; j++)
 		{
-			children[child_ind] = BB_from_boxes(&boxes[start], counts[i]);
-			tree_down(&boxes[start], counts[i], &children[child_ind], work_array, depth + 1);
+			Box b = obj_trees[i][j];
+			for (int k = 0; k < b.children_count; k++)
+				b.children[k] += start;
+			deep_bvh[start + j] = b;
 		}
-		g_boxcount++;
-		child_ind++;
+		free(obj_trees[i]);
+		shallow_bvh[i] = (C_Box){deep_bvh[start].min, deep_bvh[start].max, start};
 		start += counts[i];
 	}
-	parent->children_count = child_ind;
-	parent->children = children;
-}
-
-void sort_check(t_box *boxes, int count)
-{
-	//NB this isn't actually the best test since the objects don't get fully sorted.
-	for (int i = 0; i < count - 1; i++)
-		if (boxes[i].morton > boxes[i + 1].morton)
-		{
-			printf("FAIL at %d, %d\n", i, i+1);
-			printf("%llu %llu\n", boxes[i].morton , boxes[i + 1].morton);
-		}
-}
-
-void analyze_bvh(t_box *root, int depth)
-{
-	printf("===========\n");
-	printf("box at depth %d\n", depth);
-	print_vec(root->min);
-	print_vec(root->max);
-	printf("area of box is %f\n", vec_mag(vec_sub(root->max, root->min)));
-	if (root->children_count)
-		printf("%d children\n", root->children_count);
-	else
-		printf("leaf node, %p\n", root->object);
-	for (int i = 0; i < root->children_count; i++)
-		analyze_bvh(&root->children[i], depth + 1);
-}
-
-void make_bvh(t_scene *scene)
-{
-	int count = 0;
-	t_object *obj = scene->objects;
-	while(obj && ++count)
-		obj = obj->next;
-	t_box *boxes = malloc(count * sizeof(t_box));
-	obj = scene->objects;
-	for (int i = 0; i < count; i++, obj = obj->next)
-		boxes[i] = AABB_from_obj(obj);
-	t_box *root = malloc(sizeof(t_box));
-	*root = BB_from_boxes(boxes, count);
-	for (int i = 0; i < count; i++)
-		boxes[i].morton = mortonize(boxes[i].mid, root);
-	t_box *work_array = malloc(count * sizeof(t_box));
-	tree_down(boxes, count, root, work_array, 0);
-
-	scene->bvh = root;
-	printf("max depth %d boxcount %d\n", g_maxdepth, g_boxcount);
-	//print_box(root);
-	free(boxes);
-	free(work_array);
-}
-
-void hit_nearest(const t_ray *ray, t_box const * const box, t_object **hit, float *d)
-{
-	float this_d = 0.0;
-	if (box->object)
-	{
-		if (intersect_object(ray, box->object, &this_d))
-			if (this_d < *d)
-			{
-				*d = this_d;
-				*hit = box->object;
-			}
-	}
-	else if (intersect_box(ray, box, NULL))
-	{
-		for (int i = 0; i < box->children_count; i++)
-			hit_nearest(ray, &box->children[i], hit, d);
-	}
-}
-
-void hit_nearest_faster(const t_ray * const ray, t_box const * const box, t_object **hit, float *d)
-{
-	float this_d = 0.0;
-	if (box->object)
-	{
-		if (intersect_object(ray, box->object, &this_d))
-			if (this_d < *d)
-			{
-				*d = this_d;
-				*hit = box->object;
-			}
-	}
-	else if (intersect_box(ray, box, &this_d))
-	{
-		if (!*hit || this_d < *d)
-			for (int i = 0; i < box->children_count; i++)
-				hit_nearest(ray, &box->children[i], hit, d);
-	}
+	free(obj_trees);
+	S->boxes = deep_bvh;
+	S->box_count = box_total;
+	S->c_boxes = shallow_bvh;
+	S->c_box_count = obj_count;
 }

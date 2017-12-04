@@ -1,32 +1,15 @@
 #include "rt.h"
 
-typedef struct s_gpu_object
+typedef struct s_gpu_mat
 {
-	cl_int shape;
-	cl_int material;
-	cl_float3 v0;
-	cl_float3 v1;
-	cl_float3 v2;
-	cl_float3 color;
-	cl_float3 emission;
-}				gpu_object;
-
-#define GPU_SPHERE 1
-#define GPU_TRIANGLE 2
-
-#define GPU_MAT_DIFFUSE 1
-#define GPU_MAT_SPECULAR 2
-#define GPU_MAT_REFRACTIVE 3
-#define GPU_MAT_NULL 4
-
-# ifndef DEVICE
-# define DEVICE CL_DEVICE_TYPE_DEFAULT
-# endif
-
-cl_float3 tfloat_to_cl(t_float3 v)
-{
-	return (cl_float3){v.x, v.y, v.z};
-}
+	cl_float3 Ka;
+	cl_float3 Kd;
+	cl_float3 Ks;
+	cl_float3 Ke;
+	cl_int tex_ind;
+	cl_int tex_w;
+	cl_int tex_h;
+}				gpu_mat;
 
 void print_clf3(cl_float3 v)
 {
@@ -43,176 +26,292 @@ char *load_cl_file(char *file)
 	return source;
 }
 
-cl_float3 *gpu_render(t_scene *scene, t_camera cam)
+cl_float3 *gpu_render(Scene *s, t_camera cam, int xdim, int ydim)
 {
-	cl_uint numPlatforms;
-    int err;
 
-    // Find number of platforms
-    err = clGetPlatformIDs(0, NULL, &numPlatforms);
+	static cl_context *contexts;
+	static cl_command_queue *commands;
+	static cl_program *programs;
+	static cl_mem *d_scene;
+	static cl_mem **d_output;
+	static cl_mem **d_seeds;
+	static cl_mem *d_mats;
+	static cl_mem *d_boxes;
+	static cl_mem *d_const_boxes;
+	static cl_mem *d_tex;
+	static int first = 1;
+	static cl_uint numPlatforms;
+	static cl_uint numDevices;
+	static cl_platform_id *Platform;
 
-    // Get all platforms
-    cl_platform_id Platform[numPlatforms];
-    err = clGetPlatformIDs(numPlatforms, Platform, NULL);
-
-    // Secure a GPU
-    cl_device_id device_id;
-    for (int i = 0; i < numPlatforms; i++)
-    {
-        err = clGetDeviceIDs(Platform[i], DEVICE, 1, &device_id, NULL);
-        if (err == CL_SUCCESS)
-        {
-            break;
-        }
-    }
-
-    // Create a compute context
-    cl_context context = clCreateContext(0, 1, &device_id, NULL, NULL, &err);
-
-    // Create a command queue
-    cl_command_queue commands = clCreateCommandQueue(context, device_id, 0, &err);
-    printf("setup context\n");
-
-
-    cl_kernel k;
-    cl_program p;
-
-    char *source = load_cl_file("kernel.cl");
-
-    p = clCreateProgramWithSource(context, 1, (const char **) &source, NULL, &err);
-
-    // Build the program
-    err = clBuildProgram(p, 0, NULL, NULL, NULL, NULL);
-    if (err != CL_SUCCESS)
-    {
-        size_t len;
-        char buffer[2048];
-
-        //printf("Error: Failed to build program executable!\n%s\n", err_code(err));
-        clGetProgramBuildInfo(p, device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
-        printf("%s\n", buffer);
-        free(source);
-        exit(0);
-    }
-    free(source);
-
-    // Create the compute kernel from the program
-    k = clCreateKernel(p, "render_kernel", &err);
-    clReleaseProgram(p);
-    printf("made kernel\n");
-
-
-	//consolidate scene->objects to an array (this is a hack to avoid changing lots of other stuff, will rework)
-	t_object *obj = scene->objects;
-	int obj_count = 0;
-	while (obj && ++obj_count)
-		obj = obj->next;
-
-	gpu_object * gpu_scene = malloc(sizeof(gpu_object) * obj_count);
-	obj = scene->objects;
-	for (int i = 0; i < obj_count; i++)
+	if (first)
 	{
-		gpu_scene[i].v0 = (cl_float3){obj->position.x, obj->position.y, obj->position.z};
-		gpu_scene[i].v1 = (cl_float3){obj->normal.x, obj->normal.y, obj->normal.z};
-		gpu_scene[i].v2 = (cl_float3){obj->corner.x, obj->corner.y, obj->corner.z};
-		gpu_scene[i].color = (cl_float3){obj->color.x, obj->color.y, obj->color.z};
-		gpu_scene[i].emission = (cl_float3){obj->emission, obj->emission, obj->emission};
-		
-		if (obj->shape == SPHERE)
-			gpu_scene[i].shape = GPU_SPHERE;
-		else if (obj->shape == TRIANGLE)
-			gpu_scene[i].shape = GPU_TRIANGLE;
+		printf("doing the heavy stuff\n");
+	    int err;
 
-		if (obj->material == MAT_DIFFUSE)
-			gpu_scene[i].material = GPU_MAT_DIFFUSE;
-		else if (obj->material == MAT_SPECULAR)
-			gpu_scene[i].material = GPU_MAT_SPECULAR;
-		else if (obj->material == MAT_REFRACTIVE)
-			gpu_scene[i].material = GPU_MAT_REFRACTIVE;
-		else if (obj->material == MAT_NULL)
-			gpu_scene[i].material = GPU_MAT_NULL;
-		
-		obj = obj->next;
+	    // Find number of platforms
+	    err = clGetPlatformIDs(0, NULL, &numPlatforms);
+
+	    // Get all platforms
+	    Platform = calloc(numPlatforms, sizeof(cl_platform_id));
+	    err = clGetPlatformIDs(numPlatforms, Platform, NULL);
+
+	    //count devices
+	    numDevices = 0;
+	    for (int i = 0; i < numPlatforms; i++)
+	    {
+	    	cl_uint d;
+	        err = clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_ALL, 0, NULL, &d);
+	        if (err == CL_SUCCESS)
+	            numDevices += d;
+	    }
+
+	    printf("%u devices, %u platforms\n", numDevices, numPlatforms);
+
+	    //get ids for devices and create (platforms) compute contexts, (devices) command queues
+	    cl_device_id device_ids[numDevices];
+	    cl_uint offset = 0;
+	    contexts = calloc(numPlatforms, sizeof(cl_context));
+	    commands = calloc(numDevices, sizeof(cl_command_queue));
+	    for (int i = 0; i < numPlatforms; i++)
+	    {
+	    	cl_uint d;
+	    	clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_GPU, numDevices, &device_ids[offset], &d);
+	    	contexts[i] = clCreateContext(0, d, &device_ids[offset], NULL, NULL, &err);
+	    	for (int j = 0; j < d; j++)
+	    		commands[offset + j] = clCreateCommandQueue(contexts[i], device_ids[offset + j], CL_QUEUE_PROFILING_ENABLE, &err);
+	    	offset += d;
+	    }
+	    printf("made contexts and CQs\n");
+
+	    char *source = load_cl_file("new_kernel.cl");
+
+
+	    //create (platforms) programs and build them
+	    programs = calloc(numPlatforms, sizeof(cl_program));
+	    for (int i = 0; i < numPlatforms; i++)
+	    {
+	    	programs[i] = clCreateProgramWithSource(contexts[i], 1, (const char **) &source, NULL, &err);
+	    	err = clBuildProgram(programs[i], 0, NULL, NULL, NULL, NULL);
+	    	if (err != CL_SUCCESS)
+	    	{
+	    	 	printf("bad compile\n");
+	    	 	exit(0);
+	    	}
+		    free(source);
+	    }
+
+	    printf("built programs\n");
+
+	    //seeds for random number generation (2 per thread per device)
+		cl_uint *h_seeds = calloc(xdim * ydim * 2 * numDevices, sizeof(cl_uint));
+		for (int i = 0; i < xdim * ydim * 2 * numDevices; i++)
+			h_seeds[i] = rand();
+
+		//printf("about to do textures\n");
+		cl_int tex_size = 0;
+		for (int i = 0; i < s->mat_count; i++)
+		{
+			if (s->materials[i].map_Kd)
+				tex_size += s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3;
+			//printf("%d\n", tex_size);
+		}
+
+		//printf("tex size? %d\n", tex_size);
+		cl_uchar *h_tex = calloc(sizeof(cl_uchar), tex_size);
+		tex_size = 0;
+
+		gpu_mat *simple_mats = calloc(s->mat_count, sizeof(gpu_mat));
+		for (int i = 0; i < s->mat_count; i++)
+		{
+			if (s->materials[i].map_Kd)
+			{
+				memcpy(&h_tex[tex_size], s->materials[i].map_Kd->pixels, s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3);
+				simple_mats[i] = (gpu_mat){
+					s->materials[i].Ka,
+					s->materials[i].Kd,
+					s->materials[i].Ks,
+					s->materials[i].Ke,
+					tex_size,
+					s->materials[i].map_Kd->width,
+					s->materials[i].map_Kd->height
+				};
+				tex_size += s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3;
+			}
+			else
+			{
+				printf("tex for material %d is null!\n", i);
+				simple_mats[i] = (gpu_mat){
+					s->materials[i].Ka,
+					s->materials[i].Kd,
+					s->materials[i].Ks,
+					s->materials[i].Ke,
+					0,
+					0,
+					0,
+				};
+			}
+		}
+
+		printf("flattened textures, %d bytes\n", tex_size);
+
+		offset = 0;
+		d_scene = calloc(numPlatforms, sizeof(cl_mem));
+		d_mats = calloc(numPlatforms, sizeof(cl_mem));
+		d_output = calloc(numPlatforms, sizeof(cl_mem *));
+		d_seeds = calloc(numPlatforms, sizeof(cl_mem *));
+		d_boxes = calloc(numPlatforms, sizeof(cl_mem));
+		d_const_boxes = calloc(numPlatforms, sizeof(cl_mem));
+		d_tex = calloc(numPlatforms, sizeof(cl_mem));
+		for (int i = 0; i < numPlatforms; i++)
+		{
+			cl_uint d;
+			clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_ALL, 0, NULL, &d);
+
+			d_output[i] = calloc(d, sizeof(cl_mem));
+			d_seeds[i] = calloc(d, sizeof(cl_mem));
+			d_scene[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(Face) * s->face_count, NULL, NULL);
+			d_mats[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(gpu_mat) * s->mat_count, NULL, NULL);
+			d_boxes[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(Box) * s->box_count, NULL, NULL);
+			d_const_boxes[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(C_Box) * s->c_box_count, NULL, NULL);
+			d_tex[i] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(cl_uchar) * tex_size, NULL, NULL);
+			
+			for (int j = 0; j < d; j++)
+			{
+				d_output[i][j] = clCreateBuffer(contexts[i], CL_MEM_WRITE_ONLY, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
+				d_seeds[i][j] = clCreateBuffer(contexts[i], CL_MEM_READ_ONLY, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_scene[i], CL_TRUE, 0, sizeof(Face) * s->face_count, s->faces, 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_mats[i], CL_TRUE, 0, sizeof(gpu_mat) * s->mat_count, simple_mats, 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_seeds[i][offset + j], CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, &h_seeds[(offset + j) * xdim * ydim * 2], 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_boxes[i], CL_TRUE, 0, sizeof(Box) * s->box_count, s->boxes, 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_const_boxes[i], CL_TRUE, 0, sizeof(C_Box) * s->c_box_count, s->c_boxes, 0, NULL, NULL);
+				clEnqueueWriteBuffer(commands[offset + j], d_tex[i], CL_TRUE, 0, sizeof(cl_uchar) * tex_size, h_tex, 0, NULL, NULL);
+			}
+			offset += d;
+		}
+		first = 0;
 	}
 
-	printf("obj count is %d\n", obj_count);
+	// Create the compute kernel from the program (this can't be retained for some reason)
+	cl_kernel *kernels = calloc(numPlatforms, sizeof(cl_kernel));
+	for (int i = 0; i < numPlatforms; i++)
+		kernels[i] = clCreateKernel(programs[i], "render_kernel", NULL);
 
-	printf("scene translated\n");
-	//transform cam stuff to simple vectors
-	cl_float3 gpu_cam_origin = tfloat_to_cl(cam.origin);
-	cl_float3 gpu_cam_focus = tfloat_to_cl(cam.focus);
-	cl_float3 gpu_cam_dx = tfloat_to_cl(cam.d_x);
-	cl_float3 gpu_cam_dy = tfloat_to_cl(cam.d_y);
-
-	print_clf3(gpu_cam_origin);
-	print_clf3(gpu_cam_focus);
-	print_clf3(gpu_cam_dx);
-	print_clf3(gpu_cam_dy);
-
-	printf("translated cam\n");
-	//set up memory areas
-	cl_float3 *h_output = calloc(xdim * ydim, sizeof(cl_float3));
-	cl_uint *h_seeds = calloc(xdim * ydim * 2, sizeof(cl_uint));
-
-	for (int i = 0; i < xdim * ydim * 2; i++)
-		h_seeds[i] = rand();
-
-	cl_mem d_scene;
-	cl_mem d_output;
-	cl_mem d_seeds;
-
-	d_scene = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(gpu_object) * obj_count, NULL, NULL);
-	d_output = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_float3) * xdim * ydim, NULL, NULL);
-	d_seeds = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(cl_uint) * xdim * ydim * 2, NULL, NULL);
-
-	clEnqueueWriteBuffer(commands, d_scene, CL_TRUE, 0, sizeof(gpu_object) * obj_count, gpu_scene, 0, NULL, NULL);
-	clEnqueueWriteBuffer(commands, d_seeds, CL_TRUE, 0, sizeof(cl_uint) * xdim * ydim * 2, h_seeds, 0, NULL, NULL);
-	clEnqueueWriteBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
-
-	printf("copied scene to gpu\n");
-
-	int i_xdim = xdim;
-	int i_ydim = ydim;
 	size_t resolution = xdim * ydim;
 	size_t groupsize = 256;
-	size_t threadcount = resolution * groupsize;
+	cl_int obj_count = s->c_box_count;
 
-	cl_uint total_samples = 1024;
+	cl_uint samples_per_device = 100;
 
-	//DEBUGGING
-	//gpu_cam_origin = (cl_float3){0.5f, 0.5f, 0.5f};
-	//END DEBUG
-
-	clSetKernelArg(k, 0, sizeof(cl_mem), &d_scene);
-	printf("scene arg\n");
-	clSetKernelArg(k, 1, sizeof(cl_float3), &gpu_cam_origin);
-	clSetKernelArg(k, 2, sizeof(cl_float3), &gpu_cam_focus);
-	clSetKernelArg(k, 3, sizeof(cl_float3), &gpu_cam_dx);
-	clSetKernelArg(k, 4, sizeof(cl_float3), &gpu_cam_dy);
-	printf("cam args\n");
-	clSetKernelArg(k, 5, sizeof(cl_int), &i_xdim);
-	clSetKernelArg(k, 6, sizeof(cl_int), &i_ydim);
-	clSetKernelArg(k, 7, sizeof(cl_int), &obj_count);
-	printf("dim args\n");
-	clSetKernelArg(k, 8, sizeof(cl_float3) * groupsize, NULL);
-	clSetKernelArg(k, 9, sizeof(cl_mem), &d_output);
-	printf("output arg\n");
-	clSetKernelArg(k, 10, sizeof(cl_mem), &d_seeds);
-	clSetKernelArg(k, 11, sizeof(cl_uint), &total_samples);
+	for (int i = 0; i < numPlatforms; i++)
+	{
+		clSetKernelArg(kernels[i], 0, sizeof(cl_mem), &d_scene[i]);
+		clSetKernelArg(kernels[i], 1, sizeof(cl_mem), &d_mats[i]);
+		clSetKernelArg(kernels[i], 2, sizeof(cl_mem), &d_boxes[i]);
+		clSetKernelArg(kernels[i], 3, sizeof(cl_float3), &cam.origin);
+		clSetKernelArg(kernels[i], 4, sizeof(cl_float3), &cam.focus);
+		clSetKernelArg(kernels[i], 5, sizeof(cl_float3), &cam.d_x);
+		clSetKernelArg(kernels[i], 6, sizeof(cl_float3), &cam.d_y);
+		clSetKernelArg(kernels[i], 7, sizeof(cl_int), &xdim);
+		// clSetKernelArg(kernels[i], 8, sizeof(cl_mem), &d_output[i]);
+		// clSetKernelArg(kernels[i], 9, sizeof(cl_mem), &d_seeds[i]);
+		clSetKernelArg(kernels[i], 10, sizeof(cl_uint), &samples_per_device);
+		clSetKernelArg(kernels[i], 11, sizeof(cl_mem), &d_const_boxes[i]);
+		clSetKernelArg(kernels[i], 12, sizeof(cl_uint), &obj_count);
+		clSetKernelArg(kernels[i], 13, sizeof(cl_mem), &d_tex[i]);
+	}
 
 	printf("about to fire\n");
 	//pull the trigger
 
-	for (int i =0 ; i < total_samples; i+=1024)
+	cl_event render[numDevices];
+
+	cl_float3 **outputs = calloc(numDevices, sizeof(cl_float3 *));
+	cl_uint offset = 0;
+	for (int i = 0; i < numPlatforms; i++)
 	{
-		printf("%d samples done\n", i);
-		clEnqueueNDRangeKernel(commands, k, 1, 0, &threadcount, &groupsize, 0, NULL, NULL);
-		clFinish(commands);
+		cl_uint d;
+		clGetDeviceIDs(Platform[i], CL_DEVICE_TYPE_ALL, 0, NULL, &d);
+		for (int j = 0; j < d; j++)
+		{
+			clSetKernelArg(kernels[i], 8, sizeof(cl_mem), &d_output[i][offset + j]);
+			clSetKernelArg(kernels[i], 9, sizeof(cl_mem), &d_seeds[i][offset + j]);
+			outputs[offset + j] = calloc(xdim * ydim, sizeof(cl_float3));
+			cl_int err = clEnqueueNDRangeKernel(commands[offset + j], kernels[i], 1, 0, &resolution, &groupsize, 0, NULL, &render[offset + j]);
+			clEnqueueReadBuffer(commands[offset + j], d_output[i][j], CL_FALSE, 0, sizeof(cl_float3) * xdim * ydim, outputs[offset + j], 1, &render[offset + j], NULL);
+		}
+		offset += d;
 	}
-	clEnqueueReadBuffer(commands, d_output, CL_TRUE, 0, sizeof(cl_float3) * xdim * ydim, h_output, 0, NULL, NULL);
 
-	for (int i = 0; i < 10; i++)
-		print_clf3(h_output[i]);
+	for (int i = 0; i < numDevices; i++)
+		clFlush(commands[i]);
 
-	return h_output;
+	printf("all enqueued\n");
+	for (int i = 0; i < numDevices; i++)
+	{
+		clFinish(commands[i]);
+		cl_ulong start, end;
+		clGetEventProfilingInfo(render[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+		clGetEventProfilingInfo(render[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+		printf("kernel %d took %.3f seconds\n", i, (float)(end - start) / 1000000000.0f);
+	}
+	printf("done?\n");
+
+	//sum samples. do all transformations and sums in doubles because values may be quite different sizes
+	//I am not sure if this is necessary but it can't hurt.
+	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
+	for (int i = 0; i < numDevices; i++)
+	{
+		for (int j = 0; j < resolution; j++)
+		{
+			output_sum[j].x += (double)outputs[i][j].x;
+			output_sum[j].y += (double)outputs[i][j].y;
+			output_sum[j].z += (double)outputs[i][j].z;
+		}
+		free(outputs[i]);
+	}
+
+	//average samples and apply tone mapping
+	double Lw = 0.0;
+	for (int j = 0;j < resolution; j++)
+	{
+		double scale = 1.0 / (double)(samples_per_device * numDevices);
+		output_sum[j].x *= scale;
+		output_sum[j].y *= scale;
+		output_sum[j].z *= scale;
+
+		Lw += log(0.1 + 0.2126 * output_sum[j].x + 0.7152 * output_sum[j].y + 0.0722 * output_sum[j].z);
+	}
+	printf("Lw is %lf\n", Lw);
+	
+
+	Lw /= (double)resolution;
+	printf("Lw is %lf\n", Lw);
+
+	Lw = exp(Lw);
+	printf("Lw is %lf\n", Lw);
+
+	for (int j = 0; j < resolution; j++)
+	{
+		output_sum[j].x = output_sum[j].x * 0.36 / Lw;
+		output_sum[j].y = output_sum[j].y * 0.36 / Lw;
+		output_sum[j].z = output_sum[j].z * 0.36 / Lw;
+
+		output_sum[j].x = output_sum[j].x / (output_sum[j].x + 1.0);
+		output_sum[j].y = output_sum[j].y / (output_sum[j].y + 1.0);
+		output_sum[j].z = output_sum[j].z / (output_sum[j].z + 1.0);
+	}
+
+	//just a hack til i refactor stuff later down the pipeline to take doubles.
+	cl_float3 *float_sum = calloc(resolution, sizeof(cl_float3));
+	for (int j = 0; j < resolution; j++)
+	{
+		float_sum[j].x = (float)output_sum[j].x;
+		float_sum[j].y = (float)output_sum[j].y;
+		float_sum[j].z = (float)output_sum[j].z;
+	}
+
+	free(kernels);
+	free(output_sum);
+	return float_sum;
 }
