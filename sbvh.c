@@ -1,7 +1,10 @@
 #include "rt.h"
 
-#define BIN_COUNT 8
-#define LEAF_THRESHOLD 16
+#define SPLIT_COUNT 15
+#define LEAF_THRESHOLD 4
+
+#define MAX_START (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
+#define MIN_START (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 
 static void push(tree_box **BVH, tree_box *node)
 {
@@ -23,6 +26,8 @@ static tree_box *pop(tree_box **BVH)
 
 static void set_bounds(Face *faces, int count, cl_float3 *min, cl_float3 *max)
 {
+	//convert this to use the new defines at some point
+
 	float max_x = -1.0 * FLT_MAX;
 	float max_y = -1.0 * FLT_MAX;
 	float max_z = -1.0 * FLT_MAX;
@@ -54,6 +59,17 @@ static void set_bounds_box(tree_box *B)
 	set_bounds(B->faces, B->count, &B->min, &B->max);
 }
 
+typedef struct s_bin {
+	cl_float3 min;
+	cl_float3 max;
+}				Bin;
+
+static float SA(Bin b)
+{
+	cl_float3 span = vec_sub(b.max, b.min);
+	return 2 * span.x * span.y + 2 * span.y * span.z + 2 * span.x * span.z;
+}
+
 static float sah(tree_box *B, int pivot)
 {
 	//returns the surface area heuristic for proposed split of B->faces at index [pivot]
@@ -72,156 +88,147 @@ static float sah(tree_box *B, int pivot)
 	return left_SA * (float)pivot / B_SA + right_SA * (B->count - pivot) / B_SA;
 }
 
-static int x_cmp(const void *a, const void *b)
+int in_bounds(Face f, Bin b)
 {
-	Face *fa = (Face *)a;
-	Face *fb = (Face *)b;
-
-	if (fa->center.x > fb->center.x)
-		return (1);
-	else if (fa->center.x < fb->center.x)
-		return (-1);
-	else
-		return (0);
+	if (b.min.x <= f.center.x && f.center.x <= b.max.x)
+		if (b.min.y <= f.center.y && f.center.y <= b.max.y)
+			if (b.min.z <= f.center.z && f.center.z <= b.max.z)
+				return (1);
+	return (0);
 }
 
-static int y_cmp(const void *a, const void *b)
+void adjust_bounds(Face f, Bin *b)
 {
-	Face *fa = (Face *)a;
-	Face *fb = (Face *)b;
-
-	if (fa->center.y > fb->center.y)
-		return (1);
-	else if (fa->center.y < fb->center.y)
-		return (-1);
-	else
-		return (0);
+	for (int i = 0; i < f.shape; i++)
+	{
+		b->min.x = fmin(b->min.x, f.verts[i].x);
+		b->max.x = fmax(b->max.x, f.verts[i].x);
+		b->min.y = fmin(b->min.y, f.verts[i].y);
+		b->max.y = fmax(b->max.y, f.verts[i].y);
+		b->min.z = fmin(b->min.z, f.verts[i].z);
+		b->max.z = fmax(b->max.z, f.verts[i].z);
+	}
+}
+void print_bin(Bin b)
+{
+	print_vec(b.min);
+	print_vec(b.max);
+	printf("\n");
 }
 
-static int z_cmp(const void *a, const void *b)
+static float SAH(Bin a, Bin b, float pivot, float total, float parent_SA)
 {
-	Face *fa = (Face *)a;
-	Face *fb = (Face *)b;
-
-	if (fa->center.z > fb->center.z)
-		return (1);
-	else if (fa->center.z < fb->center.z)
-		return (-1);
-	else
-		return (0);
+	//printf("SA(a) %f SA(b) %f, parent_SA %f\n", SA(a), SA(b), parent_SA);
+	return SA(a) * pivot / parent_SA + SA(b) * (total - pivot) / parent_SA;
 }
 
-static int find_pivot(tree_box *B)
+void center_span(tree_box *B, cl_float3 *out_min, cl_float3 *out_max)
 {
-	//find best pivot in B->faces
-	float best_SAH = FLT_MAX;
-	int best_ind = 0;
+	cl_float3 min = MIN_START;
+	cl_float3 max = MAX_START;
 
-	int step = B->count / BIN_COUNT;
-	if (step)
-		for (int i = 1; i < BIN_COUNT; i++)
-		{
-			float SAH = sah(B, i * step);
-			if (SAH < best_SAH)
+	for (int i = 0; i < B->count; i++)
+	{
+		min.x = fmin(min.x, B->faces[i].center.x);
+		max.x = fmax(max.x, B->faces[i].center.x);
+		min.y = fmin(min.y, B->faces[i].center.y);
+		max.y = fmax(max.y, B->faces[i].center.y);
+		min.z = fmin(min.z, B->faces[i].center.z);
+		max.z = fmax(max.z, B->faces[i].center.z);
+	}
+	*out_min = min;
+	*out_max = max;
+}
+
+static Bin best_split(tree_box *B, int *count)
+{
+	//scan array for bounding box (n)
+	cl_float3 min, max;
+	center_span(B, &min, &max);
+	cl_float3 span = vec_sub(max, min);
+	//print_vec(span);
+	//printf("%d\n", B->count);
+	Bin *bins = calloc(3 * SPLIT_COUNT, sizeof(Bin));
+	for (int i = 0; i < SPLIT_COUNT; i++)
+	{
+		bins[i] = (Bin){min, (cl_float3){min.x + (float)(i + 1) * span.x / (float)(SPLIT_COUNT + 1), max.y, max.z}};
+		bins[i + SPLIT_COUNT] = (Bin){min, (cl_float3){max.x, min.y + (float)(i + 1) * span.y / (float)(SPLIT_COUNT + 1), max.z}};
+		bins[i + 2 * SPLIT_COUNT] = (Bin){min, (cl_float3){max.x, max.y, min.z + (float)(i + 1) * span.z / (float)(SPLIT_COUNT + 1)}};
+	}
+
+	Bin boxes[2 * 3 * SPLIT_COUNT];
+	int counts[3 * SPLIT_COUNT];
+	bzero(counts, sizeof(int) * 3 * SPLIT_COUNT);
+	for (int i = 0; i < 2 * 3 * SPLIT_COUNT; i++)
+		boxes[i] = (Bin){MIN_START, MAX_START};
+	
+	for (int i = 0; i < B->count; i++)
+		for (int j = 0; j < (3 * SPLIT_COUNT); j++)
+			if (in_bounds(B->faces[i], bins[j]))
 			{
-				best_SAH = SAH;
-				best_ind = i * step;
+				counts[j]++;
+				adjust_bounds(B->faces[i], &boxes[2 * j]);
 			}
-		}
-	else
-		for (int i = 0; i < B->count; i++)
+			else
+				adjust_bounds(B->faces[i], &boxes[2 * j + 1]);
+	
+	//which pair is best split?
+	float parent_SA = SA((Bin){min, max});
+	float min_SA = FLT_MAX;
+	int min_ind = -1;
+	for (int i = 0; i < 3 * SPLIT_COUNT; i++)
+	{
+		if (counts[i] == 0 || counts[i] == B->count)
+			continue;
+		float score = SAH(boxes[2 * i], boxes[2 * i + 1], (float)counts[i], (float)B->count, parent_SA);
+		//printf("%f\n", score);
+		if (score < min_SA)
 		{
-			float SAH = sah(B, i);
-			if (SAH < best_SAH)
-			{
-				best_SAH = SAH;
-				best_ind = i;
-			}
+			min_SA = score;
+			min_ind = i;
 		}
-	return best_ind;
+	}
+	//printf("picked split %d\n", min_ind);
+	*count = counts[min_ind];
+	return bins[min_ind];
 }
 
-static void split(tree_box *B)
+static void bin_sort(tree_box *B, Bin split, int count)
 {
-	//aspects of how i'm doing this are wildly inefficient.
-	//however, this way is easy to think about and maintain.
-	//furthermore the construction time of the BVH is small compared to rendering,
-	//and investing time in making a very good one is worth it.
-	//once this has been thoroughly tested I will improve it, but it's not a priority.
+	Face *scratch = calloc(B->count, sizeof(Face));
+	int in_index = 0;
+	int out_index = count;
+	for (int i = 0; i < B->count; i++)
+		if (in_bounds(B->faces[i], split))
+			scratch[in_index++] = B->faces[i];
+		else
+			scratch[out_index++] = B->faces[i];
+	memcpy(B->faces, scratch, B->count * sizeof(Face));
+	free(scratch);
+}
 
-	//this is an "object split" approach (ie, Faces end up in exactly one child)
-	//full SBVH construction also considers "spatial split" approach (ie, face references can be duplicated for smaller SAH)
-	//duplicating face references complicates things, though. I really like keeping faces in one array.
-	//my current plan to work around this is to tesselate down to some average Face size so split references wouldn't be needed
-	//but that obviously increases face count, possibly quite a bit in highly varied scenes.
-
-	qsort(B->faces, B->count, sizeof(Face), x_cmp);
-	int px = find_pivot(B);
-	float SAHx = sah(B, px);
-
-	qsort(B->faces, B->count, sizeof(Face), y_cmp);
-	int py = find_pivot(B);
-	float SAHy = sah(B, py);
-
-	qsort(B->faces, B->count, sizeof(Face), z_cmp);
-	int pz = find_pivot(B);
-	float SAHz = sah(B, pz);
- 
-	int p;
-	if (SAHx < SAHy && SAHx < SAHz)
-	{
-		qsort(B->faces, B->count, sizeof(Face), x_cmp);
-		p = px;
-		// printf("splitting along x axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHx);
-	}
-	else if (SAHy < SAHx && SAHy < SAHz)
-	{
-		qsort(B->faces, B->count, sizeof(Face), y_cmp);
-		p = py;
-		// printf("splitting along y axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHy);
-	}
-	else
-	{
-		p = pz;
-		// printf("splitting along z axis, %d in left %d in right, SAH %f\n", p, B->count - p, SAHz);
-	}
+void new_split(tree_box *B)
+{
+	int count;
+	Bin bin = best_split(B, &count);
+	bin_sort(B, bin, count);
 
 	tree_box *L = calloc(1, sizeof(tree_box));
 	L->faces = B->faces;
-	L->count = p;
-	if (L->count)
-	{
-		set_bounds_box(L);
-		B->left = L;
-	}
-	else
-		free(L);
+	L->count = count;
+	set_bounds_box(L);
+	B->left = L;
 
 	tree_box *R = calloc(1, sizeof(tree_box));
-	R->faces = &B->faces[p];
-	R->count = B->count - p;
-	if (R->count)
-	{
-		set_bounds_box(R);
-		B->right = R;
-	}
-	else
-		free(R);
+	R->faces = &B->faces[count];
+	R->count = B->count - count;
+	set_bounds_box(R);
+	B->right = R;
 }
 
-tree_box *build_sbvh(Face *faces, int count, int *box_count)
+//takes flat array of faces returns root of tree and box_count of tree
+tree_box *super_bvh(Face *faces, int count, int *box_count)
 {
-	//S->faces is a flat array of cpu-side faces (ie they have their VNs and VTs with them)
-
-	//make root tree box
-	//it is its own queue
-	//pop queue, split, push results to queue
-	//does not get pushed if small enough
-	//stop when queue empty
-	//original root is now head of whole, nice tree
-
-	//this design should allow for the split function to be entirely modular
-
 	tree_box *root_box = calloc(1, sizeof(tree_box));
 	root_box->faces = faces;
 	root_box->count = count;
@@ -234,33 +241,17 @@ tree_box *build_sbvh(Face *faces, int count, int *box_count)
 
 	while ((B = pop(&Q)))
 	{
-		split(B);
-		if (B->left)
-			bcount++;
-		if (B->right)
-			bcount++;
-		if (B->left && B->left->count > LEAF_THRESHOLD)
+		new_split(B);
+		//printf("split %d-%d\n", B->left->count, B->right->count);
+		//getchar();
+		bcount += 2;
+		if (B->left->count > LEAF_THRESHOLD)
 			push(&Q, B->left);
-		if (B->right && B->right->count > LEAF_THRESHOLD)
+		if (B->right->count > LEAF_THRESHOLD)
 			push(&Q, B->right);
 	}
-
-	//set S->bvh
 
 	printf("%d boxes\n", bcount);
 	*box_count = bcount;
 	return root_box;
 }
-
-
-
-/*
-stray thoughts / optimization ideas:
-track which axis sorted by, use ray direction sign to go L->R or R->L
-with just left/right children, can consider a simple [2n], [2n + 1] style array structure
-
-"BVH Lab"
-	generate many pairs of points on sphere that has BVH inscribed in it
-	ray going from point a to point b
-	how many boxes do I check against? how many boxes do i need to actually intersect?
-*/

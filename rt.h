@@ -175,6 +175,8 @@ Face *object_flatten(Face *faces, int *face_count);
 tree_box *build_sbvh(Face *faces, int count, int *box_count);
 meta_box *meta_bvh(tree_box *objects, int count, int *box_count);
 
+tree_box *super_bvh(Face *faces, int count, int *box_count);
+
 void translate(Face *list, cl_float3 displacement);
 
 ////Old stuff
