@@ -1,7 +1,7 @@
 #include "rt.h"
 
 #define SPLIT_COUNT 15
-#define LEAF_THRESHOLD 4
+#define LEAF_THRESHOLD 2
 
 #define MAX_START (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 #define MIN_START (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
@@ -68,24 +68,6 @@ static float SA(Bin b)
 {
 	cl_float3 span = vec_sub(b.max, b.min);
 	return 2 * span.x * span.y + 2 * span.y * span.z + 2 * span.x * span.z;
-}
-
-static float sah(tree_box *B, int pivot)
-{
-	//returns the surface area heuristic for proposed split of B->faces at index [pivot]
-	cl_float3 lmin, lmax, rmin, rmax;
-	set_bounds(B->faces, pivot, &lmin, &lmax);
-	set_bounds(&B->faces[pivot], B->count - pivot, &rmin, &rmax);
-
-	cl_float3 lspan = vec_sub(lmax, lmin);
-	cl_float3 rspan = vec_sub(rmax, rmin);
-	float left_SA = 2 * lspan.x * lspan.y + 2 * lspan.y * lspan.z + 2 * lspan.x * lspan.z;
-	float right_SA = 2 * rspan.x * rspan.y + 2 * rspan.y * rspan.z + 2 * rspan.x * rspan.z;
-
-	cl_float3 Bspan = vec_sub(B->max, B->min);
-	float B_SA = 2 * Bspan.x * Bspan.y + 2 * Bspan.y * Bspan.z + 2 * Bspan.x * Bspan.z;
-
-	return left_SA * (float)pivot / B_SA + right_SA * (B->count - pivot) / B_SA;
 }
 
 int in_bounds(Face f, Bin b)
@@ -242,8 +224,6 @@ tree_box *super_bvh(Face *faces, int count, int *box_count)
 	while ((B = pop(&Q)))
 	{
 		new_split(B);
-		//printf("split %d-%d\n", B->left->count, B->right->count);
-		//getchar();
 		bcount += 2;
 		if (B->left->count > LEAF_THRESHOLD)
 			push(&Q, B->left);
@@ -255,3 +235,8 @@ tree_box *super_bvh(Face *faces, int count, int *box_count)
 	*box_count = bcount;
 	return root_box;
 }
+
+// tree_box *merge_bvhs(tree_box **BVHs)
+// {
+
+// }

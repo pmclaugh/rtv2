@@ -159,17 +159,6 @@ typedef struct bvh_struct
 	struct bvh_struct *next; //for tree building not for tracing
 }				tree_box;
 
-typedef struct meta_bvh_struct
-{
-	cl_float3 min;
-	cl_float3 max;
-	struct meta_bvh_struct *left;
-	struct meta_bvh_struct *right;
-	tree_box *boxes;
-	int count;
-	struct meta_bvh_struct *next;
-}				meta_box;
-
 Face *ply_import(char *ply_file);
 Face *object_flatten(Face *faces, int *face_count);
 tree_box *build_sbvh(Face *faces, int count, int *box_count);
