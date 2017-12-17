@@ -287,7 +287,7 @@ gpu_bin *flatten_bvh(tree_box *bvh, int box_count)
 		else
 		{
 			bins[i].lind = -3 * B->face_ind;
-			bins[i].rind = -1 * B->count;
+			bins[i].rind = -3 * B->count;
 		}
 		if (B->parent)
 		{

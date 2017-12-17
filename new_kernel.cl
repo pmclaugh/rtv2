@@ -59,7 +59,7 @@ typedef struct s_box
 	int rind;
 }				Box;
 
-#define NULL_BOX (Box){(float4){0.0f, 0.0f, 0.0f, 0.0f}, (float4){0.0f, 0.0f, 0.0f, 0.0f}};
+#define NULL_BOX (Box){0.0f, 0.0f, 0.0f, 0, 0.0f, 0.0f, 0.0f, 0};
 
 static float get_random(unsigned int *seed0, unsigned int *seed1) {
 
@@ -79,36 +79,7 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 	return (res.f - 2.0f) / 2.0f;
 }
 
-static const int intersect_triangle(const Ray ray, const float3 v0, const float3 v1, const float3 v2, float *t, float *u, float *v)
-{
-	float3 e1 = v1 - v0;
-	float3 e2 = v2 - v0;
-
-	float3 h = cross(ray.direction, e2);
-	float a = dot(h, e1);
-
-	if (fabs(a) < 0)
-		return 0;
-	float f = 1.0f / a;
-	float3 s = ray.origin - v0;
-	*u = f * dot(s, h);
-	if (*u < 0.0 || *u > 1.0)
-		return 0;
-	float3 q = cross(s, e1);
-	*v = f * dot(ray.direction, q);
-	if (*v < 0.0 || *u + *v > 1.0)
-		return 0;
-	float this_t = f * dot(e2, q);
-	if (this_t > COLLIDE_ERR)
-	{
-		*t = this_t;
-		return (1);
-	}
-	else
-		return (0);
-}
-
-static int inside_box(const float3 pt, const Box box, float *t)
+static int inside_box(const float3 pt, const Box box)
 {
 	if (box.minx <= pt.x && pt.x <= box.maxx)
 		if (box.miny <= pt.y && pt.y <= box.maxy)
@@ -118,23 +89,32 @@ static int inside_box(const float3 pt, const Box box, float *t)
 }
 
 //intersect_box
-static const int intersect_box(const Ray ray, const Box b)
-{	
+static const int intersect_box(const Ray ray, const Box b, float t)
+{
+	//the if tmin >=t checks are new, should be fine, should help. will toggle to see effect.
+
 	float tx0 = (b.minx - ray.origin.x) * ray.inv_dir.x;
 	float tx1 = (b.maxx - ray.origin.x) * ray.inv_dir.x;
 	float tmin = fmin(tx0, tx1);
 	float tmax = fmax(tx0, tx1);
+
+	if (tmin >= t)
+		return (0);
 
 	float ty0 = (b.miny - ray.origin.y) * ray.inv_dir.y;
 	float ty1 = (b.maxy - ray.origin.y) * ray.inv_dir.y;
 	float tymin = fmin(ty0, ty1);
 	float tymax = fmax(ty0, ty1);
 
+
 	if ((tmin >= tymax) || (tymin >= tmax))
 		return (0);
 
 	tmin = fmax(tymin, tmin);
 	tmax = fmin(tymax, tmax);
+
+	if (tmin >= t)
+		return (0);
 
 	float tz0 = (b.minz - ray.origin.z) * ray.inv_dir.z;
 	float tz1 = (b.maxz - ray.origin.z) * ray.inv_dir.z;
@@ -146,17 +126,52 @@ static const int intersect_box(const Ray ray, const Box b)
 
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
+
+	if (tmin >= t)
+		return(0);
+
 	if (tmin <= 0.0 && tmax <= 0.0)
 		return (0);
-	// if (tmin > 0.0)
-	// 	*t_out = tmin;
-	// else
-	// 	*t_out = tmax;
 	return (1);
 }
 
+static void intersect_triangle(const Ray ray, __constant float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
+{
+	//we don't need v1 or v2 after initial calc of e1, e2. could just store them in same memory. wonder if compiler does this.
+	float this_t, this_u, this_v;
+	const float3 v0 = V[test_i];
+	const float3 v1 = V[test_i + 1];
+	const float3 v2 = V[test_i + 2];
+
+	float3 e1 = v1 - v0;
+	float3 e2 = v2 - v0;
+
+	float3 h = cross(ray.direction, e2);
+	float a = dot(h, e1);
+
+	if (fabs(a) < 0)
+		return;
+	float f = 1.0f / a;
+	float3 s = ray.origin - v0;
+	this_u = f * dot(s, h);
+	if (this_u < 0.0 || this_u > 1.0)
+		return;
+	float3 q = cross(s, e1);
+	this_v = f * dot(ray.direction, q);
+	if (this_v < 0.0 || this_u + this_v > 1.0)
+		return;
+	this_t = f * dot(e2, q);
+	if (this_t < *t && this_t > COLLIDE_ERR)
+	{
+		*t = this_t;
+		*u = this_u;
+		*v = this_v;
+		*best_i = test_i;
+	}
+}
+
 static int hit_bvh(	const Ray ray,
-					__constant cl_float3 *V,
+					__constant float3 *V,
 					__constant Box *boxes,
 					float *t_out,
 					float *u_out,
@@ -167,42 +182,39 @@ static int hit_bvh(	const Ray ray,
 	int s_i = 1;
 	stack[0] = 0;
 
-	int best_ind = -1;
-	float best_t = FLT_MAX;
-	float bu, bv;	
+	float t = FLT_MAX;
+	float u, v;
+	int ind = -1;
 
 	Box b = NULL_BOX;
-	char pop_flag = 1;
 	while (s_i)
 	{
 		//pop
-		if (pop_flag)
-		{
-			b = boxes[s_i-- - 1];
-			pop_flag = 0;
-		}
+		b = boxes[--s_i];
 
 		//check
-		if (intersect_box(ray, b))
+		if (intersect_box(ray, b, t))
 		{
-			//leaf?
+			//leaf? brute check.
 			if (b.rind < 0)
 			{
-				brute_check(ray, b, V); //placeholder
-				pop_flag = 1;
+				const int start = -1 * b.lind;
+				const int count = -1 * b.rind;
+				for (int i = start; i < start + count; i += 3)
+					intersect_triangle(ray, V, i, &ind, &t, &u, &v);
 			}
 			else
 			{
-				b = boxes[b.lind];
+				stack[s_i++] = b.lind;
 				stack[s_i++] = b.rind;
 			}
 		}
 	}
 
-	*t_out = best_t;
-	*u_out = bu;
-	*v_out = bv;
-	return best_ind;
+	*t_out = t;
+	*u_out = u;
+	*v_out = v;
+	return ind;
 }
 
 
@@ -237,9 +249,9 @@ static int hit_bvh(	const Ray ray,
 // }
 
 static float3 trace(Ray ray,
-					__constant cl_float3 *V,
-					__constant cl_float3 *T,
-					__constant cl_float3 *N,
+					__constant float3 *V,
+					__constant float3 *T,
+					__constant float3 *N,
 					__constant Box *boxes,
 					__constant Material *mats,
 					__constant uchar *tex, 
@@ -252,7 +264,7 @@ static float3 trace(Ray ray,
 
 	const float stop_prob = 0.3f;
 
-	for (int j = 0; j < 5 || get_random(seed0, seed1) >= stop_prob; j++)
+	for (int j = 0; j < 5 || get_random(&seed0, &seed1) >= stop_prob; j++)
 	{
 		float rrFactor = j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
 		
@@ -310,9 +322,9 @@ static Ray ray_from_cam(const Camera cam, float x, float y)
 	return ray;
 }
 
-__kernel void render_kernel(__constant cl_float3 *V,
-							__constant cl_float3 *T,
-							__constant cl_float3 *N,
+__kernel void render_kernel(__constant float3 *V,
+							__constant float3 *T,
+							__constant float3 *N,
 							__constant Box *boxes,
 							__constant Material *mats,
 							__constant uchar *tex,
