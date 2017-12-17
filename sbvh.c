@@ -1,7 +1,7 @@
 #include "rt.h"
 
 #define SPLIT_COUNT 15
-#define LEAF_THRESHOLD 2
+#define LEAF_THRESHOLD 512
 
 #define MAX_START (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 #define MIN_START (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
@@ -68,6 +68,12 @@ static float SA(Bin b)
 {
 	cl_float3 span = vec_sub(b.max, b.min);
 	return 2 * span.x * span.y + 2 * span.y * span.z + 2 * span.x * span.z;
+}
+
+static float area(cl_float3 min, cl_float3 max)
+{
+	cl_float3 span = vec_sub(max, min);
+	return span.x * span.y * span.z;
 }
 
 int in_bounds(Face f, Bin b)
@@ -155,7 +161,8 @@ static Bin best_split(tree_box *B, int *count)
 				adjust_bounds(B->faces[i], &boxes[2 * j + 1]);
 	
 	//which pair is best split?
-	float parent_SA = SA((Bin){min, max});
+	float parent_SA = SA((Bin){B->min, B->max});
+	//printf("parent_SA %f\n", parent_SA);
 	float min_SA = FLT_MAX;
 	int min_ind = -1;
 	for (int i = 0; i < 3 * SPLIT_COUNT; i++)
@@ -163,14 +170,30 @@ static Bin best_split(tree_box *B, int *count)
 		if (counts[i] == 0 || counts[i] == B->count)
 			continue;
 		float score = SAH(boxes[2 * i], boxes[2 * i + 1], (float)counts[i], (float)B->count, parent_SA);
-		//printf("%f\n", score);
+		//printf("score %f for split %d\n", score, i);
 		if (score < min_SA)
 		{
 			min_SA = score;
 			min_ind = i;
 		}
 	}
-	//printf("picked split %d\n", min_ind);
+	// printf("picked split %d, %d - %d\n", min_ind, counts[min_ind], B->count - counts[min_ind]);
+	// printf("P SA %9.0f P area %12.0f\nL SA %9.0f L area %12.0f\nR SA %9.0f R area %12.0f\n", parent_SA, area(B->min, B->max),
+	// 		SA(boxes[2 * min_ind]), area(boxes[2 * min_ind].min, boxes[2 * min_ind].max),
+	// 		SA(boxes[2 * min_ind + 1]), area(boxes[2 * min_ind + 1].min, boxes[2 * min_ind + 1].max));
+	// getchar();
+	if (min_ind == -1)
+	{
+		for (int i = 0; i < B->count; i++)
+		{
+			print_vec(B->faces[i].center);
+			for (int j = 0; j < B->faces[i].shape; j++)
+				print_vec(B->faces[i].verts[j]);
+			printf("\n");
+		}
+		getchar();
+	}
+
 	*count = counts[min_ind];
 	return bins[min_ind];
 }
@@ -235,8 +258,3 @@ tree_box *super_bvh(Face *faces, int count, int *box_count)
 	*box_count = bcount;
 	return root_box;
 }
-
-// tree_box *merge_bvhs(tree_box **BVHs)
-// {
-
-// }

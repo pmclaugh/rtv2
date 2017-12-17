@@ -162,7 +162,6 @@ typedef struct bvh_struct
 Face *ply_import(char *ply_file);
 Face *object_flatten(Face *faces, int *face_count);
 tree_box *build_sbvh(Face *faces, int count, int *box_count);
-meta_box *meta_bvh(tree_box *objects, int count, int *box_count);
 
 tree_box *super_bvh(Face *faces, int count, int *box_count);
 

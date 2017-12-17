@@ -173,7 +173,11 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 		else if (strncmp(line, "vt", 2) == 0)
 			vt_count++;
 		else if (strncmp(line, "f ", 2) == 0)
-			face_count++;
+		{
+			int va, vna, vta, vb, vnb, vtb, vc, vnc, vtc, vd, vnd, vtd;
+			int count = sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d %d/%d/%d", &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc, &vd, &vtd, &vnd);
+			face_count += count == 9 ? 1 : 2;
+		}
 		else if (strncmp(line, "g ", 2) == 0)
 			obj_count++;
 	}
@@ -188,7 +192,7 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 	cl_float3 *V = calloc(v_count, sizeof(cl_float3));
 	cl_float3 *VN = calloc(vn_count, sizeof(cl_float3));
 	cl_float3 *VT = calloc(vt_count, sizeof(cl_float3));
-	Face *faces = calloc(face_count + 1, sizeof(Face));
+	Face *faces = calloc(face_count, sizeof(Face));
 
 	v_count = 0;
 	vn_count = 0;
@@ -245,29 +249,24 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 			Face f;
 			int va, vna, vta, vb, vnb, vtb, vc, vnc, vtc, vd, vnd, vtd;
 			int count = sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d %d/%d/%d", &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc, &vd, &vtd, &vnd);
-			if (count == 12)
-				f.shape = 4;
-			else if (count == 9)
-				f.shape = 3;
-			else
-				printf("problem\n");
-			f.verts[0] = V[va - 1]; 
+			f.shape = 3;
+			f.center = ORIGIN;
+			f.verts[0] = V[va - 1];
+			f.center = vec_add(f.center, f.verts[0]);
 			f.verts[1] = V[vb - 1]; 
+			f.center = vec_add(f.center, f.verts[1]);
 			f.verts[2] = V[vc - 1];
-			if (f.shape == 4)
-				f.verts[3] = V[vd - 1];
+			f.center = vec_add(f.center, f.verts[2]);
+
+			f.center = vec_scale(f.center, 1.0f / (float)f.shape);
 
 			f.norms[0] = VN[vna - 1]; 
 			f.norms[1] = VN[vnb - 1]; 
 			f.norms[2] = VN[vnc - 1]; 
-			if (f.shape == 4)
-				f.norms[3] = VN[vnd - 1];
 
 			f.tex[0] = VT[vta - 1];
 			f.tex[1] = VT[vtb - 1];
 			f.tex[2] = VT[vtc - 1];
-			if (f.shape == 4)
-				f.tex[3] = VT[vtd - 1];
 
 			f.N = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
 			if (dot(f.N, f.norms[0]) < 0)
@@ -276,6 +275,35 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 			f.mat_type = GPU_MAT_DIFFUSE;
 			f.mat_ind = mat_ind;
 			faces[face_count++] = f;
+
+			if (count == 12)
+			{
+				f.center = ORIGIN;
+				f.verts[0] = V[va - 1];
+				f.center = vec_add(f.center, f.verts[0]);
+				f.verts[1] = V[vc - 1]; 
+				f.center = vec_add(f.center, f.verts[1]);
+				f.verts[2] = V[vd - 1];
+				f.center = vec_add(f.center, f.verts[2]);
+
+				f.center = vec_scale(f.center, 1.0f / (float)f.shape);
+
+				f.norms[0] = VN[vna - 1]; 
+				f.norms[1] = VN[vnc - 1]; 
+				f.norms[2] = VN[vnd - 1]; 
+
+				f.tex[0] = VT[vta - 1];
+				f.tex[1] = VT[vtc - 1];
+				f.tex[2] = VT[vtd - 1];
+
+				f.N = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
+				if (dot(f.N, f.norms[0]) < 0)
+					f.N = vec_rev(f.N);
+				f.smoothing = smoothing;
+				f.mat_type = GPU_MAT_DIFFUSE;
+				f.mat_ind = mat_ind;
+				faces[face_count++] = f;
+			}
 		}
 
 	}
