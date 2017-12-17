@@ -117,12 +117,12 @@ void center_span(tree_box *B, cl_float3 *out_min, cl_float3 *out_max)
 
 	for (int i = 0; i < B->count; i++)
 	{
-		min.x = fmin(min.x, B->faces[i].center.x);
-		max.x = fmax(max.x, B->faces[i].center.x);
-		min.y = fmin(min.y, B->faces[i].center.y);
-		max.y = fmax(max.y, B->faces[i].center.y);
-		min.z = fmin(min.z, B->faces[i].center.z);
-		max.z = fmax(max.z, B->faces[i].center.z);
+		min.x = fmin(min.x, B->faces[B->face_ind + i].center.x);
+		max.x = fmax(max.x, B->faces[B->face_ind + i].center.x);
+		min.y = fmin(min.y, B->faces[B->face_ind + i].center.y);
+		max.y = fmax(max.y, B->faces[B->face_ind + i].center.y);
+		min.z = fmin(min.z, B->faces[B->face_ind + i].center.z);
+		max.z = fmax(max.z, B->faces[B->face_ind + i].center.z);
 	}
 	*out_min = min;
 	*out_max = max;
@@ -152,13 +152,13 @@ static Bin best_split(tree_box *B, int *count)
 	
 	for (int i = 0; i < B->count; i++)
 		for (int j = 0; j < (3 * SPLIT_COUNT); j++)
-			if (in_bounds(B->faces[i], bins[j]))
+			if (in_bounds(B->faces[B->face_ind + i], bins[j]))
 			{
 				counts[j]++;
-				adjust_bounds(B->faces[i], &boxes[2 * j]);
+				adjust_bounds(B->faces[B->face_ind + i], &boxes[2 * j]);
 			}
 			else
-				adjust_bounds(B->faces[i], &boxes[2 * j + 1]);
+				adjust_bounds(B->faces[B->face_ind + i], &boxes[2 * j + 1]);
 	
 	//which pair is best split?
 	float parent_SA = SA((Bin){B->min, B->max});
@@ -186,9 +186,9 @@ static Bin best_split(tree_box *B, int *count)
 	{
 		for (int i = 0; i < B->count; i++)
 		{
-			print_vec(B->faces[i].center);
-			for (int j = 0; j < B->faces[i].shape; j++)
-				print_vec(B->faces[i].verts[j]);
+			print_vec(B->faces[B->face_ind + i].center);
+			for (int j = 0; j < B->faces[B->face_ind + i].shape; j++)
+				print_vec(B->faces[B->face_ind + i].verts[j]);
 			printf("\n");
 		}
 		getchar();
@@ -204,11 +204,11 @@ static void bin_sort(tree_box *B, Bin split, int count)
 	int in_index = 0;
 	int out_index = count;
 	for (int i = 0; i < B->count; i++)
-		if (in_bounds(B->faces[i], split))
-			scratch[in_index++] = B->faces[i];
+		if (in_bounds(B->faces[B->face_ind + i], split))
+			scratch[in_index++] = B->faces[B->face_ind + i];
 		else
-			scratch[out_index++] = B->faces[i];
-	memcpy(B->faces, scratch, B->count * sizeof(Face));
+			scratch[out_index++] = B->faces[B->face_ind + i];
+	memcpy(&B->faces[B->face_ind], scratch, B->count * sizeof(Face));
 	free(scratch);
 }
 
@@ -220,13 +220,15 @@ void new_split(tree_box *B)
 
 	tree_box *L = calloc(1, sizeof(tree_box));
 	L->faces = B->faces;
+	L->face_ind = B->face_ind;
 	L->count = count;
 	set_bounds_box(L);
 	B->left = L;
 
 	tree_box *R = calloc(1, sizeof(tree_box));
-	R->faces = &B->faces[count];
+	R->faces = B->faces;
 	R->count = B->count - count;
+	R->face_ind = B->face_ind + count;
 	set_bounds_box(R);
 	B->right = R;
 }
@@ -236,7 +238,9 @@ tree_box *super_bvh(Face *faces, int count, int *box_count)
 {
 	tree_box *root_box = calloc(1, sizeof(tree_box));
 	root_box->faces = faces;
+	root_box->face_ind = 0;
 	root_box->count = count;
+	root_box->parent = NULL;
 	set_bounds_box(root_box);
 
 	tree_box *Q = root_box;
@@ -256,5 +260,47 @@ tree_box *super_bvh(Face *faces, int count, int *box_count)
 
 	printf("%d boxes\n", bcount);
 	*box_count = bcount;
+
 	return root_box;
+}
+
+gpu_bin *flatten_bvh(tree_box *bvh, int box_count)
+{
+	gpu_bin *bins = calloc(box_count, sizeof(gpu_bin));
+	tree_box *Q = bvh;
+	tree_box *B = NULL;
+
+	int i = 0;
+	while ((B = pop(&Q)))
+	{
+		cl_float3 min = B->min;
+		cl_float3 max = B->max;
+		bins[i] = (gpu_bin){min.x, min.y, min.z, 0, max.x, max.y, max.z, 0};
+
+		if (B->left) // all nodes either have left AND right or neither.
+		{
+			B->left->parent = &bins[i];
+			push(&Q, B->left);
+			B->right->parent = &bins[i];
+			push(&Q, B->right);
+		}
+		else
+		{
+			bins[i].lind = -3 * B->face_ind;
+			bins[i].rind = -1 * B->count;
+		}
+		if (B->parent)
+		{
+			if (B->parent->lind)
+				B->parent->rind = i;
+			else
+				B->parent->lind = i;
+		}
+		i++;
+	}
+
+	//well, it's a little weird, but i've achieved my goal of a 32-byte box size.
+	//NB i need to check if max.w < 0 because there will be exactly one leaf where min.w == 0
+
+	return bins;
 }

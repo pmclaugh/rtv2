@@ -116,13 +116,6 @@ typedef struct s_face
 	struct s_face *next;
 }				Face;
 
-typedef struct compact_box
-{
-	cl_float3 min;
-	cl_float3 max;
-	cl_int key;
-}				C_Box;
-
 typedef struct s_Box
 {
 	cl_float3 min; //spatial bounds of box
@@ -133,19 +126,17 @@ typedef struct s_Box
 	cl_int children_count;
 }				Box;
 
-typedef struct s_new_scene
+typedef struct s_gpu_bin
 {
-	Material *materials;
-	int mat_count;
-	Face *faces;
-	int face_count;
-	Box *boxes;
-	int box_count;
-	C_Box *c_boxes;
-	int c_box_count;
-}				Scene;
-
-/////New stuff
+	cl_float minx;
+	cl_float miny;
+	cl_float minz;
+	cl_int lind;
+	cl_float maxx;
+	cl_float maxy;
+	cl_float maxz;
+	cl_int rind;
+}				gpu_bin;
 
 typedef struct bvh_struct
 {
@@ -153,11 +144,60 @@ typedef struct bvh_struct
 	cl_float3 max; //spatial boundary
 	struct bvh_struct *left; 
 	struct bvh_struct *right;
+	gpu_bin *parent;
 	Face *faces;
+	int face_ind;
 	int count;
 	//maybe more?
 	struct bvh_struct *next; //for tree building not for tracing
 }				tree_box;
+
+typedef struct s_new_scene
+{
+	Material *materials;
+	int mat_count;
+	Face *faces;
+	int face_count;
+	tree_box *bins;
+	int bin_count;
+}				Scene;
+
+typedef struct s_gpu_context
+{
+	cl_context *contexts;
+	cl_command_queue *commands;
+	cl_program *programs;
+	cl_uint numPlatforms;
+	cl_uint numDevices;
+	cl_platform_id *platform;
+}				gpu_context;
+
+typedef struct s_gpu_scene
+{
+	cl_float3 *V;
+	cl_float3 *T;
+	cl_float3 *N;
+	cl_uint tri_count;
+
+	gpu_bin *bins;
+	cl_uint bin_count;
+
+	cl_uint *seeds;
+	cl_uint seed_count;
+}				gpu_scene;
+
+typedef struct s_gpu_mat
+{
+	cl_float3 Ka;
+	cl_float3 Kd;
+	cl_float3 Ks;
+	cl_float3 Ke;
+	cl_int tex_ind;
+	cl_int tex_w;
+	cl_int tex_h;
+}				gpu_mat;
+
+gpu_bin *flatten_bvh(tree_box *bvh, int box_count);
 
 Face *ply_import(char *ply_file);
 Face *object_flatten(Face *faces, int *face_count);
