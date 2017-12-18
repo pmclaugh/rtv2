@@ -231,6 +231,8 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	clEnqueueWriteBuffer(CL->commands[0], d_bins, CL_TRUE, 0, sizeof(gpu_bin) * scene->bin_count, scene->bins, 0, NULL, NULL);
 	clEnqueueWriteBuffer(CL->commands[0], d_tex, CL_TRUE, 0, sizeof(cl_uchar) * scene->tex_size, scene->tex, 0, NULL, NULL);
 
+	printf("per-platform copies done\n");
+
 	//per-device pointers
 	cl_mem *d_outputs;
 	cl_mem *d_seeds;
@@ -243,6 +245,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	size_t resolution = xdim * ydim;
 	size_t groupsize = 256;
 	size_t samples = SAMPLES_PER_DEVICE;
+	size_t width = xdim;
 
 	//per-device allocs and copies
 	for (int i = 0; i < d; i++)
@@ -252,31 +255,35 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 		d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE, sizeof(cl_float3) * resolution, NULL, NULL);
 	}
 
+	printf("per-device copies done\n");
 
 	cl_kernel render = clCreateKernel(CL->programs[0], "render_kernel", NULL);
+	printf("made kernel\n");
 
 	//per-platform args
 	clSetKernelArg(render, 0, sizeof(cl_mem), &d_V);
 	clSetKernelArg(render, 1, sizeof(cl_mem), &d_T);
 	clSetKernelArg(render, 2, sizeof(cl_mem), &d_N);
-	clSetKernelArg(render, 4, sizeof(cl_mem), &d_bins);
-	clSetKernelArg(render, 5, sizeof(cl_mem), &d_mats);
-	clSetKernelArg(render, 6, sizeof(cl_mem), &d_tex);
-	clSetKernelArg(render, 7, sizeof(cl_float3), &cam.origin);
-	clSetKernelArg(render, 8, sizeof(cl_float3), &cam.focus);
-	clSetKernelArg(render, 9, sizeof(cl_float3), &cam.d_x);
-	clSetKernelArg(render, 10, sizeof(cl_float3), &cam.d_y);
-	clSetKernelArg(render, 11, sizeof(cl_uint), &samples);
-	clSetKernelArg(render, 12, sizeof(cl_uint), &xdim);
+	clSetKernelArg(render, 3, sizeof(cl_mem), &d_bins);
+	clSetKernelArg(render, 4, sizeof(cl_mem), &d_mats);
+	clSetKernelArg(render, 5, sizeof(cl_mem), &d_tex);
+	clSetKernelArg(render, 6, sizeof(cl_float3), &cam.origin);
+	clSetKernelArg(render, 7, sizeof(cl_float3), &cam.focus);
+	clSetKernelArg(render, 8, sizeof(cl_float3), &cam.d_x);
+	clSetKernelArg(render, 9, sizeof(cl_float3), &cam.d_y);
+	clSetKernelArg(render, 10, sizeof(cl_uint), &samples);
+	clSetKernelArg(render, 11, sizeof(cl_uint), &width);
 
 	//per-device args and launch
+	printf("about to launch\n");
 	cl_event done[CL->numDevices];
 	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
 	
 	for (int i = 0; i < d; i++)
 	{
-		clSetKernelArg(render, 13, sizeof(cl_mem), &d_seeds[i]);
-		clSetKernelArg(render, 14, sizeof(cl_mem), &d_outputs[i]);
+		printf("device %d\n", i);
+		clSetKernelArg(render, 12, sizeof(cl_mem), &d_seeds[i]);
+		clSetKernelArg(render, 13, sizeof(cl_mem), &d_outputs[i]);
 		outputs[i] = calloc(resolution, sizeof(cl_float3));
 
 		clEnqueueNDRangeKernel(CL->commands[i], render, 1, 0, &resolution, &groupsize, 0, 0, &done[i]);
