@@ -6,6 +6,23 @@
 # define quit_key 12
 #endif
 
+#define xdim 512
+#define ydim 512
+
+typedef struct s_param
+{
+	void *mlx;
+	void *win;
+	void *img;
+	int x;
+	int y;
+
+	Scene *scene;
+	t_camera cam;
+	cl_float3 *pixels;
+	int samplecount;
+}				t_param;
+
 //THIS DOESNT WORK RIGHT, JUST FOR TESTING
 #define H_FOV M_PI_2 * 60.0 / 90.0
 void init_camera(t_camera *camera, int xres, int yres)
@@ -31,6 +48,17 @@ void init_camera(t_camera *camera, int xres, int yres)
 	camera->origin = vec_sub(camera->origin, vec_scale(camera_y, camera->height / 2.0));
 }
 
+int key_hook(int keycode, void *param)
+{
+	t_param *p = (t_param *)param;
+	if (keycode == quit_key)
+	{
+		mlx_destroy_image(p->mlx, p->img);
+		mlx_destroy_window(p->mlx, p->win);
+		exit(0);
+	}
+	return (1);
+}
 
 int main(int ac, char **av)
 {
@@ -41,12 +69,21 @@ int main(int ac, char **av)
 	// int box_count;
 	// tree_box *bun_bvh =  super_bvh(bunny, count, &box_count);
 	
+	// printf("CL_INVALID_PROGRAM_EXECUTABLE %d\n", CL_INVALID_PROGRAM_EXECUTABLE);
+	// printf("CL_INVALID_COMMAND_QUEUE %d\n", CL_INVALID_COMMAND_QUEUE);
+	// printf("CL_INVALID_KERNEL %d\n", CL_INVALID_KERNEL);
+	// printf("CL_INVALID_CONTEXT %d\n", CL_INVALID_CONTEXT);
+	// printf("CL_INVALID_KERNEL_ARGS %d\n", CL_INVALID_KERNEL_ARGS);
+	// printf("CL_INVALID_WORK_DIMENSION %d\n", CL_INVALID_WORK_DIMENSION);
+	// printf("CL_INVALID_GLOBAL_WORK_SIZE %d\n", CL_INVALID_GLOBAL_WORK_SIZE);
 
 	Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 	int bin_count;
 	tree_box *sponza_bvh = super_bvh(sponza->faces, sponza->face_count, &bin_count);
 	sponza->bins = sponza_bvh;
 	sponza->bin_count = bin_count;
+
+	flatten_bvh(sponza_bvh, bin_count);
 
 	t_camera cam;
 	cam.center = (cl_float3){800.0, 600.0, 0.0};
@@ -55,5 +92,17 @@ int main(int ac, char **av)
 	cam.height = 1.0;
 	init_camera(&cam, 512, 512);
 	//printf("%lu\n", sizeof(gpu_bin));
-	gpu_render(sponza, cam, 512, 512);
+	cl_double3 *pixels = gpu_render(sponza, cam, 512, 512);
+
+	void *mlx = mlx_init();
+	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
+	void *img = mlx_new_image(mlx, xdim, ydim);
+	draw_pixels(img, xdim, ydim, pixels);
+	mlx_put_image_to_window(mlx, win, img, 0, 0);
+
+	t_param *param = calloc(1, sizeof(t_param));
+	*param = (t_param){mlx, win, img, xdim, ydim, sponza, cam, NULL, 0};
+	
+	mlx_key_hook(win, key_hook, param);
+	mlx_loop(mlx);
 }

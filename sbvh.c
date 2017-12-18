@@ -1,7 +1,7 @@
 #include "rt.h"
 
 #define SPLIT_COUNT 15
-#define LEAF_THRESHOLD 512
+#define LEAF_THRESHOLD 8
 
 #define MAX_START (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 #define MIN_START (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
@@ -56,7 +56,7 @@ static void set_bounds(Face *faces, int count, cl_float3 *min, cl_float3 *max)
 
 static void set_bounds_box(tree_box *B)
 {
-	set_bounds(B->faces, B->count, &B->min, &B->max);
+	set_bounds(&B->faces[B->face_ind], B->count, &B->min, &B->max);
 }
 
 typedef struct s_bin {
@@ -208,7 +208,7 @@ static void bin_sort(tree_box *B, Bin split, int count)
 			scratch[in_index++] = B->faces[B->face_ind + i];
 		else
 			scratch[out_index++] = B->faces[B->face_ind + i];
-	memcpy(&B->faces[B->face_ind], scratch, B->count * sizeof(Face));
+	memcpy(&(B->faces[B->face_ind]), scratch, B->count * sizeof(Face));
 	free(scratch);
 }
 
@@ -300,7 +300,14 @@ gpu_bin *flatten_bvh(tree_box *bvh, int box_count)
 	}
 
 	//well, it's a little weird, but i've achieved my goal of a 32-byte box size.
-	//NB i need to check if max.w < 0 because there will be exactly one leaf where min.w == 0
+	
+	// for (int i = 0; i < box_count; i++)
+	// {
+	// 	printf("\nbin %d\n", i);
+	// 	printf("min: %.0f %.0f %.0f\n", bins[i].minx, bins[i].miny, bins[i].minz);
+	// 	printf("max: %.0f %.0f %.0f\n", bins[i].maxx, bins[i].maxy, bins[i].maxz);
+	// 	printf("lind %d rind %d\n", bins[i].lind, bins[i].rind);
+	// }
 
 	return bins;
 }

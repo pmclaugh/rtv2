@@ -216,7 +216,7 @@ tree_box *super_bvh(Face *faces, int count, int *box_count);
 void translate(Face *list, cl_float3 displacement);
 
 ////Old stuff
-void draw_pixels(void *img, int xres, int yres, cl_float3 *pixels);
+void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);
 
 void init_camera(t_camera *camera, int xres, int yres);
 

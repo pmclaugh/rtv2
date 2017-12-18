@@ -8,7 +8,7 @@ typedef struct s_data_addr
 	char *imgbuff;
 }				t_data_addr;
 
-int color_to_int(cl_float3 c)
+int color_to_int(cl_double3 c)
 {
 	c.x *= 255.0;
 	c.y *= 255.0;
@@ -24,7 +24,7 @@ int color_to_int(cl_float3 c)
 	return color;
 }
 
-void	draw_img_point(void *img, int x, int y, cl_float3 color)
+void	draw_img_point(void *img, int x, int y, cl_double3 color)
 {
 	static t_data_addr *addr;
 
@@ -43,7 +43,7 @@ void	draw_img_point(void *img, int x, int y, cl_float3 color)
 		addr->imgbuff[y * addr->size_line + (x * addr->bpp + i)] = ((unsigned char *)&c)[i];
 }
 
-void draw_pixels(void *img, int xres, int yres, cl_float3 *pixels)
+void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels)
 {
 	for (int y = 0; y < yres; y++)
 		for (int x = 0; x < xres; x++)
