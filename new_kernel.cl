@@ -1,7 +1,7 @@
 
 #define PI 3.14159265359f
 #define REFRACTIVE_INDEX 1.5
-#define COLLIDE_ERR 0.0001f
+#define COLLIDE_ERR 0.00001f
 #define NORMAL_SHIFT 0.0003f
 
 #define DIFFUSE_CONSTANT 0.7
@@ -486,6 +486,7 @@ static float3 trace(Ray ray, __constant Object *scene, __constant Material *mats
 
 		// color = (N + 1.0f) / 2.0f;
 		// break;
+		//N = geom_N;
 
 		float3 new_dir;
 

@@ -101,7 +101,7 @@ int main(int ac, char **av)
 	if (ac <= 3)
 	{
 		//default view
-		cam.center = (cl_float3){800.0, 600.0, 0.0};
+		cam.center = (cl_float3){800.0, 250.0, 0.0};
 		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 	}
 	//pointed at hanging vase
@@ -130,6 +130,13 @@ int main(int ac, char **av)
 	{
 		cam.center = (cl_float3){700.0, 500.0, 350.0};
 		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	}
+
+	//2nd floor hall right facing center
+	if (strcmp(av[3], "hall2") == 0)
+	{
+		cam.center = (cl_float3){500.0, 500.0, 380.0};
+		cam.normal = (cl_float3){0.0, 0.0, -1.0};
 	}
 
 	//rounded column and some drape
