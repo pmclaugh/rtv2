@@ -89,20 +89,24 @@ static int inside_box(const float3 pt, const Box box) //currently unused. origin
 }
 
 //intersect_box
-static const int intersect_box(const Ray ray, const Box b)
+static const int intersect_box(const Ray ray, const Box b, float t)
 {
-	//the if tmin >=t checks are new, should be fine, should help. will toggle to see effect.
-
+	int inside = inside_box(ray.origin, b);
 	float tx0 = (b.minx - ray.origin.x) * ray.inv_dir.x;
 	float tx1 = (b.maxx - ray.origin.x) * ray.inv_dir.x;
 	float tmin = fmin(tx0, tx1);
 	float tmax = fmax(tx0, tx1);
+
+	if (!inside && tmin > t)
+		return 0;
 
 	float ty0 = (b.miny - ray.origin.y) * ray.inv_dir.y;
 	float ty1 = (b.maxy - ray.origin.y) * ray.inv_dir.y;
 	float tymin = fmin(ty0, ty1);
 	float tymax = fmax(ty0, ty1);
 
+	if (!inside && tymin > t)
+		return 0;
 
 	if ((tmin >= tymax) || (tymin >= tmax))
 		return (0);
@@ -114,6 +118,9 @@ static const int intersect_box(const Ray ray, const Box b)
 	float tz1 = (b.maxz - ray.origin.z) * ray.inv_dir.z;
 	float tzmin = fmin(tz0, tz1);
 	float tzmax = fmax(tz0, tz1);
+
+	if (!inside && tzmin > t)
+		return 0;
 
 	if ((tmin >= tzmax) || (tzmin >= tmax))
 		return (0);
@@ -184,7 +191,7 @@ static int hit_bvh(	const Ray ray,
 		b = boxes[stack[--s_i]];
 
 		//check
-		if (intersect_box(ray, b))
+		if (intersect_box(ray, b, t))
 		{
 			//leaf? brute check.
 			if (b.rind < 0)

@@ -1,7 +1,7 @@
 #include "rt.h"
 #include <fcntl.h>
 
-#define SAMPLES_PER_DEVICE 40
+#define SAMPLES_PER_DEVICE 70
 
 char *load_cl_file(char *file)
 {
