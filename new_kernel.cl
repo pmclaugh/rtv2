@@ -79,7 +79,7 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 	return (res.f - 2.0f) / 2.0f;
 }
 
-static int inside_box(const float3 pt, const Box box)
+static int inside_box(const float3 pt, const Box box) //currently unused. originally to provide minor speedup in tree traversal
 {
 	if (box.minx <= pt.x && pt.x <= box.maxx)
 		if (box.miny <= pt.y && pt.y <= box.maxy)
@@ -186,14 +186,14 @@ static int hit_bvh(	const Ray ray,
 	float u, v;
 	int ind = -1;
 
-	Box b = NULL_BOX;
+	Box b;
 	while (s_i)
 	{
 		//pop
 		b = boxes[--s_i];
 
 		//check
-		if (intersect_box(ray, b, t))
+		if (intersect_box(ray, b, t)) // t used for early fail. if we've hit a triangle closer than anything in the box why bother?
 		{
 			//leaf? brute check.
 			if (b.rind < 0)
@@ -201,7 +201,7 @@ static int hit_bvh(	const Ray ray,
 				const int start = -1 * b.lind;
 				const int count = -1 * b.rind;
 				for (int i = start; i < start + count; i += 3)
-					intersect_triangle(ray, V, i, &ind, &t, &u, &v);
+					intersect_triangle(ray, V, i, &ind, &t, &u, &v); //will update if success
 			}
 			else
 			{
@@ -217,8 +217,8 @@ static int hit_bvh(	const Ray ray,
 	return ind;
 }
 
+//This was KG, needs updated to VNT
 
-	//This was KG, needs updated to VNT
 // static float3 fetch_color(const float u, const float v, int quadflag, const Object hit, const Material mat, __constant uchar *tex)
 // {
 // 	if (mat.height == 0 && mat.width == 0)
@@ -281,11 +281,9 @@ static float3 trace(Ray ray,
 
 		float3 hit_point = ray.origin + ray.direction * t;
 
-		//get normal at collision point
+		//get normal at collision point. geom_N is used for the normal_shift step, but might not be necessary.
 		float3 N = normalize((1 - u - v) * N[hit_ind] + u * N[hit_ind +1] + v * N[hit_ind + 2]);
 		float3 geom_N = normalize(cross(V[hit_ind + 1] - V[hit_ind], V[hit_ind + 2] - V[hit_ind]));
-
-		float3 new_dir;
 
 		//flip normals if necessary
 		N = dot(ray.direction, N) < 0.0f ? N : N * (-1.0f);
@@ -302,7 +300,7 @@ static float3 trace(Ray ray,
 		float theta = 2 * PI * get_random(&seed0, &seed1);
 
 		//combine for new direction
-		new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
+		float3 new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + N * sqrt(max(0.0f, 1.0f - rsq)));
 		mask *= dot(new_dir, N) * rrFactor; ////////////// fetch_color goes here
 		ray.origin = hit_point + geom_N * NORMAL_SHIFT;
 
@@ -328,13 +326,13 @@ __kernel void render_kernel(__constant float3 *V,
 							__constant Box *boxes,
 							__constant Material *mats,
 							__constant uchar *tex,
-							__global uint* seeds,
 							const float3 cam_origin,
 							const float3 cam_focus,
 							const float3 cam_dx,
 							const float3 cam_dy,
 							const uint sample_count,
-							const int width,
+							const uint width,
+							__global uint* seeds,
 							__global float3* output)
 {
 	unsigned int pixel_id = get_global_id(0);

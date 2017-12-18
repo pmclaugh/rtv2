@@ -172,20 +172,6 @@ typedef struct s_gpu_context
 	cl_platform_id *platform;
 }				gpu_context;
 
-typedef struct s_gpu_scene
-{
-	cl_float3 *V;
-	cl_float3 *T;
-	cl_float3 *N;
-	cl_uint tri_count;
-
-	gpu_bin *bins;
-	cl_uint bin_count;
-
-	cl_uint *seeds;
-	cl_uint seed_count;
-}				gpu_scene;
-
 typedef struct s_gpu_mat
 {
 	cl_float3 Ka;
@@ -196,6 +182,28 @@ typedef struct s_gpu_mat
 	cl_int tex_w;
 	cl_int tex_h;
 }				gpu_mat;
+
+typedef struct s_gpu_scene
+{
+	cl_float3 *V;
+	cl_float3 *T;
+	cl_float3 *N;
+	cl_uint tri_count;
+
+	gpu_bin *bins;
+	cl_uint bin_count;
+
+	cl_uchar *tex;
+	cl_uint tex_size;
+
+	gpu_mat *mats;
+	cl_uint mat_count;
+
+	cl_uint *seeds;
+	cl_uint seed_count;
+}				gpu_scene;
+
+
 
 gpu_bin *flatten_bvh(tree_box *bvh, int box_count);
 
@@ -214,7 +222,7 @@ void init_camera(t_camera *camera, int xres, int yres);
 
 Scene *scene_from_obj(char *rel_path, char *filename);
 
-cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim);
+cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim);
 
 void old_bvh(Scene *S);
 Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
