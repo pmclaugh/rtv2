@@ -1,7 +1,7 @@
 NAME = raytrace
 
-SRCS = vec.c obj_import.c main.c mlx_stuff.c sbvh.c ply_import.c scene.c object_transform.c morton.c new_gpu_launch.c
-OBJS = vec.o obj_import.o main.o mlx_stuff.o sbvh.o ply_import.o scene.o object_transform.o morton.o new_gpu_launch.o
+SRCS = vec.c obj_import.c main.c mlx_stuff.c sbvh.c ply_import.c scene.c object_transform.c new_gpu_launch.c
+OBJS = vec.o obj_import.o main.o mlx_stuff.o sbvh.o ply_import.o scene.o object_transform.o new_gpu_launch.o
 
 
 FLAGS = -m64 -O3 -flto -march=native -funroll-loops

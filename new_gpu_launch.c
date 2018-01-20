@@ -1,7 +1,7 @@
 #include "rt.h"
 #include <fcntl.h>
 
-#define SAMPLES_PER_DEVICE 70
+#define SAMPLES_PER_DEVICE 50
 
 char *load_cl_file(char *file)
 {
@@ -173,6 +173,9 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution)
 		free(outputs[i]);
 	}
 
+	// for (int i = 0; i < 10; i++)
+	// 	printf("%lf %lf %lf\n", output_sum[i].x, output_sum[i].y, output_sum[i].z);
+
 	//average samples and apply tone mapping
 	double Lw = 0.0;
 	for (int j = 0;j < resolution; j++)
@@ -182,7 +185,9 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution)
 		output_sum[j].y *= scale;
 		output_sum[j].z *= scale;
 
-		Lw += log(0.1 + 0.2126 * output_sum[j].x + 0.7152 * output_sum[j].y + 0.0722 * output_sum[j].z);
+		double this_lw = log(0.1 + 0.2126 * output_sum[j].x + 0.7152 * output_sum[j].y + 0.0722 * output_sum[j].z);
+		if (this_lw == this_lw)
+			Lw += this_lw;
 	}
 	printf("Lw is %lf\n", Lw);
 	

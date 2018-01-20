@@ -1,11 +1,11 @@
 
 #define PI 3.14159265359f
-#define REFRACTIVE_INDEX 1.5
+#define REFRACTIVE_INDEX 1.5f
 #define COLLIDE_ERR 0.0001f
 #define NORMAL_SHIFT 0.0003f
 
-#define DIFFUSE_CONSTANT 0.7
-#define SPECULAR_CONSTANT 0.9
+#define DIFFUSE_CONSTANT 0.7f
+#define SPECULAR_CONSTANT 0.9f
 
 #define SPHERE 1
 #define TRIANGLE 3
@@ -18,7 +18,10 @@
 
 #define BLACK (float3)(0.0f, 0.0f, 0.0f)
 #define WHITE (float3)(1.0f, 1.0f, 1.0f)
-#define GREY (float3)(0.5, 0.5, 0.5)
+#define GREY (float3)(0.5f, 0.5f, 0.5f)
+
+#define SUN (float3)(0.0f, 3000.0f, 0.0f)
+#define SUN_BRIGHTNESS 30000.0f
 
 typedef struct s_ray {
 	float3 origin;
@@ -128,7 +131,7 @@ static const int intersect_box(const Ray ray, const Box b, float t)
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
 
-	if (tmin <= 0.0 && tmax <= 0.0)
+	if (tmin <= 0.0f && tmax <= 0.0f)
 		return (0);
 	return (1);
 }
@@ -152,11 +155,11 @@ static void intersect_triangle(const Ray ray, __global float3 *V, int test_i, in
 	float f = 1.0f / a;
 	float3 s = ray.origin - v0;
 	this_u = f * dot(s, h);
-	if (this_u < 0.0 || this_u > 1.0)
+	if (this_u < 0.0f || this_u > 1.0f)
 		return;
 	float3 q = cross(s, e1);
 	this_v = f * dot(ray.direction, q);
-	if (this_v < 0.0 || this_u + this_v > 1.0)
+	if (this_v < 0.0f || this_u + this_v > 1.0f)
 		return;
 	this_t = f * dot(e2, q);
 	if (this_t < *t && this_t > COLLIDE_ERR)
@@ -275,9 +278,9 @@ static float3 trace(Ray ray,
 
 	const float stop_prob = 0.3f;
 
-	for (int j = 0; j < 5 || get_random(seed0, seed1) >= stop_prob; j++)
+	for (int j = 0; j < 8 ; j++)
 	{
-		float rrFactor = j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
+		float rrFactor = 1.0f;
 		
 		//collide
 		float t, u, v;
@@ -285,8 +288,8 @@ static float3 trace(Ray ray,
 
 		if (hit_ind == -1)
 		{
-			if (j != 0)
-				color = 20000.0f * mask;
+			// if (j != 0)
+			// 	color = mask * SUN_BRIGHTNESS;
 			break;
 		}
 
@@ -299,6 +302,17 @@ static float3 trace(Ray ray,
 		//flip normals if necessary
 		sample_N = dot(ray.direction, sample_N) < 0.0f ? sample_N : sample_N * (-1.0f);
 		geom_N = dot(ray.direction, geom_N) < 0.0f ? geom_N : geom_N * (-1.0f);
+
+		// (jank) NEE
+		Ray to_sun;
+		to_sun.origin = hit_point + sample_N * NORMAL_SHIFT;
+		float3 sundir = normalize(SUN - to_sun.origin);
+		to_sun.direction = sundir;
+		to_sun.inv_dir = 1.0f / sundir;
+		float ts, us, vs;
+		int sun_hit = hit_bvh(to_sun, V, boxes, &ts, &us, &vs);
+		if (sun_hit == -1)
+			color += SUN_BRIGHTNESS * mask * dot(-1.0f * ray.direction, sample_N);
 
 		//local orthonormal system
 		float3 axis = fabs(sample_N.x) > fabs(sample_N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -313,8 +327,8 @@ static float3 trace(Ray ray,
 		//combine for new direction
 		float3 new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - rsq)));
 		mask *= dot(new_dir, sample_N) * rrFactor; ////////////// fetch_color goes here
+		
 		ray.origin = hit_point + geom_N * NORMAL_SHIFT;
-
 		ray.direction = new_dir;
 		ray.inv_dir = 1.0f / new_dir;
 	}
