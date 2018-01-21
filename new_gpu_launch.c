@@ -19,6 +19,7 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 	V = calloc(s->face_count * 3, sizeof(cl_float3));
 	T = calloc(s->face_count * 3, sizeof(cl_float3));
 	N = calloc(s->face_count * 3, sizeof(cl_float3));
+	cl_int *M = calloc(s->face_count, sizeof(cl_int));
 
 	for (int i = 0; i < s->face_count; i++)
 	{
@@ -35,6 +36,8 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 		N[i * 3] = f.norms[0];
 		N[i * 3 + 1] = f.norms[1];
 		N[i * 3 + 2] = f.norms[2];
+
+		M[i] = f.mat_ind;
 	}
 
 	//SEEDS
@@ -89,7 +92,7 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 
 	//COMBINE
 	gpu_scene *gs = calloc(1, sizeof(gpu_scene));
-	*gs = (gpu_scene){V, T, N, s->face_count * 3, flat_bvh, s->bin_count, h_tex, tex_size, simple_mats, s->mat_count, h_seeds, xdim * ydim * 2 * CL->numDevices * CL->numPlatforms};
+	*gs = (gpu_scene){V, T, N, M, s->face_count * 3, flat_bvh, s->bin_count, h_tex, tex_size, simple_mats, s->mat_count, h_seeds, xdim * ydim * 2 * CL->numDevices * CL->numPlatforms};
 	return gs;
 }
 
@@ -231,6 +234,10 @@ cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution)
 		output_sum[j].x *= scale;
 		output_sum[j].y *= scale;
 		output_sum[j].z *= scale;
+
+		output_sum[j].x = output_sum[j].x / (1.0f + output_sum[j].x);
+		output_sum[j].y = output_sum[j].y / (1.0f + output_sum[j].y);
+		output_sum[j].z = output_sum[j].z / (1.0f + output_sum[j].z);
 	}
 
 	return output_sum;
@@ -247,6 +254,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	cl_mem d_V;
 	cl_mem d_T;
 	cl_mem d_N;
+	cl_mem d_M;
 	cl_mem d_bins;
 	cl_mem d_mats;
 	cl_mem d_tex;
@@ -257,6 +265,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	d_V = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_float3) * scene->tri_count, NULL, NULL);
 	d_T = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_float3) * scene->tri_count, NULL, NULL);
 	d_N = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_float3) * scene->tri_count, NULL, NULL);
+	d_M = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_int) * scene->tri_count / 3, NULL, NULL);
 	d_mats = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(gpu_mat) * scene->mat_count, NULL, NULL);
 	d_bins = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(gpu_bin) * scene->bin_count, NULL, NULL);
 	d_tex = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_uchar) * scene->tex_size, NULL, NULL);
@@ -267,6 +276,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	clEnqueueWriteBuffer(CL->commands[0], d_V, CL_TRUE, 0, sizeof(cl_float3) * scene->tri_count, scene->V, 0, NULL, NULL);
 	clEnqueueWriteBuffer(CL->commands[0], d_T, CL_TRUE, 0, sizeof(cl_float3) * scene->tri_count, scene->T, 0, NULL, NULL);
 	clEnqueueWriteBuffer(CL->commands[0], d_N, CL_TRUE, 0, sizeof(cl_float3) * scene->tri_count, scene->N, 0, NULL, NULL);
+	clEnqueueWriteBuffer(CL->commands[0], d_M, CL_TRUE, 0, sizeof(cl_int) * scene->tri_count / 3, scene->M, 0, NULL, NULL);
 	clEnqueueWriteBuffer(CL->commands[0], d_mats, CL_TRUE, 0, sizeof(gpu_mat) * scene->mat_count, scene->mats, 0, NULL, NULL);
 	clEnqueueWriteBuffer(CL->commands[0], d_bins, CL_TRUE, 0, sizeof(gpu_bin) * scene->bin_count, scene->bins, 0, NULL, NULL);
 	clEnqueueWriteBuffer(CL->commands[0], d_tex, CL_TRUE, 0, sizeof(cl_uchar) * scene->tex_size, scene->tex, 0, NULL, NULL);
@@ -313,23 +323,26 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	clSetKernelArg(render, 9, sizeof(cl_float3), &cam.d_y);
 	clSetKernelArg(render, 10, sizeof(cl_uint), &samples);
 	clSetKernelArg(render, 11, sizeof(cl_uint), &width);
+	clSetKernelArg(render, 14, sizeof(cl_mem), &d_M);
 
 	//per-device args and launch
 	printf("about to launch\n");
 
 	cl_event done[CL->numDevices];
 	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
+	for (int i = 0; i < d; i++)
+		outputs[i] = calloc(resolution, sizeof(cl_float3));
 	
 	for (int i = 0; i < d; i++)
 	{
 		printf("device %d\n", i);
 		clSetKernelArg(render, 12, sizeof(cl_mem), &d_seeds[i]);
 		clSetKernelArg(render, 13, sizeof(cl_mem), &d_outputs[i]);
-		outputs[i] = calloc(resolution, sizeof(cl_float3));
-
 		cl_int err = clEnqueueNDRangeKernel(CL->commands[i], render, 1, 0, &resolution, &groupsize, 0, NULL, &done[i]);
-		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_FALSE, 0, sizeof(cl_float3) * resolution, outputs[i], 1, &done[i], NULL);
 	}
+
+	for (int i = 0; i < d; i++)
+		clFlush(CL->commands[i]);
 
 	printf("all enqueued\n");
 	for (int i = 0; i < d; i++)
@@ -340,6 +353,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 		clGetEventProfilingInfo(done[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 		printf("device %d took %.3f seconds\n", i, (float)(end - start) / 1000000000.0f);
 		clReleaseEvent(done[i]);
+		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_TRUE, 0, sizeof(cl_float3) * resolution, outputs[i], 0, NULL, NULL);
 	}
 	printf("done?\n");
 	return composite(outputs, d, resolution);

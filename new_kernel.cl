@@ -1,8 +1,8 @@
 
 #define PI 3.14159265359f
 #define REFRACTIVE_INDEX 1.5
-#define COLLIDE_ERR 0.0001f
-#define NORMAL_SHIFT 0.0003f
+#define COLLIDE_ERR 0.0003f
+#define NORMAL_SHIFT 0.0001f
 
 #define DIFFUSE_CONSTANT 0.7
 #define SPECULAR_CONSTANT 0.9
@@ -19,6 +19,13 @@
 #define BLACK (float3)(0.0f, 0.0f, 0.0f)
 #define WHITE (float3)(1.0f, 1.0f, 1.0f)
 #define GREY (float3)(0.5, 0.5, 0.5)
+
+#define SUN (float3)(0.0f, 3000.0f, 0.0f)
+#define SUN_BRIGHTNESS 60000.0f
+
+#define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
+#define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
+#define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
 typedef struct s_ray {
 	float3 origin;
@@ -210,34 +217,38 @@ static int hit_bvh(	const Ray ray,
 
 //This was KG, needs updated to VNT
 
-// static float3 fetch_color(const float u, const float v, int quadflag, const Object hit, const Material mat, __constant uchar *tex)
-// {
-// 	if (mat.height == 0 && mat.width == 0)
-// 		return mat.Kd;
-// 	float3 txcrd;
-// 	if(!quadflag)
-// 		txcrd = (1 - u - v) * hit.vt[0] + u * hit.vt[1] + v * hit.vt[2];
-// 	else
-// 		txcrd = (1 - u - v) * hit.vt[0] + u * hit.vt[2] + v * hit.vt[3];
+static float3 fetch_color(const int hit_ind,
+						 __constant float3 *T, 
+						 __constant int *M, 
+						 const float u, 
+						 const float v, 
+						 __constant Material *mats, 
+						 __constant uchar *tex)
+{
+	int mat_ind = M[hit_ind / 3];
+	Material mat = mats[mat_ind];
+	if (mat.height == 0 && mat.width == 0)
+		return mat.Kd;
+	float3 txcrd = (1 - u - v) * T[hit_ind] + u * T[hit_ind + 1] + v * T[hit_ind + 2];
 
-// 	txcrd.x -= floor(txcrd.x);
-// 	txcrd.y -= floor(txcrd.y);
-// 	if (txcrd.x < 0.0)
-// 		txcrd.x = 1.0 + txcrd.x;
-// 	if (txcrd.y < 0.0)
-// 		txcrd.y = 1.0 + txcrd.y;
+	txcrd.x -= floor(txcrd.x);
+	txcrd.y -= floor(txcrd.y);
+	if (txcrd.x < 0.0)
+		txcrd.x = 1.0 + txcrd.x;
+	if (txcrd.y < 0.0)
+		txcrd.y = 1.0 + txcrd.y;
 
-// 	int offset = mat.index;
-// 	int x = floor((float)mat.width * txcrd.x);
-// 	int y = floor((float)mat.height * txcrd.y);
+	int offset = mat.index;
+	int x = floor((float)mat.width * txcrd.x);
+	int y = floor((float)mat.height * txcrd.y);
 
-// 	uchar R = tex[offset + (y * mat.width + x) * 3];
-// 	uchar G = tex[offset + (y * mat.width + x) * 3 + 1];
-// 	uchar B = tex[offset + (y * mat.width + x) * 3 + 2];
+	uchar R = tex[offset + (y * mat.width + x) * 3];
+	uchar G = tex[offset + (y * mat.width + x) * 3 + 1];
+	uchar B = tex[offset + (y * mat.width + x) * 3 + 2];
 
-// 	float3 out = (float3)((float)R, (float)G, (float)B) / 255.0f * mat.Kd;
-// 	return out;
-// }
+	float3 out = ((float3)((float)R, (float)G, (float)B) / 255.0f) * mat.Kd;
+	return out;
+}
 
 static void fetch_normals(__constant float3 *V, __constant float3 *N, const int ind, const float u, const float v, float3 *sample_N, float3 *geom_N)
 {
@@ -260,7 +271,8 @@ static float3 trace(Ray ray,
 					__constant Material *mats,
 					__constant uchar *tex, 
 					unsigned int *seed0, 
-					unsigned int *seed1)
+					unsigned int *seed1,
+					__constant int *M)
 {
 
 	float3 color = BLACK;
@@ -278,8 +290,8 @@ static float3 trace(Ray ray,
 
 		if (hit_ind == -1)
 		{
-			if (j != 0)
-				color = 20000.0f * mask;
+			if (j == 0)
+				color = WHITE * SUN_BRIGHTNESS;
 			break;
 		}
 
@@ -290,8 +302,29 @@ static float3 trace(Ray ray,
 		fetch_normals(V, N, hit_ind, u, v, &sample_N, &geom_N);
 
 		//flip normals if necessary
-		sample_N = dot(ray.direction, sample_N) < 0.0f ? sample_N : sample_N * (-1.0f);
+		//sample_N = dot(ray.direction, sample_N) < 0.0f ? sample_N : sample_N * (-1.0f);
 		geom_N = dot(ray.direction, geom_N) < 0.0f ? geom_N : geom_N * (-1.0f);
+
+		//color at collision point
+		mask *= fetch_color(hit_ind, T, M, u, v, mats, tex);
+
+		// (jank) NEE
+		Ray to_sun;
+		to_sun.origin = hit_point + -1.0f * ray.direction * NORMAL_SHIFT;
+		//float3 sundir = UNIT_Y;
+		float rsq = get_random(seed0, seed1);
+		float r = sqrt(rsq);
+		float theta = 2 * PI * get_random(seed0, seed1);
+
+		//combine for new direction
+		float3 sundir = normalize(UNIT_X * r * cos(theta) + UNIT_Y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - rsq)));
+
+		to_sun.direction = sundir;
+		to_sun.inv_dir = 1.0f / sundir;
+		float ts, us, vs;
+		int sun_hit = hit_bvh(to_sun, V, boxes, &ts, &us, &vs);
+		if (sun_hit == -1)
+			color += mask * SUN_BRIGHTNESS * fmax(0.0f, dot(-1.0f * ray.direction, sample_N));
 
 		//local orthonormal system
 		float3 axis = fabs(sample_N.x) > fabs(sample_N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -299,14 +332,14 @@ static float3 trace(Ray ray,
 		float3 hem_y = cross(sample_N, hem_x);
 
 		//generate random direction on the unit hemisphere
-		float rsq = get_random(seed0, seed1);
-		float r = sqrt(rsq);
-		float theta = 2 * PI * get_random(seed0, seed1);
+		rsq = get_random(seed0, seed1);
+		r = sqrt(rsq);
+		theta = 2 * PI * get_random(seed0, seed1);
 
 		//combine for new direction
 		float3 new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - rsq)));
 		mask *= dot(new_dir, sample_N) * rrFactor; ////////////// fetch_color goes here
-		ray.origin = hit_point + geom_N * NORMAL_SHIFT;
+		ray.origin = hit_point + new_dir * NORMAL_SHIFT;
 
 		ray.direction = new_dir;
 		ray.inv_dir = 1.0f / new_dir;
@@ -314,10 +347,12 @@ static float3 trace(Ray ray,
 	return color;
 }
 
-static Ray ray_from_cam(const Camera cam, float x, float y)
+#define DOF_rad 0.0f
+
+static Ray ray_from_cam(const Camera cam, float x, float y, uint *s0, uint *s1)
 {
 	Ray ray;
-	ray.origin = cam.focus;
+	ray.origin = cam.focus; //+ (float3)(0.0f, (get_random(s0, s1) - 0.5) * DOF_rad, (get_random(s0, s1) - 0.5) * DOF_rad);
 	float3 through = cam.origin + cam.d_x * x + cam.d_y * y;
 	ray.direction = normalize(cam.focus - through);
 	ray.inv_dir = 1.0f / ray.direction;
@@ -337,7 +372,8 @@ __kernel void render_kernel(__constant float3 *V,
 							const uint sample_count,
 							const uint width,
 							__constant uint* seeds,
-							__global float3* output)
+							__global float3* output,
+							__constant int *M)
 {
 	unsigned int pixel_id = get_global_id(0);
 	unsigned int x = pixel_id % width;
@@ -358,8 +394,8 @@ __kernel void render_kernel(__constant float3 *V,
 	{
 		float x_coord = (float)x + get_random(&seed0, &seed1);
 		float y_coord = (float)y + get_random(&seed0, &seed1);
-		Ray ray = ray_from_cam(cam, x_coord, y_coord);
-		sum_color += trace(ray, V, T, N, boxes, mats, tex, &seed0, &seed1);
+		Ray ray = ray_from_cam(cam, x_coord, y_coord, &seed0, &seed1);
+		sum_color += trace(ray, V, T, N, boxes, mats, tex, &seed0, &seed1, M);
 	}
 	
 	output[pixel_id] = sum_color;

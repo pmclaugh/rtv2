@@ -136,7 +136,7 @@ static const int intersect_box(const Ray ray, const Box b, float t)
 	return (1);
 }
 
-static void intersect_triangle(const Ray ray, __global float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
+static void intersect_triangle(const Ray ray, __constant float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
 {
 	//we don't need v1 or v2 after initial calc of e1, e2. could just store them in same memory. wonder if compiler does this.
 	float this_t, this_u, this_v;
@@ -172,8 +172,8 @@ static void intersect_triangle(const Ray ray, __global float3 *V, int test_i, in
 }
 
 static int hit_bvh(	const Ray ray,
-					__global float3 *V,
-					__global Box *boxes,
+					__constant float3 *V,
+					__constant Box *boxes,
 					float *t_out,
 					float *u_out,
 					float *v_out)
@@ -220,7 +220,7 @@ static int hit_bvh(	const Ray ray,
 
 //This was KG, needs updated to VNT
 
-// static float3 fetch_color(const float u, const float v, int quadflag, const Object hit, const Material mat, __global uchar *tex)
+// static float3 fetch_color(const float u, const float v, int quadflag, const Object hit, const Material mat, __constant uchar *tex)
 // {
 // 	if (mat.height == 0 && mat.width == 0)
 // 		return mat.Kd;
@@ -249,7 +249,7 @@ static int hit_bvh(	const Ray ray,
 // 	return out;
 // }
 
-static void fetch_normals(__global float3 *V, __global float3 *N, const int ind, const float u, const float v, float3 *sample_N, float3 *geom_N)
+static void fetch_normals(__constant float3 *V, __constant float3 *N, const int ind, const float u, const float v, float3 *sample_N, float3 *geom_N)
 {
 	float3 v0 = V[ind];
 	float3 v1 = V[ind + 1];
@@ -263,12 +263,12 @@ static void fetch_normals(__global float3 *V, __global float3 *N, const int ind,
 }
 
 static float3 trace(Ray ray,
-					__global float3 *V,
-					__global float3 *T,
-					__global float3 *N,
-					__global Box *boxes,
-					__global Material *mats,
-					__global uchar *tex, 
+					__constant float3 *V,
+					__constant float3 *T,
+					__constant float3 *N,
+					__constant Box *boxes,
+					__constant Material *mats,
+					__constant uchar *tex, 
 					unsigned int *seed0, 
 					unsigned int *seed1)
 {
@@ -345,19 +345,19 @@ static Ray ray_from_cam(const Camera cam, float x, float y)
 	return ray;
 }
 
-__kernel void render_kernel(__global float3 *V,
-							__global float3 *T,
-							__global float3 *N,
-							__global Box *boxes,
-							__global Material *mats,
-							__global uchar *tex,
+__kernel void render_kernel(__constant float3 *V,
+							__constant float3 *T,
+							__constant float3 *N,
+							__constant Box *boxes,
+							__constant Material *mats,
+							__constant uchar *tex,
 							const float3 cam_origin,
 							const float3 cam_focus,
 							const float3 cam_dx,
 							const float3 cam_dy,
 							const uint sample_count,
 							const uint width,
-							__global uint* seeds,
+							__constant uint* seeds,
 							__global float3* output)
 {
 	unsigned int pixel_id = get_global_id(0);

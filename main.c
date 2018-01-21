@@ -6,8 +6,8 @@
 # define quit_key 12
 #endif
 
-#define xdim 512
-#define ydim 512
+#define XDIM 800
+#define YDIM 800
 
 typedef struct s_param
 {
@@ -86,22 +86,23 @@ int main(int ac, char **av)
 	flatten_bvh(sponza_bvh, bin_count);
 
 	t_camera cam;
-	cam.center = (cl_float3){-200.0, 200.0, 0.0};
+	//cam.center = (cl_float3){-100.0, 600.0, 0.0};
+	cam.center = (cl_float3){800.0, 300.0, 0.0};
 	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 	cam.width = 1.0;
 	cam.height = 1.0;
-	init_camera(&cam, 512, 512);
+	init_camera(&cam, XDIM, YDIM);
 	//printf("%lu\n", sizeof(gpu_bin));
-	cl_double3 *pixels = gpu_render(sponza, cam, 512, 512);
+	cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM);
 
 	void *mlx = mlx_init();
-	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
-	void *img = mlx_new_image(mlx, xdim, ydim);
-	draw_pixels(img, xdim, ydim, pixels);
+	void *win = mlx_new_window(mlx, XDIM, YDIM, "RTV1");
+	void *img = mlx_new_image(mlx, XDIM, YDIM);
+	draw_pixels(img, XDIM, YDIM, pixels);
 	mlx_put_image_to_window(mlx, win, img, 0, 0);
 
 	t_param *param = calloc(1, sizeof(t_param));
-	*param = (t_param){mlx, win, img, xdim, ydim, sponza, cam, NULL, 0};
+	*param = (t_param){mlx, win, img, XDIM, YDIM, sponza, cam, NULL, 0};
 	
 	mlx_key_hook(win, key_hook, param);
 	mlx_loop(mlx);

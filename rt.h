@@ -188,6 +188,7 @@ typedef struct s_gpu_scene
 	cl_float3 *V;
 	cl_float3 *T;
 	cl_float3 *N;
+	cl_int *M;
 	cl_uint tri_count;
 
 	gpu_bin *bins;
