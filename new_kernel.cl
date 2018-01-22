@@ -290,8 +290,10 @@ static float3 trace(Ray ray,
 
 		if (hit_ind == -1)
 		{
-			if (j == 0)
-				color = WHITE * SUN_BRIGHTNESS;
+			if (j==0)
+				color += mask * SUN_BRIGHTNESS;
+			else
+				color += mask * SUN_BRIGHTNESS * pow(dot(UNIT_Y, ray.direction), 20);
 			break;
 		}
 
@@ -302,47 +304,40 @@ static float3 trace(Ray ray,
 		fetch_normals(V, N, hit_ind, u, v, &sample_N, &geom_N);
 
 		//flip normals if necessary
-		//sample_N = dot(ray.direction, sample_N) < 0.0f ? sample_N : sample_N * (-1.0f);
 		geom_N = dot(ray.direction, geom_N) < 0.0f ? geom_N : geom_N * (-1.0f);
+		sample_N = dot(geom_N, sample_N) >= 0.0f ? sample_N : sample_N * (-1.0f);
 
 		//color at collision point
-		mask *= fetch_color(hit_ind, T, M, u, v, mats, tex);
+		Material mat = mats[M[hit_ind / 3]];
 
-		// (jank) NEE
-		Ray to_sun;
-		to_sun.origin = hit_point + -1.0f * ray.direction * NORMAL_SHIFT;
-		//float3 sundir = UNIT_Y;
-		float rsq = get_random(seed0, seed1);
-		float r = sqrt(rsq);
-		float theta = 2 * PI * get_random(seed0, seed1);
+		if (mat.height == 0 && mat.width == 0)
+		{
+			ray.origin = hit_point + sample_N * NORMAL_SHIFT;
+			ray.direction = normalize(dot(ray.direction, sample_N) * -2.0 * sample_N + ray.direction);
+			ray.inv_dir = 1.0f / ray.direction;
+			mask *= 0.7f * rrFactor;
+			continue ;
+		}
+		else
+		{
+			//local orthonormal system
+			float3 axis = fabs(sample_N.x) > fabs(sample_N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+			float3 hem_x = cross(axis, sample_N);
+			float3 hem_y = cross(sample_N, hem_x);
 
-		//combine for new direction
-		float3 sundir = normalize(UNIT_X * r * cos(theta) + UNIT_Y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - rsq)));
+			//generate random direction on the unit hemisphere
+			float rsq = get_random(seed0, seed1);
+			float r = sqrt(rsq);
+			float theta = 2 * PI * get_random(seed0, seed1);
 
-		to_sun.direction = sundir;
-		to_sun.inv_dir = 1.0f / sundir;
-		float ts, us, vs;
-		int sun_hit = hit_bvh(to_sun, V, boxes, &ts, &us, &vs);
-		if (sun_hit == -1)
-			color += mask * SUN_BRIGHTNESS * fmax(0.0f, dot(-1.0f * ray.direction, sample_N));
-
-		//local orthonormal system
-		float3 axis = fabs(sample_N.x) > fabs(sample_N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-		float3 hem_x = cross(axis, sample_N);
-		float3 hem_y = cross(sample_N, hem_x);
-
-		//generate random direction on the unit hemisphere
-		rsq = get_random(seed0, seed1);
-		r = sqrt(rsq);
-		theta = 2 * PI * get_random(seed0, seed1);
-
-		//combine for new direction
-		float3 new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - rsq)));
-		mask *= dot(new_dir, sample_N) * rrFactor; ////////////// fetch_color goes here
-		ray.origin = hit_point + new_dir * NORMAL_SHIFT;
-
-		ray.direction = new_dir;
-		ray.inv_dir = 1.0f / new_dir;
+			//combine for new direction
+			float3 new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - rsq)));
+			mask *= dot(new_dir, sample_N) * rrFactor * fetch_color(hit_ind, T, M, u, v, mats, tex);
+			
+			ray.origin = hit_point + sample_N * NORMAL_SHIFT;
+			ray.direction = new_dir;
+			ray.inv_dir = 1.0f / new_dir;
+		}
 	}
 	return color;
 }

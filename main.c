@@ -30,6 +30,9 @@ void init_camera(t_camera *camera, int xres, int yres)
 	//printf("init camera %d %d\n", xres, yres);
 	//determine a focus point in front of the view-plane
 	//such that the edge-focus-edge vertex has angle H_FOV
+
+	camera->normal = unit_vec(camera->normal);
+
 	float d = (camera->width / 2.0) / tan(H_FOV / 2.0);
 	camera->focus = vec_add(camera->center, vec_scale(camera->normal, d));
 
@@ -86,9 +89,9 @@ int main(int ac, char **av)
 	flatten_bvh(sponza_bvh, bin_count);
 
 	t_camera cam;
-	//cam.center = (cl_float3){-100.0, 600.0, 0.0};
-	cam.center = (cl_float3){800.0, 300.0, 0.0};
-	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
+	cam.center = (cl_float3){-630.0, 50.0, 50.0};
+	//cam.center = (cl_float3){-500.0, 600.0, 350.0};
+	cam.normal = (cl_float3){0.0, 0.0, 1.0};
 	cam.width = 1.0;
 	cam.height = 1.0;
 	init_camera(&cam, XDIM, YDIM);

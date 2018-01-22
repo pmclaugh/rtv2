@@ -159,6 +159,7 @@ gpu_context *prep_gpu(void)
     	}
 	    free(source);
     }
+    printf("good compile\n");
     return gpu;
 }
 
