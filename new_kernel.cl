@@ -41,9 +41,21 @@ typedef struct s_material
 	float3 Ke;
 
 	//here's where texture and stuff goes
-	int index;
-	int height;
-	int width;
+	int d_index;
+	int d_height;
+	int d_width;
+
+	int s_index;
+	int s_height;
+	int s_width;
+
+	int b_index;
+	int b_height;
+	int b_width;
+
+	int t_index;
+	int t_height;
+	int t_width;
 }				Material;
 
 typedef struct s_camera
@@ -215,38 +227,53 @@ static int hit_bvh(	const Ray ray,
 	return ind;
 }
 
-//This was KG, needs updated to VNT
+// static float3 fetch_color(const int hit_ind,
+// 						 __constant float3 *T, 
+// 						 const float u, 
+// 						 const float v,
+// 						 const Material mat,
+// 						 __constant uchar *tex)
+// {
+// 	if (mat.d_height == 0 && mat.d_width == 0)
+// 		return mat.Kd;
+// 	float3 txcrd = (1 - u - v) * T[hit_ind] + u * T[hit_ind + 1] + v * T[hit_ind + 2];
 
-static float3 fetch_color(const int hit_ind,
-						 __constant float3 *T, 
-						 __constant int *M, 
-						 const float u, 
-						 const float v, 
-						 __constant Material *mats, 
-						 __constant uchar *tex)
+// 	txcrd.x -= floor(txcrd.x);
+// 	txcrd.y -= floor(txcrd.y);
+// 	if (txcrd.x < 0.0)
+// 		txcrd.x = 1.0 + txcrd.x;
+// 	if (txcrd.y < 0.0)
+// 		txcrd.y = 1.0 + txcrd.y;
+
+// 	int offset = mat.d_index;
+// 	int x = floor((float)mat.d_width * txcrd.x);
+// 	int y = floor((float)mat.d_height * txcrd.y);
+
+// 	uchar R = tex[offset + (y * mat.d_width + x) * 3];
+// 	uchar G = tex[offset + (y * mat.d_width + x) * 3 + 1];
+// 	uchar B = tex[offset + (y * mat.d_width + x) * 3 + 2];
+
+// 	float3 out = ((float3)((float)R, (float)G, (float)B) / 255.0f);
+// 	return out;
+// }
+
+static float3 fetch_tex(	const float3 txcrd,
+							const int offset,
+							const int height,
+							const int width,
+							__constant uchar *tex)
 {
-	int mat_ind = M[hit_ind / 3];
-	Material mat = mats[mat_ind];
-	if (mat.height == 0 && mat.width == 0)
-		return mat.Kd;
-	float3 txcrd = (1 - u - v) * T[hit_ind] + u * T[hit_ind + 1] + v * T[hit_ind + 2];
 
-	txcrd.x -= floor(txcrd.x);
-	txcrd.y -= floor(txcrd.y);
-	if (txcrd.x < 0.0)
-		txcrd.x = 1.0 + txcrd.x;
-	if (txcrd.y < 0.0)
-		txcrd.y = 1.0 + txcrd.y;
+	if (height == 0 || width == 0)
+		return (float3)(0.7f, 0.2f, 0.2f);
+	int x = floor((float)width * txcrd.x);
+	int y = floor((float)height * txcrd.y);
 
-	int offset = mat.index;
-	int x = floor((float)mat.width * txcrd.x);
-	int y = floor((float)mat.height * txcrd.y);
+	uchar R = tex[offset + (y * width + x) * 3];
+	uchar G = tex[offset + (y * width + x) * 3 + 1];
+	uchar B = tex[offset + (y * width + x) * 3 + 2];
 
-	uchar R = tex[offset + (y * mat.width + x) * 3];
-	uchar G = tex[offset + (y * mat.width + x) * 3 + 1];
-	uchar B = tex[offset + (y * mat.width + x) * 3 + 2];
-
-	float3 out = ((float3)((float)R, (float)G, (float)B) / 255.0f) * mat.Kd;
+	float3 out = ((float3)((float)R, (float)G, (float)B) / 255.0f);
 	return out;
 }
 
@@ -310,34 +337,71 @@ static float3 trace(Ray ray,
 		//color at collision point
 		Material mat = mats[M[hit_ind / 3]];
 
-		if (mat.height == 0 && mat.width == 0)
-		{
-			ray.origin = hit_point + sample_N * NORMAL_SHIFT;
-			ray.direction = normalize(dot(ray.direction, sample_N) * -2.0 * sample_N + ray.direction);
-			ray.inv_dir = 1.0f / ray.direction;
-			mask *= 0.7f * rrFactor;
-			continue ;
-		}
-		else
-		{
-			//local orthonormal system
-			float3 axis = fabs(sample_N.x) > fabs(sample_N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-			float3 hem_x = cross(axis, sample_N);
-			float3 hem_y = cross(sample_N, hem_x);
+		float3 txcrd = (1 - u - v) * T[hit_ind] + u * T[hit_ind + 1] + v * T[hit_ind + 2];
 
-			//generate random direction on the unit hemisphere
-			float rsq = get_random(seed0, seed1);
-			float r = sqrt(rsq);
-			float theta = 2 * PI * get_random(seed0, seed1);
+		txcrd.x -= floor(txcrd.x);
+		txcrd.y -= floor(txcrd.y);
+		if (txcrd.x < 0.0)
+			txcrd.x = 1.0 + txcrd.x;
+		if (txcrd.y < 0.0)
+			txcrd.y = 1.0 + txcrd.y;
 
-			//combine for new direction
-			float3 new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - rsq)));
-			mask *= dot(new_dir, sample_N) * rrFactor * fetch_color(hit_ind, T, M, u, v, mats, tex);
-			
-			ray.origin = hit_point + sample_N * NORMAL_SHIFT;
-			ray.direction = new_dir;
-			ray.inv_dir = 1.0f / new_dir;
+		//was point actually transparent? if so, pass through and re-hit
+		if (mat.t_height && mat.t_width)
+		{
+			float3 trans = fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex);
+			if (trans.x == 0.0f)
+			{
+				ray.origin = hit_point + ray.direction * NORMAL_SHIFT;
+				j--;
+				continue;
+			}
 		}
+
+		//does point have a bump map? if so bump it
+		if (mat.b_height && mat.b_width)
+		{
+			//bump mapping is hard
+			//need to add another buffer B[] of precomputed tangents
+			//so that it's fast enough to debug
+		}
+
+		//does point have a specular map? if so, roll for specular
+		if (mat.s_height && mat.s_width)
+		{
+			float3 spec = fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex);
+			if (get_random(seed0, seed1) * (1.0f + spec.x) < spec.x)
+			{
+				ray.origin = hit_point + sample_N * NORMAL_SHIFT;
+				ray.direction = normalize(dot(ray.direction, sample_N) * -2.0 * sample_N + ray.direction);
+				ray.inv_dir = 1.0f / ray.direction;
+				mask *= rrFactor * spec.x / (1.0f + spec.x);
+				continue;
+			}
+		}
+
+		//what color is the point?
+		mask *= fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex);
+
+		//Diffuse reflection (default)
+
+		//local orthonormal system
+		float3 axis = fabs(sample_N.x) > fabs(sample_N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+		float3 hem_x = cross(axis, sample_N);
+		float3 hem_y = cross(sample_N, hem_x);
+
+		//generate random direction on the unit hemisphere
+		float rsq = get_random(seed0, seed1);
+		float r = sqrt(rsq);
+		float theta = 2 * PI * get_random(seed0, seed1);
+
+		//combine for new direction
+		float3 new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - rsq)));
+		mask *= dot(new_dir, sample_N) * rrFactor;
+		
+		ray.origin = hit_point + sample_N * NORMAL_SHIFT;
+		ray.direction = new_dir;
+		ray.inv_dir = 1.0f / new_dir;
 	}
 	return color;
 }

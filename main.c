@@ -89,9 +89,10 @@ int main(int ac, char **av)
 	flatten_bvh(sponza_bvh, bin_count);
 
 	t_camera cam;
-	cam.center = (cl_float3){-630.0, 50.0, 50.0};
-	//cam.center = (cl_float3){-500.0, 600.0, 350.0};
-	cam.normal = (cl_float3){0.0, 0.0, 1.0};
+	//cam.center = (cl_float3){-400.0, 50.0, -220.0};
+	//cam.center = (cl_float3){-1200.0, 600.0, 350.0};
+	cam.center = (cl_float3){-1100.0, 200.0, 0.0};
+	cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 	cam.width = 1.0;
 	cam.height = 1.0;
 	init_camera(&cam, XDIM, YDIM);

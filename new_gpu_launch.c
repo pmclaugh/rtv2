@@ -1,7 +1,7 @@
 #include "rt.h"
 #include <fcntl.h>
 
-#define SAMPLES_PER_DEVICE 50
+#define SAMPLES_PER_DEVICE 1
 
 char *load_cl_file(char *file)
 {
@@ -49,8 +49,16 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 	//TEXTURES
 	cl_int tex_size = 0;
 	for (int i = 0; i < s->mat_count; i++)
+	{
 		if (s->materials[i].map_Kd)
 			tex_size += s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3;
+		if (s->materials[i].map_Ks)
+			tex_size += s->materials[i].map_Ks->height * s->materials[i].map_Ks->width * 3;
+		if (s->materials[i].map_bump)
+			tex_size += s->materials[i].map_bump->height * s->materials[i].map_bump->width * 3;
+		if (s->materials[i].map_d)
+			tex_size += s->materials[i].map_d->height * s->materials[i].map_d->width * 3;
+	}
 
 	cl_uchar *h_tex = calloc(sizeof(cl_uchar), tex_size);
 	tex_size = 0;
@@ -58,32 +66,45 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 	gpu_mat *simple_mats = calloc(s->mat_count, sizeof(gpu_mat));
 	for (int i = 0; i < s->mat_count; i++)
 	{
+		simple_mats[i].Ka = s->materials[i].Ka;
+		simple_mats[i].Kd = s->materials[i].Kd;
+		simple_mats[i].Ks = s->materials[i].Ks;
+		simple_mats[i].Ke = s->materials[i].Ke;
+
 		if (s->materials[i].map_Kd)
 		{
 			memcpy(&h_tex[tex_size], s->materials[i].map_Kd->pixels, s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3);
-			simple_mats[i] = (gpu_mat){
-				s->materials[i].Ka,
-				s->materials[i].Kd,
-				s->materials[i].Ks,
-				s->materials[i].Ke,
-				tex_size,
-				s->materials[i].map_Kd->width,
-				s->materials[i].map_Kd->height
-			};
+			simple_mats[i].diff_ind = tex_size;
+			simple_mats[i].diff_h = s->materials[i].map_Kd->height;
+			simple_mats[i].diff_w = s->materials[i].map_Kd->width;
 			tex_size += s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3;
 		}
-		else
+
+		if (s->materials[i].map_Ks)
 		{
-			printf("tex for material %d is null!\n", i);
-			simple_mats[i] = (gpu_mat){
-				s->materials[i].Ka,
-				s->materials[i].Kd,
-				s->materials[i].Ks,
-				s->materials[i].Ke,
-				0,
-				0,
-				0,
-			};
+			memcpy(&h_tex[tex_size], s->materials[i].map_Ks->pixels, s->materials[i].map_Ks->height * s->materials[i].map_Ks->width * 3);
+			simple_mats[i].spec_ind = tex_size;
+			simple_mats[i].spec_h = s->materials[i].map_Ks->height;
+			simple_mats[i].spec_w = s->materials[i].map_Ks->width;
+			tex_size += s->materials[i].map_Ks->height * s->materials[i].map_Ks->width * 3;
+		}
+
+		if (s->materials[i].map_bump)
+		{
+			memcpy(&h_tex[tex_size], s->materials[i].map_bump->pixels, s->materials[i].map_bump->height * s->materials[i].map_bump->width * 3);
+			simple_mats[i].bump_ind = tex_size;
+			simple_mats[i].bump_h = s->materials[i].map_bump->height;
+			simple_mats[i].bump_w = s->materials[i].map_bump->width;
+			tex_size += s->materials[i].map_bump->height * s->materials[i].map_bump->width * 3;
+		}
+
+		if (s->materials[i].map_d)
+		{
+			memcpy(&h_tex[tex_size], s->materials[i].map_d->pixels, s->materials[i].map_d->height * s->materials[i].map_d->width * 3);
+			simple_mats[i].trans_ind = tex_size;
+			simple_mats[i].trans_h = s->materials[i].map_d->height;
+			simple_mats[i].trans_w = s->materials[i].map_d->width;
+			tex_size += s->materials[i].map_d->height * s->materials[i].map_d->width * 3;
 		}
 	}
 

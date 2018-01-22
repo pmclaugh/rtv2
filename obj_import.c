@@ -40,8 +40,12 @@ Map *load_map(char *rel_path, char *filename)
 	}
 
 	fclose(fp);
+	free(raw_pixels);
 	if (VERBOSE)
+	{
 		printf("loaded texture %s\n", tga_file);
+		printf("%d %d\n", map->height, map->width);
+	}
 	free(tga_file);
 	return map;
 }
@@ -65,6 +69,7 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 	fseek(fp, 0, SEEK_SET);
 	int mat_ind = -1;
 	Material m;
+	printf("\n");
 	while (fgets(line, 512, fp))
 	{
 		if (strncmp(line, "newmtl ", 7) == 0)
@@ -106,27 +111,38 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 
 		else if (strncmp(line, "\tmap_Ka", 7) == 0)
 		{
+			//printf("loading a Ka\n");
 			m.map_Ka_path = calloc(512, 1);
 			sscanf(line, "\tmap_Ka %s\n", m.map_Ka_path);
 			m.map_Ka = load_map(rel_path, m.map_Ka_path);
 		}
 		else if (strncmp(line, "\tmap_Kd", 7) == 0)
 		{
+			//printf("loading a Kd\n");
 			m.map_Kd_path = calloc(512, 1);
 			sscanf(line, "\tmap_Kd %s\n", m.map_Kd_path);
 			m.map_Kd = load_map(rel_path, m.map_Kd_path);
 		}
-		else if (strncmp(line, "\tmap_bump", 10) == 0)
+		else if (strncmp(line, "\tmap_bump", 9) == 0)
 		{
+			//printf("loading a bump\n");
 			m.map_bump_path = calloc(512, 1);
 			sscanf(line, "\tmap_bump %s\n", m.map_bump_path);
 			m.map_bump = load_map(rel_path, m.map_bump_path);
 		}
 		else if (strncmp(line, "\tmap_d", 6) == 0)
 		{
+			//printf("loading a map_d\n");
 			m.map_d_path = calloc(512, 1);
 			sscanf(line, "\tmap_d %s\n", m.map_d_path);
 			m.map_d = load_map(rel_path, m.map_d_path);
+		}
+		else if (strncmp(line, "\tmap_Ks", 7) == 0)
+		{
+			//printf("loading a Ks\n");
+			m.map_Ks_path = calloc(512, 1);
+			sscanf(line, "\tmap_Ks %s\n", m.map_Ks_path);
+			m.map_Ks = load_map(rel_path, m.map_Ks_path);
 		}
 	}
 	S->materials[mat_ind] = m;

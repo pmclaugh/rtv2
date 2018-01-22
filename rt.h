@@ -99,6 +99,9 @@ typedef struct s_material
 
 	char *map_d_path;
 	Map *map_d;
+
+	char *map_Ks_path;
+	Map *map_Ks;
 }				Material;
 
 typedef struct s_face
@@ -178,9 +181,22 @@ typedef struct s_gpu_mat
 	cl_float3 Kd;
 	cl_float3 Ks;
 	cl_float3 Ke;
-	cl_int tex_ind;
-	cl_int tex_w;
-	cl_int tex_h;
+
+	cl_int diff_ind;
+	cl_int diff_h;
+	cl_int diff_w;
+
+	cl_int spec_ind;
+	cl_int spec_h;
+	cl_int spec_w;
+
+	cl_int bump_ind;
+	cl_int bump_h;
+	cl_int bump_w;
+
+	cl_int trans_ind;
+	cl_int trans_h;
+	cl_int trans_w;
 }				gpu_mat;
 
 typedef struct s_gpu_scene
