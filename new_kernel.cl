@@ -307,9 +307,10 @@ static float3 trace(Ray ray,
 
 	const float stop_prob = 0.3f;
 
-	for (int j = 0; j < 5 || get_random(seed0, seed1) >= stop_prob; j++)
+	for (int j = 0; j < 5 || get_random(seed0, seed1) > stop_prob; j++)
 	{
 		float rrFactor = j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
+		//float rrFactor = 1.0f;
 		
 		//collide
 		float t, u, v;
@@ -358,13 +359,13 @@ static float3 trace(Ray ray,
 			}
 		}
 
-		//does point have a bump map? if so bump it
-		if (mat.b_height && mat.b_width)
-		{
-			//bump mapping is hard
-			//need to add another buffer B[] of precomputed tangents
-			//so that it's fast enough to debug
-		}
+		// //does point have a bump map? if so bump it
+		// if (mat.b_height && mat.b_width)
+		// {
+		// 	//bump mapping is hard
+		// 	//need to add another buffer B[] of precomputed tangents
+		// 	//so that it's fast enough to debug
+		// }
 
 		//does point have a specular map? if so, roll for specular
 		if (mat.s_height && mat.s_width)
@@ -375,10 +376,11 @@ static float3 trace(Ray ray,
 				ray.origin = hit_point + sample_N * NORMAL_SHIFT;
 				ray.direction = normalize(dot(ray.direction, sample_N) * -2.0 * sample_N + ray.direction);
 				ray.inv_dir = 1.0f / ray.direction;
-				mask *= rrFactor * spec.x / (1.0f + spec.x);
+				mask *= 0.6f * rrFactor * spec.x / (1.0f + spec.x);
 				continue;
 			}
 		}
+		
 
 		//what color is the point?
 		mask *= fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex);
