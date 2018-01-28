@@ -89,8 +89,8 @@ int main(int ac, char **av)
 	flatten_bvh(sponza_bvh, bin_count);
 
 	t_camera cam;
-	cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view
-	//cam.center = (cl_float3){-540.0, 150.0, 380.0};
+	cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
+	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
 	//cam.center = (cl_float3){-800.0, 450.0, 0.0};
 	//cam.center = (cl_float3){-720.0, 475.0, -50.0};
 	//cam.center = (cl_float3){-800.0, 600.0, 350.0};

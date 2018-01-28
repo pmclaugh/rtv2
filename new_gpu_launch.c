@@ -1,7 +1,7 @@
 #include "rt.h"
 #include <fcntl.h>
 
-#define SAMPLES_PER_DEVICE 1
+#define SAMPLES_PER_DEVICE 50
 
 char *load_cl_file(char *file)
 {
@@ -244,9 +244,9 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution)
 
 	for (int j = 0; j < resolution; j++)
 	{
-		output_sum[j].x = output_sum[j].x * 0.36 / Lw;
-		output_sum[j].y = output_sum[j].y * 0.36 / Lw;
-		output_sum[j].z = output_sum[j].z * 0.36 / Lw;
+		output_sum[j].x = output_sum[j].x * 0.64 / Lw;
+		output_sum[j].y = output_sum[j].y * 0.64 / Lw;
+		output_sum[j].z = output_sum[j].z * 0.64 / Lw;
 
 		output_sum[j].x = output_sum[j].x / (output_sum[j].x + 1.0);
 		output_sum[j].y = output_sum[j].y / (output_sum[j].y + 1.0);
@@ -342,19 +342,15 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 		d_seeds[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_uint) * 2 * resolution, NULL, NULL);
 		clEnqueueWriteBuffer(CL->commands[i], d_seeds[i], CL_FALSE, 0, sizeof(cl_uint) * 2 * resolution, &scene->seeds[2 * resolution * i], 0, NULL, NULL);
 		d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_WRITE_ONLY, sizeof(cl_float3) * resolution, NULL, NULL);
-
-		if(i % 2 == 0)
-		{
-			clEnqueueWriteBuffer(CL->commands[i], d_V, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count, scene->V, 0, NULL, NULL);
-			clEnqueueWriteBuffer(CL->commands[i], d_T, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count, scene->T, 0, NULL, NULL);
-			clEnqueueWriteBuffer(CL->commands[i], d_N, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count, scene->N, 0, NULL, NULL);
-			clEnqueueWriteBuffer(CL->commands[i], d_M, CL_FALSE, 0, sizeof(cl_int) * scene->tri_count / 3, scene->M, 0, NULL, NULL);
-			clEnqueueWriteBuffer(CL->commands[i], d_TN, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count / 3, scene->TN, 0, NULL, NULL);
-			clEnqueueWriteBuffer(CL->commands[i], d_BTN, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count / 3, scene->BTN, 0, NULL, NULL);
-			clEnqueueWriteBuffer(CL->commands[i], d_mats, CL_FALSE, 0, sizeof(gpu_mat) * scene->mat_count, scene->mats, 0, NULL, NULL);
-			clEnqueueWriteBuffer(CL->commands[i], d_bins, CL_FALSE, 0, sizeof(gpu_bin) * scene->bin_count, scene->bins, 0, NULL, NULL);
-			clEnqueueWriteBuffer(CL->commands[i], d_tex, CL_FALSE, 0, sizeof(cl_uchar) * scene->tex_size, scene->tex, 0, NULL, NULL);
-		}
+		clEnqueueWriteBuffer(CL->commands[i], d_V, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count, scene->V, 0, NULL, NULL);
+		clEnqueueWriteBuffer(CL->commands[i], d_T, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count, scene->T, 0, NULL, NULL);
+		clEnqueueWriteBuffer(CL->commands[i], d_N, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count, scene->N, 0, NULL, NULL);
+		clEnqueueWriteBuffer(CL->commands[i], d_M, CL_FALSE, 0, sizeof(cl_int) * scene->tri_count / 3, scene->M, 0, NULL, NULL);
+		clEnqueueWriteBuffer(CL->commands[i], d_TN, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count / 3, scene->TN, 0, NULL, NULL);
+		clEnqueueWriteBuffer(CL->commands[i], d_BTN, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count / 3, scene->BTN, 0, NULL, NULL);
+		clEnqueueWriteBuffer(CL->commands[i], d_mats, CL_FALSE, 0, sizeof(gpu_mat) * scene->mat_count, scene->mats, 0, NULL, NULL);
+		clEnqueueWriteBuffer(CL->commands[i], d_bins, CL_FALSE, 0, sizeof(gpu_bin) * scene->bin_count, scene->bins, 0, NULL, NULL);
+		clEnqueueWriteBuffer(CL->commands[i], d_tex, CL_FALSE, 0, sizeof(cl_uchar) * scene->tex_size, scene->tex, 0, NULL, NULL);
 	}
 
 	for (int i = 0; i < d; i++)

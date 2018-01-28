@@ -20,6 +20,8 @@
 #define WHITE (float3)(1.0f, 1.0f, 1.0f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
+#define LUMA (float3)(0.2126f, 0.7152f, 0.0722f)
+
 #define SUN (float3)(0.0f, 10000.0f, 0.0f)
 #define SUN_BRIGHTNESS 60000.0f
 
@@ -235,9 +237,6 @@ static float3 fetch_tex(	const float3 txcrd,
 							const int width,
 							__constant uchar *tex)
 {
-
-	if (height == 0 || width == 0)
-		return (float3)(0.7f, 0.2f, 0.2f);
 	int x = floor((float)width * txcrd.x);
 	int y = floor((float)height * txcrd.y);
 
@@ -337,8 +336,8 @@ static float3 trace(Ray ray,
 		sample_N = bump_map(TN, BTN, hit_ind / 3, sample_N, bump);
 		
 		mask *= j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
-		float spec_importance = dot(mask, spec);
-		float diff_importance = dot(mask, diff);
+		float spec_importance = sqrt(dot(spec, spec));
+		float diff_importance = sqrt(dot(diff, diff));
 		float range = spec_importance + diff_importance;
 		spec_importance /= range;
 		diff_importance /= range;
