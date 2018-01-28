@@ -6,8 +6,8 @@
 # define quit_key 12
 #endif
 
-#define XDIM 800
-#define YDIM 800
+#define XDIM 1024
+#define YDIM 1024
 
 typedef struct s_param
 {
@@ -89,10 +89,12 @@ int main(int ac, char **av)
 	flatten_bvh(sponza_bvh, bin_count);
 
 	t_camera cam;
-	//cam.center = (cl_float3){-400.0, 50.0, -220.0};
-	//cam.center = (cl_float3){-800.0, 500.0, 0.0};
-	//cam.center = (cl_float3){-720.0, 475.0, 3.0};
-	cam.center = (cl_float3){-500.0, 100.0, 350.0};
+	cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view
+	//cam.center = (cl_float3){-540.0, 150.0, 380.0};
+	//cam.center = (cl_float3){-800.0, 450.0, 0.0};
+	//cam.center = (cl_float3){-720.0, 475.0, -50.0};
+	//cam.center = (cl_float3){-800.0, 600.0, 350.0};
+	//cam.center = (cl_float3){800.0, 100.0, -50.0};
 	cam.normal = (cl_float3){1.0, 0.0, 0.0};
 	cam.width = 1.0;
 	cam.height = 1.0;

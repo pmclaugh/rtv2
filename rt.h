@@ -179,7 +179,7 @@ typedef struct s_gpu_mat
 {
 	cl_float3 Ka;
 	cl_float3 Kd;
-	cl_float3 Ks;
+	cl_float3 Ns;
 	cl_float3 Ke;
 
 	cl_int diff_ind;
@@ -205,6 +205,8 @@ typedef struct s_gpu_scene
 	cl_float3 *T;
 	cl_float3 *N;
 	cl_int *M;
+	cl_float3 *TN;
+	cl_float3 *BTN;
 	cl_uint tri_count;
 
 	gpu_bin *bins;

@@ -18,14 +18,16 @@
 
 #define BLACK (float3)(0.0f, 0.0f, 0.0f)
 #define WHITE (float3)(1.0f, 1.0f, 1.0f)
-#define GREY (float3)(0.5, 0.5, 0.5)
+#define GREY (float3)(0.5f, 0.5f, 0.5f)
 
-#define SUN (float3)(0.0f, 3000.0f, 0.0f)
+#define SUN (float3)(0.0f, 10000.0f, 0.0f)
 #define SUN_BRIGHTNESS 60000.0f
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
+
+#define stop_prob 0.3f
 
 typedef struct s_ray {
 	float3 origin;
@@ -37,7 +39,7 @@ typedef struct s_material
 {
 	float3 Ka;
 	float3 Kd;
-	float3 Ks;
+	float3 Ns;
 	float3 Ke;
 
 	//here's where texture and stuff goes
@@ -227,36 +229,6 @@ static int hit_bvh(	const Ray ray,
 	return ind;
 }
 
-// static float3 fetch_color(const int hit_ind,
-// 						 __constant float3 *T, 
-// 						 const float u, 
-// 						 const float v,
-// 						 const Material mat,
-// 						 __constant uchar *tex)
-// {
-// 	if (mat.d_height == 0 && mat.d_width == 0)
-// 		return mat.Kd;
-// 	float3 txcrd = (1 - u - v) * T[hit_ind] + u * T[hit_ind + 1] + v * T[hit_ind + 2];
-
-// 	txcrd.x -= floor(txcrd.x);
-// 	txcrd.y -= floor(txcrd.y);
-// 	if (txcrd.x < 0.0)
-// 		txcrd.x = 1.0 + txcrd.x;
-// 	if (txcrd.y < 0.0)
-// 		txcrd.y = 1.0 + txcrd.y;
-
-// 	int offset = mat.d_index;
-// 	int x = floor((float)mat.d_width * txcrd.x);
-// 	int y = floor((float)mat.d_height * txcrd.y);
-
-// 	uchar R = tex[offset + (y * mat.d_width + x) * 3];
-// 	uchar G = tex[offset + (y * mat.d_width + x) * 3 + 1];
-// 	uchar B = tex[offset + (y * mat.d_width + x) * 3 + 2];
-
-// 	float3 out = ((float3)((float)R, (float)G, (float)B) / 255.0f);
-// 	return out;
-// }
-
 static float3 fetch_tex(	const float3 txcrd,
 							const int offset,
 							const int height,
@@ -277,17 +249,45 @@ static float3 fetch_tex(	const float3 txcrd,
 	return out;
 }
 
-static void fetch_normals(__constant float3 *V, __constant float3 *N, const int ind, const float u, const float v, float3 *sample_N, float3 *geom_N)
+static void fetch_all_tex(__constant Material *mats, const int m_ind, __constant uchar *tex, const float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
+{
+	Material mat = mats[m_ind];
+	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
+	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
+	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : BLACK;
+	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : (float3)(0.7f, 0.1f, 0.1f);
+}
+
+static void fetch_NT(__constant float3 *V, __constant float3 *N, __constant float3 *T, const float3 dir, const int ind, const float u, const float v, float3 *N_out, float3 *txcrd_out)
 {
 	float3 v0 = V[ind];
 	float3 v1 = V[ind + 1];
 	float3 v2 = V[ind + 2];
-	*geom_N = normalize(cross(v1 - v0, v2 - v0));
+	float3 geom_N = normalize(cross(v1 - v0, v2 - v0));
 
 	v0 = N[ind];
 	v1 = N[ind + 1];
 	v2 = N[ind + 2];
-	*sample_N = normalize((1 - u - v) * v0 + u * v1 + v * v2);
+	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
+
+	*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
+
+	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
+	txcrd.x -= floor(txcrd.x);
+	txcrd.y -= floor(txcrd.y);
+	if (txcrd.x < 0.0f)
+		txcrd.x = 1.0f + txcrd.x;
+	if (txcrd.y < 0.0f)
+		txcrd.y = 1.0f + txcrd.y;
+	*txcrd_out = txcrd;	
+}
+
+static float3 bump_map(__constant float3 *TN, __constant float3 *BTN, const int ind, const float3 sample_N, const float3 bump)
+{
+	float3 tangent = TN[ind];
+	float3 bitangent = BTN[ind];
+	tangent = normalize(tangent - sample_N * dot(sample_N, tangent));
+	return normalize(tangent * bump.x + bitangent * bump.y + sample_N * bump.z);
 }
 
 static float3 trace(Ray ray,
@@ -299,111 +299,111 @@ static float3 trace(Ray ray,
 					__constant uchar *tex, 
 					unsigned int *seed0, 
 					unsigned int *seed1,
-					__constant int *M)
+					__constant int *M,
+					__constant float3 *TN,
+					__constant float3 *BTN)
 {
 
 	float3 color = BLACK;
 	float3 mask = WHITE;
 
-	const float stop_prob = 0.3f;
-
 	for (int j = 0; j < 5 || get_random(seed0, seed1) > stop_prob; j++)
 	{
-		float rrFactor = j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
-		//float rrFactor = 1.0f;
-		
 		//collide
 		float t, u, v;
-		int hit_ind = hit_bvh(ray, V, boxes, &t, &u, &v);
+		const int hit_ind = hit_bvh(ray, V, boxes, &t, &u, &v);
 
 		if (hit_ind == -1)
 		{
-			if (j==0)
-				color += mask * SUN_BRIGHTNESS;
-			else
-				color += mask * SUN_BRIGHTNESS * pow(dot(UNIT_Y, ray.direction), 20);
+			color = mask * SUN_BRIGHTNESS;
 			break;
 		}
 
-		float3 hit_point = ray.origin + ray.direction * t;
-
 		//get normal at collision point. geom_N is used for the normal_shift step, but might not be necessary.
-		float3 sample_N, geom_N;
-		fetch_normals(V, N, hit_ind, u, v, &sample_N, &geom_N);
+		float3 sample_N, txcrd;
+		fetch_NT(V, N, T, ray.direction, hit_ind, u, v, &sample_N, &txcrd);
 
-		//flip normals if necessary
-		geom_N = dot(ray.direction, geom_N) < 0.0f ? geom_N : geom_N * (-1.0f);
-		sample_N = dot(geom_N, sample_N) >= 0.0f ? sample_N : sample_N * (-1.0f);
+		//get material data
+		float3 trans, bump, spec, diff;
+		fetch_all_tex(mats, M[hit_ind / 3], tex, txcrd, &trans, &bump, &spec, &diff);
 
-		//color at collision point
-		Material mat = mats[M[hit_ind / 3]];
-
-		float3 txcrd = (1 - u - v) * T[hit_ind] + u * T[hit_ind + 1] + v * T[hit_ind + 2];
-
-		txcrd.x -= floor(txcrd.x);
-		txcrd.y -= floor(txcrd.y);
-		if (txcrd.x < 0.0)
-			txcrd.x = 1.0 + txcrd.x;
-		if (txcrd.y < 0.0)
-			txcrd.y = 1.0 + txcrd.y;
-
-		//was point actually transparent? if so, pass through and re-hit
-		if (mat.t_height && mat.t_width)
+		if (trans.x == 0.0f)
 		{
-			float3 trans = fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex);
-			if (trans.x == 0.0f)
-			{
-				ray.origin = hit_point + ray.direction * NORMAL_SHIFT;
-				j--;
-				continue;
-			}
+			ray.origin = ray.origin + ray.direction * (t + NORMAL_SHIFT);
+			//j--;
+			continue;
 		}
 
-		// //does point have a bump map? if so bump it
-		// if (mat.b_height && mat.b_width)
-		// {
-		// 	//bump mapping is hard
-		// 	//need to add another buffer B[] of precomputed tangents
-		// 	//so that it's fast enough to debug
-		// }
+		sample_N = bump_map(TN, BTN, hit_ind / 3, sample_N, bump);
 
-		//does point have a specular map? if so, roll for specular
-		if (mat.s_height && mat.s_width)
+		//weird debug idea
+		spec = BLACK;
+
+		//debug mode
+		color = (sample_N + 1.0f);
+		break;
+		
+		mask *= j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
+		float spec_importance = dot(mask, spec);
+		float diff_importance = dot(mask, diff);
+		float range = spec_importance + diff_importance;
+		spec_importance /= range;
+		diff_importance /= range;
+		float3 new_dir;
+		float r1 = get_random(seed0, seed1);
+		float r2 = get_random(seed0, seed1);
+		if(get_random(seed0, seed1) < spec_importance)
 		{
-			float3 spec = fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex);
-			if (get_random(seed0, seed1) * (1.0f + spec.x) < spec.x)
-			{
-				ray.origin = hit_point + sample_N * NORMAL_SHIFT;
-				ray.direction = normalize(dot(ray.direction, sample_N) * -2.0 * sample_N + ray.direction);
-				ray.inv_dir = 1.0f / ray.direction;
-				mask *= 0.6f * rrFactor * spec.x / (1.0f + spec.x);
-				continue;
-			}
+			float3 spec_dir = ray.direction - 2.0f * dot(ray.direction, sample_N) * sample_N;
+
+			//local orthonormal system
+			float3 axis = fabs(spec_dir.x) > fabs(spec_dir.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+			float3 hem_x = cross(axis, spec_dir);
+			float3 hem_y = cross(spec_dir, hem_x);
+
+			float phi = 2.0f * PI * r1;
+			float theta = acos(pow((1.0f - r2), 0.1f));
+
+			float3 x = hem_x * sin(theta) * cos(phi);
+			float3 y = hem_y * sin(theta) * sin(phi);
+			float3 z = spec_dir * cos(theta);
+			new_dir = x + y + z;
+			if (dot(new_dir, sample_N) < 0.0f) // pick mirror of sample (same importance)
+				new_dir = z - x - y;
+			mask *= spec;
 		}
-		
+		else
+		{
+			//Diffuse reflection (default)
+			//local orthonormal system
+			float3 axis = fabs(sample_N.x) > fabs(sample_N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+			float3 hem_x = cross(axis, sample_N);
+			float3 hem_y = cross(sample_N, hem_x);
 
-		//what color is the point?
-		mask *= fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex);
+			//generate random direction on the unit hemisphere (cosine-weighted fo)
+			float r = sqrt(r1);
+			float theta = 2 * PI * r2;
 
-		//Diffuse reflection (default)
+			//combine for new direction
+			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - r1)));
+			mask *= diff;
+		}
 
-		//local orthonormal system
-		float3 axis = fabs(sample_N.x) > fabs(sample_N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-		float3 hem_x = cross(axis, sample_N);
-		float3 hem_y = cross(sample_N, hem_x);
+		// //NEE back in?
+		// Ray to_sun;
+		// to_sun.origin = ray.origin + (ray.direction * (t - NORMAL_SHIFT)); //referring to old inbound
+		// to_sun.direction = normalize(SUN - to_sun.origin);
+		// to_sun.inv_dir = 1.0f / to_sun.direction;
 
-		//generate random direction on the unit hemisphere
-		float rsq = get_random(seed0, seed1);
-		float r = sqrt(rsq);
-		float theta = 2 * PI * get_random(seed0, seed1);
+		// float ts, us, vs;
+		// const int sun_hit = hit_bvh(to_sun, V, boxes, &ts, &us, &vs);
+		// if (sun_hit == -1)
+		// 	color += mask * SUN_BRIGHTNESS * dot(to_sun.direction, sample_N) / PI;
 
-		//combine for new direction
-		float3 new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - rsq)));
-		mask *= dot(new_dir, sample_N) * rrFactor;
-		
-		ray.origin = hit_point + sample_N * NORMAL_SHIFT;
+		ray.origin = ray.origin + ray.direction * t + sample_N *NORMAL_SHIFT;
 		ray.direction = new_dir;
 		ray.inv_dir = 1.0f / new_dir;
+
 	}
 	return color;
 }
@@ -434,7 +434,9 @@ __kernel void render_kernel(__constant float3 *V,
 							const uint width,
 							__constant uint* seeds,
 							__global float3* output,
-							__constant int *M)
+							__constant int *M,
+							__constant float3 *TN,
+							__constant float3 *BTN)
 {
 	unsigned int pixel_id = get_global_id(0);
 	unsigned int x = pixel_id % width;
@@ -456,7 +458,7 @@ __kernel void render_kernel(__constant float3 *V,
 		float x_coord = (float)x + get_random(&seed0, &seed1);
 		float y_coord = (float)y + get_random(&seed0, &seed1);
 		Ray ray = ray_from_cam(cam, x_coord, y_coord, &seed0, &seed1);
-		sum_color += trace(ray, V, T, N, boxes, mats, tex, &seed0, &seed1, M);
+		sum_color += trace(ray, V, T, N, boxes, mats, tex, &seed0, &seed1, M, TN, BTN);
 	}
 	
 	output[pixel_id] = sum_color;
