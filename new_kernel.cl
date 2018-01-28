@@ -335,13 +335,6 @@ static float3 trace(Ray ray,
 		}
 
 		sample_N = bump_map(TN, BTN, hit_ind / 3, sample_N, bump);
-
-		//weird debug idea
-		spec = BLACK;
-
-		//debug mode
-		color = (sample_N + 1.0f);
-		break;
 		
 		mask *= j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
 		float spec_importance = dot(mask, spec);
@@ -400,7 +393,7 @@ static float3 trace(Ray ray,
 		// if (sun_hit == -1)
 		// 	color += mask * SUN_BRIGHTNESS * dot(to_sun.direction, sample_N) / PI;
 
-		ray.origin = ray.origin + ray.direction * t + sample_N *NORMAL_SHIFT;
+		ray.origin = ray.origin + ray.direction * t + sample_N * NORMAL_SHIFT;
 		ray.direction = new_dir;
 		ray.inv_dir = 1.0f / new_dir;
 

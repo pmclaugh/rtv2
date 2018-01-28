@@ -1,7 +1,7 @@
 #include "rt.h"
 #include <fcntl.h>
 
-#define SAMPLES_PER_DEVICE 10
+#define SAMPLES_PER_DEVICE 1
 
 char *load_cl_file(char *file)
 {
@@ -14,44 +14,6 @@ char *load_cl_file(char *file)
 
 gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 {
-	//FACES
-	cl_float3 *V, *T, *N;
-	V = calloc(s->face_count * 3, sizeof(cl_float3));
-	T = calloc(s->face_count * 3, sizeof(cl_float3));
-	N = calloc(s->face_count * 3, sizeof(cl_float3));
-	cl_int *M;
-	M = calloc(s->face_count, sizeof(cl_int));
-	cl_float3 *TN, *BTN;
-	TN = calloc(s->face_count, sizeof(cl_float3));
-	BTN = calloc(s->face_count, sizeof(cl_float3));
-
-	for (int i = 0; i < s->face_count; i++)
-	{
-		Face f = s->faces[i];
-
-		V[i * 3] = f.verts[0];
-		V[i * 3 + 1] = f.verts[1];
-		V[i * 3 + 2] = f.verts[2];
-
-		T[i * 3] = f.tex[0];
-		T[i * 3 + 1] = f.tex[1];
-		T[i * 3 + 2] = f.tex[2];
-
-		N[i * 3] = f.norms[0];
-		N[i * 3 + 1] = f.norms[1];
-		N[i * 3 + 2] = f.norms[2];
-
-		M[i] = f.mat_ind;
-
-		cl_float3 dp1 = vec_sub(f.verts[1], f.verts[0]);
-		cl_float3 dp2 = vec_sub(f.verts[2], f.verts[0]);
-		cl_float3 duv1 = vec_sub(f.tex[1], f.tex[0]);
-		cl_float3 duv2 = vec_sub(f.tex[2], f.tex[0]);
-		float r = 1.0f / (duv1.x * duv2.y - duv1.y * duv2.x);
-		TN[i] = unit_vec(vec_scale(vec_sub(vec_scale(dp1, duv2.y), vec_scale(dp2, duv1.y)), r));
-		BTN[i] = unit_vec(vec_scale(vec_sub(vec_scale(dp2, duv1.x), vec_scale(dp1, duv2.x)), r));
-	}
-
 	//SEEDS
 	cl_uint *h_seeds = calloc(xdim * ydim * 2 * CL->numDevices * CL->numPlatforms, sizeof(cl_uint));
 	for (int i = 0; i < xdim * ydim * 2 * CL->numDevices; i++)
@@ -119,6 +81,48 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 			tex_size += s->materials[i].map_d->height * s->materials[i].map_d->width * 3;
 		}
 	}
+
+
+	//FACES
+	cl_float3 *V, *T, *N;
+	V = calloc(s->face_count * 3, sizeof(cl_float3));
+	T = calloc(s->face_count * 3, sizeof(cl_float3));
+	N = calloc(s->face_count * 3, sizeof(cl_float3));
+	cl_int *M;
+	M = calloc(s->face_count, sizeof(cl_int));
+	cl_float3 *TN, *BTN;
+	TN = calloc(s->face_count, sizeof(cl_float3));
+	BTN = calloc(s->face_count, sizeof(cl_float3));
+
+	for (int i = 0; i < s->face_count; i++)
+	{
+		Face f = s->faces[i];
+
+		V[i * 3] = f.verts[0];
+		V[i * 3 + 1] = f.verts[1];
+		V[i * 3 + 2] = f.verts[2];
+
+		T[i * 3] = f.tex[0];
+		T[i * 3 + 1] = f.tex[1];
+		T[i * 3 + 2] = f.tex[2];
+
+		N[i * 3] = f.norms[0];
+		N[i * 3 + 1] = f.norms[1];
+		N[i * 3 + 2] = f.norms[2];
+
+		M[i] = f.mat_ind;
+		if (simple_mats[f.mat_ind].bump_h)
+		{
+			cl_float3 dp1 = vec_sub(f.verts[1], f.verts[0]);
+			cl_float3 dp2 = vec_sub(f.verts[2], f.verts[0]);
+			cl_float3 duv1 = vec_sub(f.tex[1], f.tex[0]);
+			cl_float3 duv2 = vec_sub(f.tex[2], f.tex[0]);
+			float r = 1.0f / (duv1.x * duv2.y - duv1.y * duv2.x);
+			TN[i] = unit_vec(vec_scale(vec_sub(vec_scale(dp1, duv2.y), vec_scale(dp2, duv1.y)), r));
+			BTN[i] = unit_vec(cross(TN[i], cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0]))));
+		}
+	}
+
 
 	//BINS
 	gpu_bin *flat_bvh = flatten_bvh(s->bins, s->bin_count);
