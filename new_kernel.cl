@@ -254,7 +254,10 @@ static void fetch_all_tex(__constant Material *mats, const int m_ind, __constant
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
 	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : BLACK;
-	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : (float3)(0.7f, 0.1f, 0.1f);
+	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : (float3)(0.7f, 0.4f, 0.4f);
+
+	if (!mat.d_height)
+		*spec = (float3)(0.7f, 0.3f, 0.3f);
 }
 
 static void fetch_NT(__constant float3 *V, __constant float3 *N, __constant float3 *T, const float3 dir, const int ind, const float u, const float v, float3 *N_out, float3 *txcrd_out)
@@ -306,7 +309,7 @@ static float3 trace(Ray ray,
 	float3 color = BLACK;
 	float3 mask = WHITE;
 
-	for (int j = 0; j < 5 || get_random(seed0, seed1) > stop_prob; j++)
+	for (int j = 0; j < 5 || get_random(seed0, seed1) < stop_prob; j++)
 	{
 		//collide
 		float t, u, v;
@@ -326,21 +329,21 @@ static float3 trace(Ray ray,
 		float3 trans, bump, spec, diff;
 		fetch_all_tex(mats, M[hit_ind / 3], tex, txcrd, &trans, &bump, &spec, &diff);
 
-		if (trans.x == 0.0f)
+		if (trans.x < 1.0f)
 		{
 			ray.origin = ray.origin + ray.direction * (t + NORMAL_SHIFT);
-			//j--;
+			j--;
 			continue;
 		}
 
 		sample_N = bump_map(TN, BTN, hit_ind / 3, sample_N, bump);
 		
-		mask *= j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0;
-		float spec_importance = sqrt(dot(spec, spec));
-		float diff_importance = sqrt(dot(diff, diff));
-		float range = spec_importance + diff_importance;
-		spec_importance /= range;
-		diff_importance /= range;
+		mask *= j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0f;
+		float spec_importance = spec.x + spec.y + spec.z;
+		float diff_importance = diff.x + diff.y + diff.z;
+		float total = spec_importance + diff_importance;
+		spec_importance /= total;
+		diff_importance /= total;
 		float3 new_dir;
 		float r1 = get_random(seed0, seed1);
 		float r2 = get_random(seed0, seed1);
@@ -354,7 +357,7 @@ static float3 trace(Ray ray,
 			float3 hem_y = cross(spec_dir, hem_x);
 
 			float phi = 2.0f * PI * r1;
-			float theta = acos(pow((1.0f - r2), 0.1f));
+			float theta = acos(pow((1.0f - r2), 1.0f / (100.0f * spec.x)));
 
 			float3 x = hem_x * sin(theta) * cos(phi);
 			float3 y = hem_y * sin(theta) * sin(phi);
@@ -380,17 +383,6 @@ static float3 trace(Ray ray,
 			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - r1)));
 			mask *= diff;
 		}
-
-		// //NEE back in?
-		// Ray to_sun;
-		// to_sun.origin = ray.origin + (ray.direction * (t - NORMAL_SHIFT)); //referring to old inbound
-		// to_sun.direction = normalize(SUN - to_sun.origin);
-		// to_sun.inv_dir = 1.0f / to_sun.direction;
-
-		// float ts, us, vs;
-		// const int sun_hit = hit_bvh(to_sun, V, boxes, &ts, &us, &vs);
-		// if (sun_hit == -1)
-		// 	color += mask * SUN_BRIGHTNESS * dot(to_sun.direction, sample_N) / PI;
 
 		ray.origin = ray.origin + ray.direction * t + sample_N * NORMAL_SHIFT;
 		ray.direction = new_dir;

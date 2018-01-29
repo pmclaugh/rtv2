@@ -117,7 +117,9 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 			cl_float3 dp2 = vec_sub(f.verts[2], f.verts[0]);
 			cl_float3 duv1 = vec_sub(f.tex[1], f.tex[0]);
 			cl_float3 duv2 = vec_sub(f.tex[2], f.tex[0]);
-			float r = 1.0f / (duv1.x * duv2.y - duv1.y * duv2.x);
+			float r = duv1.x * duv2.y - duv1.y * duv2.x == 0.0f ? 1.0f : 1.0f / (duv1.x * duv2.y - duv1.y * duv2.x);
+
+			TN[i] = unit_vec(vec_scale(vec_sub(vec_scale(dp1, duv2.y), vec_scale(dp2, duv1.y)), r));
 			TN[i] = unit_vec(vec_scale(vec_sub(vec_scale(dp1, duv2.y), vec_scale(dp2, duv1.y)), r));
 			BTN[i] = unit_vec(cross(TN[i], cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0]))));
 		}
@@ -244,9 +246,9 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution)
 
 	for (int j = 0; j < resolution; j++)
 	{
-		output_sum[j].x = output_sum[j].x * 0.64 / Lw;
-		output_sum[j].y = output_sum[j].y * 0.64 / Lw;
-		output_sum[j].z = output_sum[j].z * 0.64 / Lw;
+		output_sum[j].x = output_sum[j].x * 0.36 / Lw;
+		output_sum[j].y = output_sum[j].y * 0.36 / Lw;
+		output_sum[j].z = output_sum[j].z * 0.36 / Lw;
 
 		output_sum[j].x = output_sum[j].x / (output_sum[j].x + 1.0);
 		output_sum[j].y = output_sum[j].y / (output_sum[j].y + 1.0);
@@ -392,6 +394,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 		clSetKernelArg(render, 12, sizeof(cl_mem), &d_seeds[i]);
 		clSetKernelArg(render, 13, sizeof(cl_mem), &d_outputs[i]);
 		cl_int err = clEnqueueNDRangeKernel(CL->commands[i], render, 1, 0, &resolution, &groupsize, 0, NULL, &done[i]);
+		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_FALSE, 0, sizeof(cl_float3) * resolution, outputs[i], 1, &done[i], NULL);
 	}
 
 	for (int i = 0; i < d; i++)
@@ -406,7 +409,6 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 		clGetEventProfilingInfo(done[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 		printf("device %d took %.3f seconds\n", i, (float)(end - start) / 1000000000.0f);
 		clReleaseEvent(done[i]);
-		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_TRUE, 0, sizeof(cl_float3) * resolution, outputs[i], 0, NULL, NULL);
 	}
 	printf("done?\n");
 	return composite(outputs, d, resolution);
