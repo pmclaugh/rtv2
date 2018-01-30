@@ -66,29 +66,22 @@ int key_hook(int keycode, void *param)
 int main(int ac, char **av)
 {
 	srand(time(NULL));
-	// Face *bunny = ply_import("objects/ply/bunny.ply");
-	// int count;
-	// bunny = object_flatten(bunny, &count);
-	// int box_count;
-	// tree_box *bun_bvh =  super_bvh(bunny, count, &box_count);
-	
-	// printf("CL_INVALID_PROGRAM_EXECUTABLE %d\n", CL_INVALID_PROGRAM_EXECUTABLE);
-	// printf("CL_INVALID_COMMAND_QUEUE %d\n", CL_INVALID_COMMAND_QUEUE);
-	// printf("CL_INVALID_KERNEL %d\n", CL_INVALID_KERNEL);
-	// printf("CL_INVALID_CONTEXT %d\n", CL_INVALID_CONTEXT);
-	// printf("CL_INVALID_KERNEL_ARGS %d\n", CL_INVALID_KERNEL_ARGS);
-	// printf("CL_INVALID_WORK_DIMENSION %d\n", CL_INVALID_WORK_DIMENSION);
-	// printf("CL_INVALID_GLOBAL_WORK_SIZE %d\n", CL_INVALID_GLOBAL_WORK_SIZE);
 
 	Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
-	for (int i = 0; i < sponza->face_count - 1; i++)
-		sponza->faces[i].next = &(sponza->faces[i + 1]);
 
-	//count em
-	int count = 0;
-	for (Face *f = sponza->faces; f; f = f->next)
-		count++;
-	printf("OG count %d new count %d\n", sponza->face_count, count);
+	//LL is best for this bvh. don't want to rearrange import for now, will do later
+	Face *face_list = NULL;
+	for (int i = 0; i < sponza->face_count; i++)
+	{
+		Face *f = calloc(1, sizeof(Face));
+		memcpy(f, &sponza->faces[i], sizeof(Face));
+		f->next = face_list;
+		face_list = f;
+	}
+
+	int box_count = 0;
+	best_bvh(face_list, &box_count);
+	printf("finished with %d boxes\n", box_count);
 	return 0;
 	
 

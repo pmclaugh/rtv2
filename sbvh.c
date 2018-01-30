@@ -1,7 +1,7 @@
 #include "rt.h"
 
-#define SPLIT_COUNT 16
-#define LEAF_THRESHOLD 16
+#define SPLIT_COUNT 10
+#define LEAF_THRESHOLD 200
 
 #define MAX_START (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 #define MIN_START (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
