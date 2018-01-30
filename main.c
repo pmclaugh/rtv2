@@ -81,11 +81,21 @@ int main(int ac, char **av)
 	// printf("CL_INVALID_GLOBAL_WORK_SIZE %d\n", CL_INVALID_GLOBAL_WORK_SIZE);
 
 	Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
+	for (int i = 0; i < sponza->face_count - 1; i++)
+		sponza->faces[i].next = &(sponza->faces[i + 1]);
+
+	//count em
+	int count = 0;
+	for (Face *f = sponza->faces; f; f = f->next)
+		count++;
+	printf("OG count %d new count %d\n", sponza->face_count, count);
+	return 0;
+	
+
 	int bin_count;
 	tree_box *sponza_bvh = super_bvh(sponza->faces, sponza->face_count, &bin_count);
 	sponza->bins = sponza_bvh;
 	sponza->bin_count = bin_count;
-
 	flatten_bvh(sponza_bvh, bin_count);
 
 	t_camera cam;

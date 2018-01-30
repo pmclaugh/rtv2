@@ -290,6 +290,7 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 			f.smoothing = smoothing;
 			f.mat_type = GPU_MAT_DIFFUSE;
 			f.mat_ind = mat_ind;
+			f.next = NULL;
 			faces[face_count++] = f;
 
 			if (count == 12)
@@ -318,6 +319,7 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 				f.smoothing = smoothing;
 				f.mat_type = GPU_MAT_DIFFUSE;
 				f.mat_ind = mat_ind;
+				f.next = NULL;
 				faces[face_count++] = f;
 			}
 		}

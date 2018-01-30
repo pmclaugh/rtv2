@@ -129,6 +129,9 @@ void best_split(BVH *box)
 	cl_float3 span = vec_sub(box->max, box->min);
 
 	BVH *splits = calloc(2 * 3 * splits_per_axis, sizeof(BVH));
+
+	BVH *lefts = calloc(3 * splits_per_axis, sizeof(BVH));
+	BVH *rights = calloc(3 * splits_per_axis, sizeof(BVH));
 	for (int i = 0; i < splits_per_axis; i++)
 	{
 		splits[i] = 								new_box(box->min, (cl_float3){box->min.x + (float)(i + 1) * span.x / (float)(splits_per_axis + 1), box->max.y, box->max.z});
