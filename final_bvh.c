@@ -10,6 +10,7 @@ typedef struct s_BVH
 	struct s_BVH *right;
 
 	struct s_BVH *next;
+	int depth;
 }				BVH;
 
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
@@ -114,6 +115,7 @@ void print_box(BVH *box)
 {
 	print_vec(box->min);
 	print_vec(box->max);
+	printf("area %.f SA %.f\n", area(box), SA(box));
 	printf("%d faces\n", box->face_count);
 }
 
@@ -127,8 +129,8 @@ void free_list(Face *faces)
 	}
 }
 
-#define splits_per_axis 10
-#define LEAF_THRESHOLD 200
+#define splits_per_axis 8
+#define LEAF_THRESHOLD 32 //weird performance black hole when this goes much lower
 
 void best_split(BVH *box)
 {
@@ -150,6 +152,13 @@ void best_split(BVH *box)
 		lefts[i + 2 * splits_per_axis] = 	new_box(box->min, (cl_float3){box->max.x, box->max.y, box->min.z + (float)(i + 1) * span.z / (float)(splits_per_axis + 1)});
 		rights[i + 2 * splits_per_axis] = new_box((cl_float3){box->min.x, box->min.y, box->min.z + (float)(i + 1) * span.z / (float)(splits_per_axis + 1)}, box->max);
 	}
+
+	// for (int i = 0; i < 3 * splits_per_axis; i++)
+	// {
+	// 	print_box(lefts[i]);
+	// 	print_box(rights[i]);
+	// }
+	// getchar();
 
 	for (int i = 0; i < 3 * splits_per_axis; i++)
 	{
@@ -189,7 +198,9 @@ void best_split(BVH *box)
 	}
 
 	box->left = lefts[best_SAH_ind];
+	box->left->depth = box->depth + 1;
 	box->right = rights[best_SAH_ind];
+	box->right->depth = box->depth + 1;
 
 	//add to box!
 	for (Face *f = box->faces; f; f = f->next)
@@ -202,7 +213,7 @@ void best_split(BVH *box)
 
 	// print_box(box->left);
 	// print_box(box->right);
-	//getchar();
+	// getchar();
 
 	free_list(box->faces);
 	for(int i = 0; i < 3 * splits_per_axis; i++)
@@ -225,7 +236,6 @@ void best_split(BVH *box)
 BVH *best_bvh(Face *faces, int *box_count)
 {
 	BVH *root = new_box(INF, NEG_INF);
-
 	for (Face *f = faces; f; f = f->next)
 	{
 		add_to_box(f, root);
@@ -256,14 +266,22 @@ BVH *best_bvh(Face *faces, int *box_count)
 
 	float area_total = 0.0f;
 	int tricount = 0;
+	int leafcount = 0;
+	int maxdepth = 0;
+	int totaldepth = 0;
 	while(leaves)
 	{
+		leafcount++;
+		if (leaves->depth > maxdepth)
+			maxdepth = leaves->depth;
+		totaldepth += leaves->depth;
 		tricount += leaves->face_count;
 		area_total += area(leaves);
 		leaves = leaves->next;
 	}
 	printf("ended as %d triangles\n", tricount);
 	printf("%f leaf / total\n", area_total / area(root));
+	printf("%d leaves, max depth %d avg depth %.1f\n", leafcount, maxdepth, (float)totaldepth / (float)leafcount);
 	*box_count = count;
 	return root;
 }
