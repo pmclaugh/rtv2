@@ -18,7 +18,6 @@ typedef struct s_BVH
 
 void shrink_wrap(BVH *box, BVH *bag)
 {
-	//I think this is right??
 	box->min.x = fmax(box->min.x, bag->min.x);
 	box->max.x = fmin(box->max.x, bag->max.x);
 	box->min.y = fmax(box->min.y, bag->min.y);
@@ -153,13 +152,6 @@ void best_split(BVH *box)
 		rights[i + 2 * splits_per_axis] = new_box((cl_float3){box->min.x, box->min.y, box->min.z + (float)(i + 1) * span.z / (float)(splits_per_axis + 1)}, box->max);
 	}
 
-	// for (int i = 0; i < 3 * splits_per_axis; i++)
-	// {
-	// 	print_box(lefts[i]);
-	// 	print_box(rights[i]);
-	// }
-	// getchar();
-
 	for (int i = 0; i < 3 * splits_per_axis; i++)
 	{
 		left_bags[i] = new_box(INF, NEG_INF);
@@ -230,8 +222,6 @@ void best_split(BVH *box)
 	free(left_bags);
 	free(right_bags);
 }
-
-
 
 BVH *best_bvh(Face *faces, int *box_count)
 {
