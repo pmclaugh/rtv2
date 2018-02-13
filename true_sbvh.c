@@ -4,6 +4,7 @@
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
 #define SPLIT_TEST_NUM 10
+#define LEAF_THRESHOLD 10000
 
 enum axis{
 	X_AXIS,
@@ -17,6 +18,7 @@ typedef struct s_AABB
 	cl_float3 max;
 
 	struct s_AABB *members;
+	int member_count;
 	struct s_AABB *left;
 	struct s_AABB *right;
 	struct s_AABB *next;
@@ -315,6 +317,15 @@ Split *new_split(AABB *box, enum axis a, int i, int total)
 	return split;
 }
 
+void free_split(Split *split)
+{
+	free(split->left);
+	free(split->right);
+	free(split->left_flex);
+	free(split->right_flex);
+	free(split);
+}
+
 float SA(AABB *box)
 {
 	cl_float3 span = vec_sub(box->max, box->min);
@@ -386,11 +397,7 @@ Split *best_spatial_split(AABB *box)
 		if (i == min_ind)
 			continue;
 		else
-		{
-			free(spatials[i]->left);
-			free(spatials[i]->right);
-			free(spatials[i]);
-		}
+			free_split(spatials[i]);
 	free(spatials);
 
 	return winner;
@@ -400,9 +407,36 @@ void partition(AABB *box)
 {
 	Split *spatial = best_spatial_split(box);
 
-	//pour box->members into split->left_flex, split->right_flex
-	//need to re-clip
-	
+	box->left = dupe_box(spatial->left_flex);
+	box->right = dupe_box(spatial->right_flex);
+
+	for (AABB *b = box->members; b; b = b->next)
+		if (box_in_box(b, box->left) && box_in_box(b, box->right))
+		{
+			AABB *lclip = dupe_box(b);
+			AABB *rclip = dupe_box(b);
+
+			clip_box(lclip, box->left);
+			clip_box(rclip, box->right);
+
+			push(&box->left->members, lclip);
+			box->left->member_count++;
+			push(&box->left->members, lclip);
+			box->right->member_count++;
+
+			free(b);
+		}
+		else if (box_in_box(b, spatial->left))
+		{
+			push(&box->left->members, b);
+			box->left->member_count++;
+		}
+		else
+		{
+			push(&box->right->members, b);
+			box->right->member_count++;
+		}
+	free_split(spatial);
 }
 
 AABB *sbvh(Face *faces, int *box_count)
@@ -415,11 +449,17 @@ AABB *sbvh(Face *faces, int *box_count)
 	AABB *root_box = box_from_boxes(boxes);
 
 	AABB *stack = root_box;
+	int count = 1;
 	while (stack)
 	{
 		AABB *box = pop(&stack);
 		partition(box);
-		//push children onto stack if they still need to be split further
+		count += 2;
+		if (box->left->member_count > LEAF_THRESHOLD)
+			push(&stack, box->left);
+		if (box->right->member_count > LEAF_THRESHOLD)
+			push(&stack, box->right);
 	}
+	printf("done?? %d boxes?", count);
 	return root_box;
 }
