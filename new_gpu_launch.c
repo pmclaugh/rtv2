@@ -127,7 +127,7 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 
 
 	//BINS
-	gpu_bin *flat_bvh = flatten_bvh(s->bins, s->bin_count);
+	gpu_bin *flat_bvh;// = flatten_bvh(s->bins, s->bin_count);
 
 	//COMBINE
 	gpu_scene *gs = calloc(1, sizeof(gpu_scene));

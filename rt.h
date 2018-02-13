@@ -222,6 +222,22 @@ typedef struct s_gpu_scene
 	cl_uint seed_count;
 }				gpu_scene;
 
+typedef struct s_AABB
+{
+	cl_float3 min;
+	cl_float3 max;
+
+	struct s_AABB *members;
+	int member_count;
+	struct s_AABB *left;
+	struct s_AABB *right;
+	struct s_AABB *next;
+
+	Face *f;
+}				AABB;
+
+AABB *sbvh(Face *faces, int *box_count);
+
 int triBoxOverlap(float boxcenter[3],float boxhalfsize[3],float triverts[3][3]);
 
 gpu_bin *flatten_bvh(tree_box *bvh, int box_count);

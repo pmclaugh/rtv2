@@ -3,7 +3,7 @@
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
-#define SPLIT_TEST_NUM 10
+#define SPLIT_TEST_NUM 1
 #define LEAF_THRESHOLD 10000
 
 enum axis{
@@ -11,20 +11,6 @@ enum axis{
 	Y_AXIS,
 	Z_AXIS
 };
-
-typedef struct s_AABB
-{
-	cl_float3 min;
-	cl_float3 max;
-
-	struct s_AABB *members;
-	int member_count;
-	struct s_AABB *left;
-	struct s_AABB *right;
-	struct s_AABB *next;
-
-	Face *f;
-}				AABB;
 
 cl_float3 center(AABB *box)
 {
@@ -109,10 +95,12 @@ void flex_box(AABB *box, AABB *added)
 AABB *box_from_boxes(AABB *boxes)
 {
 	AABB *box = empty_box();
-	for (AABB *b = boxes; b; b = b->next)
+	for (AABB *b = boxes; b;)
 	{
 		flex_box(box, b);
+		AABB *tmp = b->next;
 		push(&box->members, b);
+		b = tmp;
 	}
 
 	//all pointers in new_box (ie left, right, next) are null
@@ -347,10 +335,15 @@ Split *best_spatial_split(AABB *box)
 		spatials[2 * SPLIT_TEST_NUM + i] = new_split(box, Z_AXIS, i, SPLIT_TEST_NUM);
 	}
 
+	printf("made splits\n");
+
 	//for each member, "add" to each split (dont actually make copies)
-	for (AABB *b = box->members; b; b = b->next)
+	for (AABB *b = box->members; b;)
+	{
+		AABB *tmp = b->next;
 		for (int i = 0; i < SPLIT_TEST_NUM * 3; i++)
 		{
+			//printf("i is %d\n", i);
 			if (box_in_box(b, spatials[i]->left) && box_in_box(b, spatials[i]->right))
 			{
 				AABB *lclip = dupe_box(b);
@@ -376,6 +369,8 @@ Split *best_spatial_split(AABB *box)
 				spatials[i]->right_count++;
 			}
 		}
+		b = tmp;
+	}
 
 	//measure and choose best split
 
@@ -406,11 +401,14 @@ Split *best_spatial_split(AABB *box)
 void partition(AABB *box)
 {
 	Split *spatial = best_spatial_split(box);
+	printf("found best spatial\n");
 
 	box->left = dupe_box(spatial->left_flex);
 	box->right = dupe_box(spatial->right_flex);
 
-	for (AABB *b = box->members; b; b = b->next)
+	for (AABB *b = box->members; b;)
+	{
+		AABB *tmp = b->next;
 		if (box_in_box(b, box->left) && box_in_box(b, box->right))
 		{
 			AABB *lclip = dupe_box(b);
@@ -436,6 +434,8 @@ void partition(AABB *box)
 			push(&box->right->members, b);
 			box->right->member_count++;
 		}
+		b = tmp;
+	}
 	free_split(spatial);
 }
 
@@ -446,7 +446,11 @@ AABB *sbvh(Face *faces, int *box_count)
 	for (Face *f = faces; f; f = f->next)
 		push(&boxes, box_from_face(f));
 
+	printf("boxes are in faces\n");
+
 	AABB *root_box = box_from_boxes(boxes);
+
+	printf("root box made\n");
 
 	AABB *stack = root_box;
 	int count = 1;
@@ -454,6 +458,7 @@ AABB *sbvh(Face *faces, int *box_count)
 	{
 		AABB *box = pop(&stack);
 		partition(box);
+		printf("partitioned\n");
 		count += 2;
 		if (box->left->member_count > LEAF_THRESHOLD)
 			push(&stack, box->left);
@@ -461,5 +466,6 @@ AABB *sbvh(Face *faces, int *box_count)
 			push(&stack, box->right);
 	}
 	printf("done?? %d boxes?", count);
+	*box_count = count;
 	return root_box;
 }
