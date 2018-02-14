@@ -80,8 +80,9 @@ int main(int ac, char **av)
 	}
 
 	int box_count = 0;
-	sbvh(face_list, &box_count);
+	AABB *tree = sbvh(face_list, &box_count);
 	printf("finished with %d boxes\n", box_count);
+	study_tree(tree, 10000);
 	return 0;
 	
 

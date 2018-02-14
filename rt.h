@@ -237,6 +237,7 @@ typedef struct s_AABB
 }				AABB;
 
 AABB *sbvh(Face *faces, int *box_count);
+void study_tree(AABB *tree, int ray_count);
 
 int triBoxOverlap(float boxcenter[3],float boxhalfsize[3],float triverts[3][3]);
 

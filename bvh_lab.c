@@ -15,19 +15,6 @@ typedef struct s_traversal
 	int tris_hit;
 }			Traversal;
 
-typedef struct s_BVH
-{
-	cl_float3 min;
-	cl_float3 max;
-	struct s_BVH *left;
-	struct s_BVH *right;
-	struct s_BVH *next;
-	
-	Face *faces;
-	int face_count;
-	int depth;
-}				BVH;
-
 typedef struct s_triangle
 {
 	cl_float3 v0;
@@ -35,7 +22,7 @@ typedef struct s_triangle
 	cl_float3 v2;
 }				Triangle;
 
-static int inside_box(Traversal *ray, BVH *box)
+static int inside_box(Traversal *ray, AABB *box)
 {
 	ray->inside_comps++;
 	if (box->min.x <= ray->origin.x && ray->origin.x <= box->max.x)
@@ -48,7 +35,7 @@ static int inside_box(Traversal *ray, BVH *box)
 	return 0;
 }
 
-static int intersect_box(Traversal *ray, BVH *box)
+static int intersect_box(Traversal *ray, AABB *box)
 {
 	ray->box_comps++;
 
@@ -118,37 +105,37 @@ static int intersect_triangle(Traversal *ray, const cl_float3 v0, const cl_float
 	return 1;
 }
 
-void check_tris(Traversal *ray, BVH *box)
+void check_tris(Traversal *ray, AABB *box)
 {
-	for (Face *f = box->faces; f; f = f->next)
-		intersect_triangle(ray, f->verts[0], f->verts[1], f->verts[2]);
+	for (AABB *member = box->members; member; member = member->next)
+		intersect_triangle(ray, member->f->verts[0], member->f->verts[1], member->f->verts[2]);
 }
 
-void push(BVH **stack, BVH *box)
+static void push(AABB **stack, AABB *box)
 {
 	box->next = *stack;
 	*stack = box;
 }
 
-BVH *pop(BVH **stack)
+static AABB *pop(AABB **stack)
 {
-	BVH *popped = NULL;
+	AABB *popped = NULL;
 	if (*stack)
 	{
 		popped = *stack;
-		*stack = (*stack)->next;
+		*stack = popped->next;
 	}
 	return popped;
 }
 
-void traverse(BVH *tree, Traversal *ray)
+void traverse(AABB *tree, Traversal *ray)
 {
 	tree->next = NULL;
-	BVH *stack = tree;
+	AABB *stack = tree;
 
 	while(stack)
 	{
-		BVH *box = pop(&stack);
+		AABB *box = pop(&stack);
 		if (intersect_box(ray, box))
 		{
 			if (box->left) //boxes have either 0 or 2 children
@@ -164,13 +151,12 @@ void traverse(BVH *tree, Traversal *ray)
 
 float unit_rand()
 {
-	return rand() / RAND_MAX;
+	return (float)rand() / (float)RAND_MAX;
 }
 
-Traversal *random_ray(BVH *tree)
+Traversal *random_ray(AABB *tree)
 {
 	Traversal *ray = calloc(1, sizeof(Traversal));
-
 	float rx = unit_rand();
 	float ry = unit_rand();
 	float rz = unit_rand();
@@ -199,14 +185,15 @@ void tally(Traversal *sum, Traversal *ray)
 	free(ray);
 }
 
-void study_tree(BVH *tree, int ray_count)
+void study_tree(AABB *tree, int ray_count)
 {
+	printf("entering the lab\n");
 	Traversal *sum = calloc(1, sizeof(Traversal));
 	for (int i = 0; i < ray_count; i++)
 	{
 		Traversal *ray = random_ray(tree);
 		traverse(tree, ray);
-		tally(ray, sum);
+		tally(sum, ray);
 	}
 
 	printf("%d rays complete\n", ray_count);
