@@ -4,7 +4,7 @@
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
 #define SPLIT_TEST_NUM 1
-#define LEAF_THRESHOLD 10000
+#define LEAF_THRESHOLD 128
 
 enum axis{
 	X_AXIS,
@@ -20,8 +20,7 @@ cl_float3 center(AABB *box)
 
 void push(AABB **stack, AABB *box)
 {
-	if (*stack)
-		box->next = *stack;
+	box->next = *stack;
 	*stack = box;
 }
 
@@ -31,7 +30,7 @@ AABB *pop(AABB **stack)
 	if (*stack)
 	{
 		popped = *stack;
-		*stack = (*stack)->next;
+		*stack = popped->next;
 	}
 	return popped;
 }
@@ -97,9 +96,10 @@ AABB *box_from_boxes(AABB *boxes)
 	AABB *box = empty_box();
 	for (AABB *b = boxes; b;)
 	{
-		flex_box(box, b);
 		AABB *tmp = b->next;
+		flex_box(box, b);
 		push(&box->members, b);
+		box->member_count++;
 		b = tmp;
 	}
 
@@ -118,8 +118,8 @@ AABB *dupe_box(AABB* box)
 int point_in_box(cl_float3 point, AABB *box)
 {
 	if (box->min.x <= point.x && point.x <= box->max.x)
-		if (box->min.y < point.y && point.y <= box->max.y)
-			if (box->min.z < point.z && point.z <= box->max.z)
+		if (box->min.y <= point.y && point.y <= box->max.y)
+			if (box->min.z <= point.z && point.z <= box->max.z)
 				return 1;
 	return 0;
 }
@@ -128,8 +128,6 @@ int box_in_box(AABB *box, AABB *in)
 {
 	//not generic box-box intersection, but adequate for context
 	//just check all corners of the smaller box, true if any are in big box
-	cl_float3 span = vec_sub(box->max, box->min);
-
 	if (point_in_box(box->min, in))
 		return 1;
 	if (point_in_box(box->max, in))
@@ -149,6 +147,39 @@ int box_in_box(AABB *box, AABB *in)
 	return 0;
 }
 
+int all_in(AABB *box, AABB *in)
+{
+	if (!point_in_box(box->min, in))
+		return 0;
+	if (!point_in_box(box->max, in))
+		return 0;
+	if (!point_in_box((cl_float3){box->max.x, box->min.y, box->min.z}, in))
+		return 0;
+	if (!point_in_box((cl_float3){box->min.x, box->max.y, box->min.z}, in))
+		return 0;
+	if (!point_in_box((cl_float3){box->min.x, box->min.y, box->max.z}, in))
+		return 0;
+	if (!point_in_box((cl_float3){box->max.x, box->max.y, box->min.z}, in))
+		return 0;
+	if (!point_in_box((cl_float3){box->min.x, box->max.y, box->max.z}, in))
+		return 0;
+	if (!point_in_box((cl_float3){box->max.x, box->min.y, box->max.z}, in))
+		return 0;
+	return 1;
+}
+
+void print_box(AABB *box)
+{
+	print_vec(box->min);
+	print_vec(box->max);
+}
+
+void print_face(Face *f)
+{
+	for (int i = 0; i < f->shape; i++)
+		print_vec(f->verts[i]);
+}
+
 typedef struct s_split
 {
 	AABB *left;
@@ -160,14 +191,15 @@ typedef struct s_split
 }				Split;
 
 //intersect_box
-int edge_clip(cl_float3 A, cl_float3 B, AABB *clipping, cl_float3 *hitpoint_a, cl_float3 *hitpoint_b)
+int edge_clip(cl_float3 A, cl_float3 B, AABB *clipping, cl_float3 *points, int *pt_count, int *res_a, int *res_b)
 {
 	cl_float3 origin = A;
 	cl_float3 edge = vec_sub(B, A);
 	cl_float3 direction = unit_vec(edge);
 	cl_float3 inv_dir = (cl_float3){1.0f / direction.x, 1.0f / direction.y, 1.0f / direction.z};
 
-	float edge_t = edge.x * inv_dir.x;
+	float edge_t = fmin(fmin(edge.x * inv_dir.x, edge.y * inv_dir.y), edge.z * inv_dir.z);
+	//printf("edge_t is %f\n", edge_t);
 
 	float tx0 = (clipping->min.x - origin.x) * inv_dir.x;
 	float tx1 = (clipping->max.x - origin.x) * inv_dir.x;
@@ -180,7 +212,7 @@ int edge_clip(cl_float3 A, cl_float3 B, AABB *clipping, cl_float3 *hitpoint_a, c
 	float tymax = fmax(ty0, ty1);
 
 
-	if ((tmin >= tymax) || (tymin >= tmax))
+	if ((tmin > tymax) || (tymin > tmax))
 		return 0;
 
 	tmin = fmax(tymin, tmin);
@@ -191,24 +223,51 @@ int edge_clip(cl_float3 A, cl_float3 B, AABB *clipping, cl_float3 *hitpoint_a, c
 	float tzmin = fmin(tz0, tz1);
 	float tzmax = fmax(tz0, tz1);
 
-	if ((tmin >= tzmax) || (tzmin >= tmax))
+	if ((tmin > tzmax) || (tzmin > tmax))
 		return 0;
 
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
 
-	//need to make sure we're not updating with a further point
+	//need to make sure we're not updating with a point that goes past far vertex (not sure if even possible)
 
-	if (tmin > 0 && tmin < edge_t)
-	*hitpoint_a = vec_add(A, vec_scale(B, tmin));
-	if (tmax > 0 && tmax < edge_t)
-	*hitpoint_b = vec_add(A, vec_scale(B, tmax));
+	if (tmin >= 0 && tmin < edge_t)
+	{
+		points[*pt_count] = vec_add(A, vec_scale(direction, tmin));
+		*pt_count = *pt_count + 1;
+		*res_a = *res_a + 1;
+	}
+	if (tmax >= 0 && tmax < edge_t)
+	{
+		points[*pt_count] = vec_add(A, vec_scale(direction, tmax));
+		*pt_count = *pt_count + 1;
+		*res_b = *res_b + 1;
+	}
 	return 1;
 }
 
 void clip_box(AABB *box, AABB *bound)
 {
+	// printf("\n\nattempting to clip this box\n");
+	// print_box(box);
+	// printf("containing this face\n");
+	// print_face(box->f);
+	// printf("with this box\n");
+	// print_box(bound);
 	//initial clip is easy because they're AABBs
+
+
+	if (point_in_box(box->min, bound) && point_in_box(box->max, bound))
+	{
+		printf("\n\ni have made a bad assumption\n");
+		printf("attempting to clip this box\n");
+		print_box(box);
+		printf("containing this face\n");
+		print_face(box->f);
+		printf("with this box\n");
+		print_box(bound);
+	}
+
 	if (point_in_box(box->min, bound))
 	{
 		//min is in so we update max
@@ -236,26 +295,9 @@ void clip_box(AABB *box, AABB *bound)
 	cl_float3 points[6];
 	int pt_count = 0;
 
-	if(edge_clip(A, B, bound, &points[pt_count], &points[pt_count + 1]))
-	{
-		res_a++;
-		res_b++;
-		pt_count += 2;
-	}
-
-	if(edge_clip(A, C, bound, &points[pt_count], &points[pt_count + 1]))
-	{
-		res_a++;
-		res_c++;
-		pt_count += 2;
-	}
-
-	if(edge_clip(B, C, bound, &points[pt_count], &points[pt_count + 1]))
-	{
-		res_b++;
-		res_c++;
-		pt_count += 2;
-	}
+	edge_clip(A, B, bound, points, &pt_count, &res_a, &res_b);
+	edge_clip(A, C, bound, points, &pt_count, &res_a, &res_c);
+	edge_clip(B, C, bound, points, &pt_count, &res_b, &res_c);
 
 	//basically, if we get an "update" for a, b or c, we don't consider the original point anymore.
 	//but we do consider both possible "updates", and if we don't get any we consider the original point.
@@ -265,8 +307,13 @@ void clip_box(AABB *box, AABB *bound)
 		points[pt_count++] = B;
 	if (res_c == 0)
 		points[pt_count++] = C;
+	//printf("%d points in input\n", pt_count);
+	// for (int i = 0; i < pt_count; i++)
+	// 	print_vec(points[i]);
 
 	AABB *clippy = box_from_points(points, pt_count);
+	// printf("clippy box\n");
+	// print_box(clippy);
 
 	//i hope this is this easy.
 
@@ -277,6 +324,10 @@ void clip_box(AABB *box, AABB *bound)
 	box->min.x = fmax(clippy->min.x, bound->min.x);
 	box->min.y = fmax(clippy->min.y, bound->min.y);
 	box->min.z = fmax(clippy->min.z, bound->min.z);
+
+	// printf("resulting clipped box\n");
+	// print_box(box);
+	// getchar();
 }
 
 Split *new_split(AABB *box, enum axis a, int i, int total)
@@ -287,6 +338,10 @@ Split *new_split(AABB *box, enum axis a, int i, int total)
 	split->left_flex = empty_box();
 	split->right = dupe_box(box);
 	split->right_flex = empty_box();
+
+	i++;
+	total++;
+
 	if (a == X_AXIS)
 	{
 		split->left->max.x = split->left->min.x + span.x * (float)i / (float)total;
@@ -314,6 +369,25 @@ void free_split(Split *split)
 	free(split);
 }
 
+void print_split(Split *split)
+{
+	printf("left rigid:\n");
+	print_vec(split->left->min);
+	print_vec(split->left->max);
+	printf("left flex:\n");
+	print_vec(split->left_flex->min);
+	print_vec(split->left_flex->max);
+	printf("%d\n", split->left_count);
+
+	printf("right rigid:\n");
+	print_vec(split->right->min);
+	print_vec(split->right->max);
+	printf("right flex:\n");
+	print_vec(split->right_flex->min);
+	print_vec(split->right_flex->max);
+	printf("%d\n", split->right_count);
+}
+
 float SA(AABB *box)
 {
 	cl_float3 span = vec_sub(box->max, box->min);
@@ -335,16 +409,23 @@ Split *best_spatial_split(AABB *box)
 		spatials[2 * SPLIT_TEST_NUM + i] = new_split(box, Z_AXIS, i, SPLIT_TEST_NUM);
 	}
 
-	printf("made splits\n");
+	//printf("made splits\n");
+
+	// for (int i = 0; i < SPLIT_TEST_NUM * 3; i++)
+	// 	print_split(spatials[i]);
+	// getchar();
 
 	//for each member, "add" to each split (dont actually make copies)
-	for (AABB *b = box->members; b;)
+	int count = 0;
+	//printf("box->member_count %d\n", box->member_count);
+	for (AABB *b = box->members; b != NULL; b = b->next)
 	{
-		AABB *tmp = b->next;
+		if (count == box->member_count)
+			printf("count is %d, member count %d, should have been done now\n", count, box->member_count);
 		for (int i = 0; i < SPLIT_TEST_NUM * 3; i++)
 		{
 			//printf("i is %d\n", i);
-			if (box_in_box(b, spatials[i]->left) && box_in_box(b, spatials[i]->right))
+			if (box_in_box(b, spatials[i]->left) && box_in_box(b, spatials[i]->right) && !all_in(b, spatials[i]->left) && !all_in(b, spatials[i]->right))
 			{
 				AABB *lclip = dupe_box(b);
 				AABB *rclip = dupe_box(b);
@@ -354,6 +435,9 @@ Split *best_spatial_split(AABB *box)
 
 				flex_box(spatials[i]->left_flex, lclip);
 				flex_box(spatials[i]->right_flex, rclip);
+
+				spatials[i]->left_count++;
+				spatials[i]->right_count++;
 				
 				free(lclip);
 				free(rclip);
@@ -363,13 +447,15 @@ Split *best_spatial_split(AABB *box)
 				flex_box(spatials[i]->left_flex, b);
 				spatials[i]->left_count++;
 			}
-			else
+			else if (box_in_box(b, spatials[i]->right))
 			{
 				flex_box(spatials[i]->right_flex, b);
 				spatials[i]->right_count++;
 			}
+			else
+				printf("member not in any box (shouldnt happen)\n");
 		}
-		b = tmp;
+		count++;
 	}
 
 	//measure and choose best split
@@ -401,12 +487,14 @@ Split *best_spatial_split(AABB *box)
 void partition(AABB *box)
 {
 	Split *spatial = best_spatial_split(box);
-	printf("found best spatial\n");
+	// printf("\n\nfound best spatial\n");
+	// print_split(spatial);
+	// getchar();
 
 	box->left = dupe_box(spatial->left_flex);
 	box->right = dupe_box(spatial->right_flex);
 
-	for (AABB *b = box->members; b;)
+	for (AABB *b = box->members; b != NULL;)
 	{
 		AABB *tmp = b->next;
 		if (box_in_box(b, box->left) && box_in_box(b, box->right))
@@ -419,7 +507,7 @@ void partition(AABB *box)
 
 			push(&box->left->members, lclip);
 			box->left->member_count++;
-			push(&box->left->members, lclip);
+			push(&box->right->members, rclip);
 			box->right->member_count++;
 
 			free(b);
@@ -429,11 +517,13 @@ void partition(AABB *box)
 			push(&box->left->members, b);
 			box->left->member_count++;
 		}
-		else
+		else if (box_in_box(b, spatial->right))
 		{
 			push(&box->right->members, b);
 			box->right->member_count++;
 		}
+		else
+			printf("not in any final box, real problem\n");
 		b = tmp;
 	}
 	free_split(spatial);
@@ -443,14 +533,20 @@ AABB *sbvh(Face *faces, int *box_count)
 {
 	//put all faces in AABBs
 	AABB *boxes = NULL;
+	int fcount = 0;
 	for (Face *f = faces; f; f = f->next)
+	{
 		push(&boxes, box_from_face(f));
+		fcount++;
+	}
 
-	printf("boxes are in faces\n");
+	printf("faces are in boxes, %d\n", fcount);
 
 	AABB *root_box = box_from_boxes(boxes);
 
 	printf("root box made\n");
+	print_vec(root_box->min);
+	print_vec(root_box->max);
 
 	AABB *stack = root_box;
 	int count = 1;
@@ -458,7 +554,7 @@ AABB *sbvh(Face *faces, int *box_count)
 	{
 		AABB *box = pop(&stack);
 		partition(box);
-		printf("partitioned\n");
+		//printf("partitioned\n");
 		count += 2;
 		if (box->left->member_count > LEAF_THRESHOLD)
 			push(&stack, box->left);
