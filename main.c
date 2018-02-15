@@ -83,7 +83,7 @@ int main(int ac, char **av)
 	int box_count, ref_count;
 	AABB *tree = sbvh(face_list, &box_count, &ref_count);
 	printf("finished with %d boxes\n", box_count);
-	study_tree(tree, 1000);
+	study_tree(tree, 100000);
 
 	sponza->bins = tree;
 	sponza->bin_count = box_count;

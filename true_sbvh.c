@@ -3,8 +3,8 @@
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
-#define SPLIT_TEST_NUM 1
-#define LEAF_THRESHOLD 1000
+#define SPLIT_TEST_NUM 7
+#define LEAF_THRESHOLD 32
 
 enum axis{
 	X_AXIS,
@@ -685,8 +685,8 @@ gpu_bin *flatten_bvh(Scene *scene)
 	}
 
 
-	for (int i = 0; i < scene->bin_count; i++)
-		printf("%d, L %d R %d\n", i, bins[i].lind, bins[i].rind);
+	// for (int i = 0; i < scene->bin_count; i++)
+	// 	printf("%d, L %d R %d\n", i, bins[i].lind, bins[i].rind);
 
 	return bins;
 }

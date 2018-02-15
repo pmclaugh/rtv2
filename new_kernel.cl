@@ -112,7 +112,7 @@ static int inside_box(const float3 pt, const Box box) //currently unused. origin
 }
 
 //intersect_box
-static const int intersect_box(const Ray ray, const Box b)
+static const int intersect_box(const Ray ray, const Box b, const float t)
 {
 	//the if tmin >=t checks are new, should be fine, should help. will toggle to see effect.
 
@@ -143,6 +143,9 @@ static const int intersect_box(const Ray ray, const Box b)
 
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
+
+	if (tmin > t)
+		return (0);
 
 	if (tmin <= 0.0 && tmax <= 0.0)
 		return (0);
@@ -207,7 +210,7 @@ static int hit_bvh(	const Ray ray,
 		b = boxes[stack[--s_i]];
 
 		//check
-		if (intersect_box(ray, b))
+		if (intersect_box(ray, b, t))
 		{
 			//leaf? brute check.
 			if (b.rind < 0)

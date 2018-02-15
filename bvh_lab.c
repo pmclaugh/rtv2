@@ -185,14 +185,79 @@ void tally(Traversal *sum, Traversal *ray)
 	free(ray);
 }
 
+float area(AABB *box)
+{
+	cl_float3 span = vec_sub(box->max, box->min);
+	return span.x * span.y * span.z;
+}
+
+int depth(AABB *box)
+{
+	int d = 0;
+	while (box)
+	{
+		box = box->parent;
+		d++;
+	}
+	return d;
+}
+
 void study_tree(AABB *tree, int ray_count)
 {
-	printf("entering the lab\n");
+	printf("\n\n\nentering the lab\n");
+
+	printf("\nmeasuring tree:\n");
+
+	float root_area = area(tree);
+
+	int depth_total = 0;
+	int max_depth = 0;
+	float area_total = 0;
+	float leaf_area_subtotal = 0;
+	int node_count = 0;
+	int leaf_count = 0;
+
+	AABB *queue_head = tree;
+	AABB *queue_tail = tree;
+
+	while (queue_head)
+	{
+		area_total += area(queue_head);
+		node_count++;
+		if (queue_head->left)
+		{
+			queue_head->left->next = queue_head->right;
+			queue_tail->next = queue_head->left;
+			queue_tail = queue_head->right;
+			queue_tail->next = NULL;
+		}
+		else
+		{
+			leaf_count++;
+			int d = depth(queue_head);
+			if (d > max_depth)
+				max_depth = d;
+			depth_total += d;
+			leaf_area_subtotal += area(queue_head);
+		}
+		queue_head = queue_head->next;
+	}
+	printf("%d leaf nodes, %d nodes total\n", leaf_count, node_count);
+	printf("%.2f average depth, %d max\n", (float)depth_total / (float)leaf_count, max_depth);
+	printf("total area of all boxes %.2f\n", area_total);
+	printf("leaves are %.2f%% of root box area\n", 100.0f * leaf_area_subtotal / root_area);
+
+
+	printf("\ntesting the tree:\n");
 	Traversal *sum = calloc(1, sizeof(Traversal));
-	for (int i = 0; i < ray_count; i++)
+
+	int i;
+	//#pragma omp parallel for private(i)
+	for (i = 0; i < ray_count; i++)
 	{
 		Traversal *ray = random_ray(tree);
 		traverse(tree, ray);
+		//#pragma omp critical
 		tally(sum, ray);
 	}
 
