@@ -85,6 +85,8 @@ int main(int ac, char **av)
 	printf("finished with %d boxes\n", box_count);
 	study_tree(tree, 100000);
 
+	//return 0;
+
 	sponza->bins = tree;
 	sponza->bin_count = box_count;
 	sponza->face_count = ref_count;
