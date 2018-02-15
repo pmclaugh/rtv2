@@ -155,13 +155,31 @@ typedef struct bvh_struct
 	struct bvh_struct *next; //for tree building not for tracing
 }				tree_box;
 
+typedef struct s_AABB
+{
+	cl_float3 min;
+	cl_float3 max;
+
+	struct s_AABB *members;
+	struct s_AABB *left;
+	struct s_AABB *right;
+	struct s_AABB *next;
+	struct s_AABB *parent;
+
+	int start_ind;
+	int member_count;
+	int flat_ind;
+
+	Face *f;
+}				AABB;
+
 typedef struct s_new_scene
 {
 	Material *materials;
 	int mat_count;
 	Face *faces;
 	int face_count;
-	tree_box *bins;
+	AABB *bins;
 	int bin_count;
 }				Scene;
 
@@ -222,34 +240,17 @@ typedef struct s_gpu_scene
 	cl_uint seed_count;
 }				gpu_scene;
 
-typedef struct s_AABB
-{
-	cl_float3 min;
-	cl_float3 max;
 
-	struct s_AABB *members;
-	int member_count;
-	struct s_AABB *left;
-	struct s_AABB *right;
-	struct s_AABB *next;
 
-	Face *f;
-}				AABB;
-
-AABB *sbvh(Face *faces, int *box_count);
+AABB *sbvh(Face *faces, int *box_count, int *ref_count);
 void study_tree(AABB *tree, int ray_count);
+void flatten_faces(Scene *scene);
+gpu_bin *flatten_bvh(Scene *scene);
 
-int triBoxOverlap(float boxcenter[3],float boxhalfsize[3],float triverts[3][3]);
 
-gpu_bin *flatten_bvh(tree_box *bvh, int box_count);
 
 Face *ply_import(char *ply_file);
 Face *object_flatten(Face *faces, int *face_count);
-tree_box *build_sbvh(Face *faces, int count, int *box_count);
-
-tree_box *super_bvh(Face *faces, int count, int *box_count);
-
-void translate(Face *list, cl_float3 displacement);
 
 ////Old stuff
 void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);

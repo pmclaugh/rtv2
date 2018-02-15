@@ -78,55 +78,54 @@ int main(int ac, char **av)
 		f->next = face_list;
 		face_list = f;
 	}
+	free(sponza->faces);
 
-	int box_count = 0;
-	AABB *tree = sbvh(face_list, &box_count);
+	int box_count, ref_count;
+	AABB *tree = sbvh(face_list, &box_count, &ref_count);
 	printf("finished with %d boxes\n", box_count);
-	study_tree(tree, 10000);
-	return 0;
+	study_tree(tree, 1000);
+
+	sponza->bins = tree;
+	sponza->bin_count = box_count;
+	sponza->face_count = ref_count;
+	printf("about to flatten\n");
+	flatten_faces(sponza);
+
+	t_camera cam;
+	//cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
+	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
+	cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
+	//cam.center = (cl_float3){-800.0, 600.0, 350.0}; upstairs left
+	//cam.center = (cl_float3){800.0, 100.0, 350.0}; //down left
+	//cam.center = (cl_float3){900.0, 150.0, -35.0}; //lion
+	//cam.center = (cl_float3){-250.0, 100.0, 0.0};
+	cam.normal = (cl_float3){1.0, 0.0, 0.0};
+	cam.width = 1.0;
+	cam.height = 1.0;
+	init_camera(&cam, XDIM, YDIM);
+	//printf("%lu\n", sizeof(gpu_bin));
+	cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM);
+
+	FILE *f = fopen("out.ppm", "w");
+	fprintf(f, "P3\n%d %d\n%d\n ",XDIM,YDIM,255);
+	for (int row=0; row<YDIM; row++)
+	{
+		for (int col=0;col<XDIM;col++) {
+			fprintf(f,"%d %d %d ", (int)(pixels[row * XDIM + (XDIM - col)].x * 255), (int)(pixels[row * XDIM + (XDIM - col)].y * 255), (int)(pixels[row * XDIM + (XDIM - col)].z * 255));
+		}
+		fprintf(f, "\n");
+	}
+	fclose(f);
+
+	void *mlx = mlx_init();
+	void *win = mlx_new_window(mlx, XDIM, YDIM, "RTV1");
+	void *img = mlx_new_image(mlx, XDIM, YDIM);
+	draw_pixels(img, XDIM, YDIM, pixels);
+	mlx_put_image_to_window(mlx, win, img, 0, 0);
+
+	t_param *param = calloc(1, sizeof(t_param));
+	*param = (t_param){mlx, win, img, XDIM, YDIM, sponza, cam, NULL, 0};
 	
-
-	// int bin_count;
-	// tree_box *sponza_bvh = super_bvh(sponza->faces, sponza->face_count, &bin_count);
-	// sponza->bins = sponza_bvh;
-	// sponza->bin_count = bin_count;
-	// flatten_bvh(sponza_bvh, bin_count);
-
-	// t_camera cam;
-	// //cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
-	// //cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
-	// cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
-	// //cam.center = (cl_float3){-800.0, 600.0, 350.0}; upstairs left
-	// //cam.center = (cl_float3){800.0, 100.0, 350.0}; //down left
-	// //cam.center = (cl_float3){900.0, 150.0, -35.0}; //lion
-	// //cam.center = (cl_float3){-250.0, 100.0, 0.0};
-	// cam.normal = (cl_float3){1.0, 0.0, 0.0};
-	// cam.width = 1.0;
-	// cam.height = 1.0;
-	// init_camera(&cam, XDIM, YDIM);
-	// //printf("%lu\n", sizeof(gpu_bin));
-	// cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM);
-
-	// FILE *f = fopen("out.ppm", "w");
-	// fprintf(f, "P3\n%d %d\n%d\n ",XDIM,YDIM,255);
-	// for (int row=0; row<YDIM; row++)
-	// {
-	// 	for (int col=0;col<XDIM;col++) {
-	// 		fprintf(f,"%d %d %d ", (int)(pixels[row * XDIM + (XDIM - col)].x * 255), (int)(pixels[row * XDIM + (XDIM - col)].y * 255), (int)(pixels[row * XDIM + (XDIM - col)].z * 255));
-	// 	}
-	// 	fprintf(f, "\n");
-	// }
-	// fclose(f);
-
-	// void *mlx = mlx_init();
-	// void *win = mlx_new_window(mlx, XDIM, YDIM, "RTV1");
-	// void *img = mlx_new_image(mlx, XDIM, YDIM);
-	// draw_pixels(img, XDIM, YDIM, pixels);
-	// mlx_put_image_to_window(mlx, win, img, 0, 0);
-
-	// t_param *param = calloc(1, sizeof(t_param));
-	// *param = (t_param){mlx, win, img, XDIM, YDIM, sponza, cam, NULL, 0};
-	
-	// mlx_key_hook(win, key_hook, param);
-	// mlx_loop(mlx);
+	mlx_key_hook(win, key_hook, param);
+	mlx_loop(mlx);
 }

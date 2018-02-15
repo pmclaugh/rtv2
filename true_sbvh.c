@@ -3,8 +3,8 @@
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
-#define SPLIT_TEST_NUM 10
-#define LEAF_THRESHOLD 32
+#define SPLIT_TEST_NUM 1
+#define LEAF_THRESHOLD 1000
 
 enum axis{
 	X_AXIS,
@@ -523,7 +523,7 @@ void partition(AABB *box)
 	free_split(spatial);
 }
 
-AABB *sbvh(Face *faces, int *box_count)
+AABB *sbvh(Face *faces, int *box_count, int *refs)
 {
 	//put all faces in AABBs
 	AABB *boxes = NULL;
@@ -549,6 +549,8 @@ AABB *sbvh(Face *faces, int *box_count)
 	{
 		AABB *box = pop(&stack);
 		partition(box);
+		box->left->parent = box;
+		box->right->parent = box;
 		count += 2;
 		if (box->left->member_count > LEAF_THRESHOLD)
 			push(&stack, box->left);
@@ -562,6 +564,129 @@ AABB *sbvh(Face *faces, int *box_count)
 	printf("done?? %d boxes?", count);
 	printf("%d member references vs %d starting\n", ref_count, root_box->member_count);
 	*box_count = count;
+	*refs = ref_count;
 
 	return root_box;
+}
+
+///////FLATTENING SECTION//////////
+
+void flatten_faces(Scene *scene)
+{
+	//make array of Faces that's ref_count big
+	Face *faces = calloc(scene->face_count, sizeof(Face));
+	int face_ind = 0;
+	//traverse tree, finding leaf nodes
+	scene->bins->next = NULL;
+	AABB *stack = scene->bins;
+	AABB *box = NULL;
+	//populate face array with faces in leaf nodes
+	while (stack)
+	{
+		box = pop(&stack);
+		if (box->left) // boxes always have 0 or 2 children never 1
+		{
+			push(&stack, box->left);
+			push(&stack, box->right);
+		}
+		else
+		{
+			box->start_ind = face_ind;
+			for (AABB *node = box->members; node; node = node->next)
+				memcpy(&faces[face_ind++], node->f, sizeof(Face));
+		}
+			
+	}
+
+	scene->faces = faces;
+}
+
+// typedef struct s_gpu_bin
+// {
+// 	cl_float minx;
+// 	cl_float miny;
+// 	cl_float minz;
+// 	cl_int lind;
+// 	cl_float maxx;
+// 	cl_float maxy;
+// 	cl_float maxz;
+// 	cl_int rind;
+// }				gpu_bin;
+
+gpu_bin bin_from_box(AABB *box)
+{
+	gpu_bin bin;
+
+	bin.minx = box->min.x;
+	bin.miny = box->min.y;
+	bin.minz = box->min.z;
+
+	bin.maxx = box->max.x;
+	bin.maxy = box->max.y;
+	bin.maxz = box->max.z;
+
+	if (box->left)
+	{
+		bin.lind = box->left->flat_ind;
+		bin.rind = box->right->flat_ind;
+	}
+	else
+	{
+		bin.lind = -3 * box->start_ind;
+		bin.rind = -3 * box->member_count;
+	}
+
+	return bin;
+}
+
+gpu_bin *flatten_bvh(Scene *scene)
+{
+	gpu_bin *bins = calloc(scene->bin_count, sizeof(gpu_bin));
+	int bin_ind = 0;
+
+	//do a "dummy" traversal and fill in flat_ind for each AABB
+
+	AABB *queue_head = scene->bins;
+	AABB *queue_tail = scene->bins;
+
+	while (queue_head)
+	{
+		queue_head->flat_ind = bin_ind++;
+
+		if (queue_head->left)
+		{
+			queue_head->left->next = queue_head->right;
+			queue_tail->next = queue_head->left;
+			queue_tail = queue_head->right;
+			queue_tail->next = NULL;
+		}
+
+		queue_head = queue_head->next;
+	}
+
+	printf("bin_ind got to %d, should equal %d\n", bin_ind, scene->bin_count);
+
+	//second pass to actually populate the gpu_bins
+	queue_head = scene->bins;
+	queue_tail = scene->bins;
+
+	while (queue_head)
+	{
+		bins[queue_head->flat_ind] = bin_from_box(queue_head);
+		if (queue_head->left)
+		{
+			queue_head->left->next = queue_head->right;
+			queue_tail->next = queue_head->left;
+			queue_tail = queue_head->right;
+			queue_tail->next = NULL;
+		}
+
+		queue_head = queue_head->next;
+	}
+
+
+	for (int i = 0; i < scene->bin_count; i++)
+		printf("%d, L %d R %d\n", i, bins[i].lind, bins[i].rind);
+
+	return bins;
 }
