@@ -5,7 +5,7 @@
 #define EPSILON 0.001f
 
 #define SPLIT_TEST_NUM 32
-#define LEAF_THRESHOLD 16
+#define LEAF_THRESHOLD 32
 
 enum axis{
 	X_AXIS,
@@ -534,7 +534,7 @@ int object_wins;
 
 void partition(AABB *box)
 {
-	Split *spatial = NULL; //best_spatial_split(box);
+	Split *spatial = best_spatial_split(box);
 	Split *object = best_object_split(box);
 
 	//printf("spatial %p - object %p\n", spatial, object);
