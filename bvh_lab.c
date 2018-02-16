@@ -133,6 +133,8 @@ void traverse(AABB *tree, Traversal *ray)
 	tree->next = NULL;
 	AABB *stack = tree;
 
+	float t = FLT_MAX;
+
 	while(stack)
 	{
 		AABB *box = pop(&stack);

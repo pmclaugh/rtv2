@@ -5,7 +5,7 @@
 #define EPSILON 0.001f
 
 #define SPLIT_TEST_NUM 32
-#define LEAF_THRESHOLD 32
+#define LEAF_THRESHOLD 16
 
 enum axis{
 	X_AXIS,
@@ -319,7 +319,7 @@ void clip_box(AABB *box, AABB *bound)
 	// getchar();
 }
 
-Split *new_split(AABB *box, enum axis a, int i, int total)
+Split *new_split(AABB *box, enum axis a, float ratio)
 {
 	cl_float3 span = vec_sub(box->max, box->min);
 	Split *split = calloc(1, sizeof(Split));
@@ -328,22 +328,19 @@ Split *new_split(AABB *box, enum axis a, int i, int total)
 	split->right = dupe_box(box);
 	split->right_flex = empty_box();
 
-	i++;
-	total++;
-
 	if (a == X_AXIS)
 	{
-		split->left->max.x = split->left->min.x + span.x * (float)i / (float)total;
+		split->left->max.x = split->left->min.x + span.x * ratio;
 		split->right->min.x = split->left->max.x;
 	}
 	if (a == Y_AXIS)
 	{
-		split->left->max.y = split->left->min.y + span.y * (float)i / (float)total;
+		split->left->max.y = split->left->min.y + span.y * ratio;
 		split->right->min.y = split->left->max.y;
 	}
 	if (a == Z_AXIS)
 	{
-		split->left->max.z = split->left->min.z + span.z * (float)i / (float)total;
+		split->left->max.z = split->left->min.z + span.z * ratio;
 		split->right->min.z = split->left->max.z;
 	}
 	return split;
@@ -391,20 +388,32 @@ float SAH(Split *split, AABB *parent)
 	return (SA(split->left_flex) * split->left_count + SA(split->right_flex) * split->right_count) / SA(parent);
 }
 
+Split **allocate_splits(AABB *box)
+{
+	cl_float3 span = vec_sub(box->max, box->min);
+	float spread = span.x + span.y + span.z;
+
+	Split **spatials = calloc(SPLIT_TEST_NUM, sizeof(Split));
+
+	for (float i = 1.0f / (float)SPLIT_TEST_NUM; i < 1; i += 1.0f / (float)SPLIT_TEST_NUM)
+		if (i * spread < span.x)
+			spatials[(int)(floor(i * SPLIT_TEST_NUM)) - 1] = new_split(box, X_AXIS, i * spread / span.x);
+		else if (i * spread < (span.y + span.x))
+			spatials[(int)(floor(i * SPLIT_TEST_NUM)) - 1] = new_split(box, Y_AXIS, (i * spread - span.x) / span.y);
+		else
+			spatials[(int)(floor(i * SPLIT_TEST_NUM)) - 1] = new_split(box, Z_AXIS, (i * spread - span.x - span.y) / span.z);
+	return spatials;
+}
+
 Split *best_spatial_split(AABB *box)
 {
-	Split **spatials = calloc(SPLIT_TEST_NUM * 3, sizeof(Split));
-	for (int i = 0; i < SPLIT_TEST_NUM; i++)
-	{
-		spatials[i] = new_split(box, X_AXIS, i, SPLIT_TEST_NUM);
-		spatials[SPLIT_TEST_NUM + i] = new_split(box, Y_AXIS, i, SPLIT_TEST_NUM);
-		spatials[2 * SPLIT_TEST_NUM + i] = new_split(box, Z_AXIS, i, SPLIT_TEST_NUM);
-	}
+	Split **spatials = allocate_splits(box);
 
 	//for each member, "add" to each split (dont actually make copies)
 	int count = 0;
 	//printf("box->member_count %d\n", box->member_count);
-	for (int i = 0; i < SPLIT_TEST_NUM * 3; i++)
+	for (int i = 0; i < SPLIT_TEST_NUM - 1; i++)
+	{
 		for (AABB *b = box->members; b != NULL; b = b->next)
 			if (box_in_box(b, spatials[i]->left) && box_in_box(b, spatials[i]->right) && !all_in(b, spatials[i]->right) && !all_in(b, spatials[i]->left))
 			{
@@ -440,11 +449,12 @@ Split *best_spatial_split(AABB *box)
 				print_box(b);
 				print_split(spatials[i]);
 			}
+	}
 	//measure and choose best split
 
 	float min_SAH = FLT_MAX;
 	int min_ind = -1;
-	for (int i = 0; i < SPLIT_TEST_NUM * 3; i++)
+	for (int i = 0; i < SPLIT_TEST_NUM - 1; i++)
 	{
 		if (spatials[i]->left_count == 0 || spatials[i]->right_count == 0)
 			continue ;
@@ -458,7 +468,7 @@ Split *best_spatial_split(AABB *box)
 
 	//clean up
 	Split *winner = min_ind == -1 ? NULL : spatials[min_ind];
-	for (int i = 0; i < SPLIT_TEST_NUM * 3; i++)
+	for (int i = 0; i < SPLIT_TEST_NUM - 1; i++)
 		if (i == min_ind)
 			continue;
 		else
@@ -470,15 +480,9 @@ Split *best_spatial_split(AABB *box)
 
 Split *best_object_split(AABB *box)
 {
-	Split **objects = calloc(SPLIT_TEST_NUM * 3, sizeof(Split));
-	for (int i = 0; i < SPLIT_TEST_NUM; i++)
-	{
-		objects[i] = new_split(box, X_AXIS, i, SPLIT_TEST_NUM);
-		objects[SPLIT_TEST_NUM + i] = new_split(box, Y_AXIS, i, SPLIT_TEST_NUM);
-		objects[2 * SPLIT_TEST_NUM + i] = new_split(box, Z_AXIS, i, SPLIT_TEST_NUM);
-	}
+	Split **objects = allocate_splits(box);
 
-	for (int i = 0; i < SPLIT_TEST_NUM * 3; i++)
+	for (int i = 0; i < SPLIT_TEST_NUM - 1; i++)
 		for (AABB *b = box->members; b != NULL; b = b->next)
 			if (point_in_box(center(b), objects[i]->left))
 			{
@@ -501,7 +505,7 @@ Split *best_object_split(AABB *box)
 
 	float min_SAH = FLT_MAX;
 	int min_ind = -1;
-	for (int i = 0; i < SPLIT_TEST_NUM * 3; i++)
+	for (int i = 0; i < SPLIT_TEST_NUM - 1; i++)
 	{
 		if (objects[i]->left_count == 0 || objects[i]->right_count == 0)
 			continue ;
@@ -515,7 +519,7 @@ Split *best_object_split(AABB *box)
 
 	//clean up
 	Split *winner = min_ind == -1 ? NULL : objects[min_ind];
-	for (int i = 0; i < SPLIT_TEST_NUM * 3; i++)
+	for (int i = 0; i < SPLIT_TEST_NUM - 1; i++)
 		if (i == min_ind)
 			continue;
 		else
@@ -530,8 +534,8 @@ int object_wins;
 
 void partition(AABB *box)
 {
-	Split *spatial = best_spatial_split(box);
-	Split *object = NULL;//best_object_split(box);
+	Split *spatial = NULL; //best_spatial_split(box);
+	Split *object = best_object_split(box);
 
 	//printf("spatial %p - object %p\n", spatial, object);
 
