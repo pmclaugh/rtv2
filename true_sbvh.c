@@ -7,6 +7,9 @@
 #define SPLIT_TEST_NUM 32
 #define LEAF_THRESHOLD 16
 
+#define TRAVERSAL_COST 10
+#define TRIANGLE_COMP_COST 1
+
 enum axis{
 	X_AXIS,
 	Y_AXIS,
@@ -392,7 +395,7 @@ float SA(AABB *box)
 
 float SAH(Split *split, AABB *parent)
 {
-	return (SA(split->left_flex) * split->left_count + SA(split->right_flex) * split->right_count) / SA(parent);
+	return TRAVERSAL_COST + TRIANGLE_COMP_COST * (SA(split->left_flex) * split->left_count + SA(split->right_flex) * split->right_count) / SA(parent);
 }
 
 Split **allocate_splits(AABB *box)
@@ -555,9 +558,12 @@ void partition(AABB *box)
 	Split *spatial = best_spatial_split(box);
 	Split *object = best_object_split(box);
 
-	//printf("spatial %p - object %p\n", spatial, object);
 
-	if (spatial == NULL && object == NULL)
+	float sp = spatial ? SAH(spatial, box) : FLT_MAX;
+	float ob = object ? SAH(object, box) : FLT_MAX;
+	float no = TRIANGLE_COMP_COST * box->member_count;
+
+	if (spatial == NULL && object == NULL || (sp < no && ob < no))
 	{
 		printf("bailing out!\n");
 		return;
