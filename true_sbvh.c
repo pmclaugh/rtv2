@@ -4,7 +4,12 @@
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
 #define SPLIT_TEST_NUM 15
-#define LEAF_THRESHOLD 32
+#define LEAF_THRESHOLD 16
+#define SOFT_LEAF_THRESHOLD 32
+
+#define TRAVERSAL_COST 10000
+#define TRIANGLE_COST 1
+#define BOX_COST 2
 
 enum axis{
 	X_AXIS,
@@ -531,6 +536,22 @@ int x_sort(const void *arg1, const void *arg2)
 		return 0;
 }
 
+// int x_sort_corner(const void *arg1, const void *arg2)
+// {
+// 	AABB **ap = arg1;
+// 	AABB **bp = arg2;
+
+// 	AABB *a = *ap;
+// 	AABB *b = *bp;
+
+// 	if (a->min.x > b->min.x)
+// 		return 1;
+// 	else if (a->min.x< b->min.x)
+// 		return -1;
+// 	else
+// 		return 0;
+// }
+
 int y_sort(const void *arg1, const void *arg2)
 {
 	AABB **ap = arg1;
@@ -615,7 +636,7 @@ Split *best_object_split(AABB *box)
 		for (int j = 0; j < SPLIT_TEST_NUM / 3; j++)
 		{
 			cl_float3 c = center(members[i]);
-			if ((float)i / (float)box->member_count < (float)(j + 1) / (float)(SPLIT_TEST_NUM / 3 + 1) || c.y == objects[j]->left->max.y)
+			if ((float)i / (float)box->member_count < (float)(j + 1) / (float)(SPLIT_TEST_NUM / 3 + 1) || c.y == objects[j + SPLIT_TEST_NUM / 3]->left->max.y)
 			{
 				flex_box(objects[j + SPLIT_TEST_NUM / 3]->left_flex, members[i]);
 				objects[j + SPLIT_TEST_NUM / 3]->left_count++;
@@ -635,7 +656,7 @@ Split *best_object_split(AABB *box)
 		for (int j = 0; j < SPLIT_TEST_NUM / 3; j++)
 		{
 			cl_float3 c = center(members[i]);
-			if ((float)i / (float)box->member_count < (float)(j + 1) / (float)(SPLIT_TEST_NUM / 3 + 1) || c.z == objects[j]->left->max.z)
+			if ((float)i / (float)box->member_count < (float)(j + 1) / (float)(SPLIT_TEST_NUM / 3 + 1) || c.z == objects[j + 2 * SPLIT_TEST_NUM / 3]->left->max.z)
 			{
 				flex_box(objects[j + 2 * SPLIT_TEST_NUM / 3]->left_flex, members[i]);
 				objects[j + 2 * SPLIT_TEST_NUM / 3]->left_count++;
@@ -687,6 +708,18 @@ void partition(AABB *box)
 
 	//printf("spatial %p - object %p\n", spatial, object);
 
+	if (box->member_count < SOFT_LEAF_THRESHOLD)
+	{
+		//consider not splitting
+		float parent_SAH = SA(box) * box->member_count;
+		if (!spatial || parent_SAH < TRAVERSAL_COST + SAH(spatial, box))
+			if (!object || parent_SAH < TRAVERSAL_COST + SAH(object, box))
+			{
+				//printf("best not to split\n");
+				return;
+			}
+	}
+
 	if (spatial == NULL && object == NULL)
 	{
 		printf("bailing out!\n");
@@ -694,7 +727,7 @@ void partition(AABB *box)
 	}
 	else if (spatial == NULL || (object != NULL && SAH(object, box) < SAH(spatial, box)))
 	{
-		printf("OBJECT, children are %.2f%% of parent area\n", 100.0f * (area(object->left_flex) + area(object->right_flex)) / area(box));
+		//printf("OBJECT, children are %.2f%% of parent area\n", 100.0f * (area(object->left_flex) + area(object->right_flex)) / area(box));
 		//printf("doing the object split\n");
 		box->left = dupe_box(object->left_flex);
 		box->right = dupe_box(object->right_flex);
@@ -713,7 +746,7 @@ void partition(AABB *box)
 			}
 			else
 			{
-				printf("\n\nnot in any final box, real problem\n");
+				printf("\n\nnot in any final box, real problem (object)\n");
 				print_box(b);
 				print_split(object);
 				print_box(box);
@@ -721,11 +754,20 @@ void partition(AABB *box)
 			}
 			b = tmp;
 		}
+
+		// printf("object split complete, did we do it right?\n");
+		// printf("split was calculated with L %d R %d\n", object->left_count, object->right_count);
+		// printf("we ended up with L %d R %d\n", box->left->member_count, box->right->member_count);
+		// if (object->left_count != box->left->member_count || object->right_count != box->right->member_count)
+		// {
+		// 	printf("mismatch\n");
+		// 	getchar();
+		// }
 	}
 	else
 	{
 		
-		printf("SPATIAL, children are %.2f%% of parent area\n", 100.0f * (area(spatial->left_flex) + area(spatial->right_flex)) / area(box));
+		//printf("SPATIAL, children are %.2f%% of parent area\n", 100.0f * (area(spatial->left_flex) + area(spatial->right_flex)) / area(box));
 		//printf("doing the spatial split\n");
 		box->left = dupe_box(spatial->left_flex);
 		box->right = dupe_box(spatial->right_flex);
@@ -760,7 +802,7 @@ void partition(AABB *box)
 			}
 			else
 			{
-				printf("\n\nnot in any final box, real problem\n");
+				printf("\n\nnot in any final box, real problem (spatial)\n");
 				print_box(b);
 				print_split(spatial);
 				print_box(box);
@@ -820,8 +862,8 @@ AABB *sbvh(Face *faces, int *box_count, int *refs)
 		}
 		else
 		{
-			printf("failed to split this box\n");
-			print_box(box);
+			// printf("failed to split this box\n");
+			// print_box(box);
 		}
 	}
 	printf("done?? %d boxes?", count);
