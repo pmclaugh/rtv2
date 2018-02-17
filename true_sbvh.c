@@ -2,13 +2,9 @@
 
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
-#define EPSILON 0.001f
 
-#define SPLIT_TEST_NUM 32
-#define LEAF_THRESHOLD 16
-
-#define TRAVERSAL_COST 10
-#define TRIANGLE_COMP_COST 1
+#define SPLIT_TEST_NUM 15
+#define LEAF_THRESHOLD 32
 
 enum axis{
 	X_AXIS,
@@ -358,29 +354,44 @@ Split *new_split(AABB *box, enum axis a, float ratio)
 
 void free_split(Split *split)
 {
-	free(split->left);
-	free(split->right);
-	free(split->left_flex);
-	free(split->right_flex);
+	if(split->left)
+		free(split->left);
+	if(split->right)
+		free(split->right);
+	if(split->left_flex)
+		free(split->left_flex);
+	if(split->right_flex)
+		free(split->right_flex);
 	free(split);
 }
 
 void print_split(Split *split)
 {
-	printf("left rigid:\n");
-	print_vec(split->left->min);
-	print_vec(split->left->max);
-	printf("left flex:\n");
-	print_vec(split->left_flex->min);
-	print_vec(split->left_flex->max);
+	if(split->left)
+	{
+		printf("left rigid:\n");
+		print_vec(split->left->min);
+		print_vec(split->left->max);
+	}
+	if (split->left_flex)
+	{
+		printf("left flex:\n");
+		print_vec(split->left_flex->min);
+		print_vec(split->left_flex->max);
+	}
 	printf("%d\n", split->left_count);
-
-	printf("right rigid:\n");
-	print_vec(split->right->min);
-	print_vec(split->right->max);
-	printf("right flex:\n");
-	print_vec(split->right_flex->min);
-	print_vec(split->right_flex->max);
+	if (split->right)
+	{
+		printf("right rigid:\n");
+		print_vec(split->right->min);
+		print_vec(split->right->max);
+	}
+	if(split->right_flex)
+	{
+		printf("right flex:\n");
+		print_vec(split->right_flex->min);
+		print_vec(split->right_flex->max);
+	}
 	printf("%d\n", split->right_count);
 
 	printf("%d in both\n", split->both_count);
@@ -395,7 +406,8 @@ float SA(AABB *box)
 
 float SAH(Split *split, AABB *parent)
 {
-	return TRAVERSAL_COST + TRIANGLE_COMP_COST * (SA(split->left_flex) * split->left_count + SA(split->right_flex) * split->right_count) / SA(parent);
+	//return (SA(split->left_flex) * split->left_count + SA(split->right_flex) * split->right_count) / SA(parent);
+	return (SA(split->left_flex) * split->left_count + SA(split->right_flex) * split->right_count) / SA(parent);
 }
 
 Split **allocate_splits(AABB *box)
@@ -403,7 +415,7 @@ Split **allocate_splits(AABB *box)
 	cl_float3 span = vec_sub(box->max, box->min);
 	float spread = span.x + span.y + span.z;
 
-	Split **spatials = calloc(SPLIT_TEST_NUM, sizeof(Split));
+	Split **spatials = calloc(SPLIT_TEST_NUM, sizeof(Split *));
 
 	for (float i = 1.0f / (float)SPLIT_TEST_NUM; i < 1; i += 1.0f / (float)SPLIT_TEST_NUM)
 		if (i * spread < span.x)
@@ -466,9 +478,10 @@ Split *best_spatial_split(AABB *box)
 			}
 			else
 			{
-				printf("member not in any box (shouldnt happen)\n");
+				printf("member not in any box (shouldnt happen) (spatial)\n");
 				print_box(b);
 				print_split(spatials[i]);
+				//getchar();
 			}
 	}
 	//measure and choose best split
@@ -499,30 +512,144 @@ Split *best_spatial_split(AABB *box)
 	return winner;
 }
 
+int x_sort(const void *arg1, const void *arg2)
+{
+	AABB **ap = arg1;
+	AABB **bp = arg2;
+
+	AABB *a = *ap;
+	AABB *b = *bp;
+
+	cl_float3 center_a = center(a);
+	cl_float3 center_b = center(b);
+
+	if (center_a.x > center_b.x)
+		return 1;
+	else if (center_a.x < center_b.x)
+		return -1;
+	else
+		return 0;
+}
+
+int y_sort(const void *arg1, const void *arg2)
+{
+	AABB **ap = arg1;
+	AABB **bp = arg2;
+
+	AABB *a = *ap;
+	AABB *b = *bp;
+
+	cl_float3 center_a = center(a);
+	cl_float3 center_b = center(b);
+
+	if (center_a.y > center_b.y)
+		return 1;
+	else if (center_a.y < center_b.y)
+		return -1;
+	else
+		return 0;
+}
+
+int z_sort(const void *arg1, const void *arg2)
+{
+	AABB **ap = arg1;
+	AABB **bp = arg2;
+
+	AABB *a = *ap;
+	AABB *b = *bp;
+
+	cl_float3 center_a = center(a);
+	cl_float3 center_b = center(b);
+
+	if (center_a.z > center_b.z)
+		return 1;
+	else if (center_a.z < center_b.z)
+		return -1;
+	else
+		return 0;
+}
+
 Split *best_object_split(AABB *box)
 {
-	Split **objects = allocate_splits(box);
+	//alloc blank splits
+	Split **objects = calloc(SPLIT_TEST_NUM, sizeof(Split *));
+	for (int i = 0; i < SPLIT_TEST_NUM; i++)
+	{
+		objects[i] = calloc(1, sizeof(Split));
+		objects[i]->left_flex = empty_box();
+		objects[i]->right_flex = empty_box();
+		objects[i]->left = dupe_box(box);
+		objects[i]->right = dupe_box(box);
+	}
 
-	for (int i = 0; i < SPLIT_TEST_NUM - 1; i++)
-		for (AABB *b = box->members; b != NULL; b = b->next)
-			if (point_in_box(center(b), objects[i]->left))
+	//make array of box members
+	AABB **members = calloc(box->member_count, sizeof(AABB *));
+	AABB *b = box->members;
+	for (int i = 0; b; b = b->next, i++)
+		members[i] = b;
+
+	qsort(members, box->member_count, sizeof(AABB *), x_sort);
+	//printf("sorted x\n");
+
+	for (int i = 0; i < box->member_count; i++)
+		for (int j = 0; j < SPLIT_TEST_NUM / 3; j++)
+		{
+			cl_float3 c = center(members[i]);
+			if ((float)i / (float)box->member_count < (float)(j + 1) / (float)(SPLIT_TEST_NUM / 3 + 1) || c.x == objects[j]->left->max.x)
 			{
-				flex_box(objects[i]->left_flex, b);
-				objects[i]->left_count++;
-			}
-			else if (point_in_box(center(b), objects[i]->right))
-			{
-				flex_box(objects[i]->right_flex, b);
-				objects[i]->right_count++;
+				flex_box(objects[j]->left_flex, members[i]);
+				objects[j]->left_count++;
+				objects[j]->left->max.x = c.x;
 			}
 			else
 			{
-				printf("member not in any box (shouldnt happen)\n");
-				print_box(b);
-				print_split(objects[i]);
+				flex_box(objects[j]->right_flex, members[i]);
+				objects[j]->right_count++;
 			}
+		}
 
+	qsort(members, box->member_count, sizeof(AABB *), y_sort);
+	//printf("sorted y\n");
+
+	for (int i = 0; i < box->member_count; i++)
+		for (int j = 0; j < SPLIT_TEST_NUM / 3; j++)
+		{
+			cl_float3 c = center(members[i]);
+			if ((float)i / (float)box->member_count < (float)(j + 1) / (float)(SPLIT_TEST_NUM / 3 + 1) || c.y == objects[j]->left->max.y)
+			{
+				flex_box(objects[j + SPLIT_TEST_NUM / 3]->left_flex, members[i]);
+				objects[j + SPLIT_TEST_NUM / 3]->left_count++;
+				objects[j + SPLIT_TEST_NUM / 3]->left->max.y = c.y;
+			}
+			else
+			{
+				flex_box(objects[j + SPLIT_TEST_NUM / 3]->right_flex, members[i]);
+				objects[j + SPLIT_TEST_NUM / 3]->right_count++;
+			}
+		}
+
+	qsort(members, box->member_count, sizeof(AABB *), z_sort);
+	//printf("sorted z\n");
+
+	for (int i = 0; i < box->member_count; i++)
+		for (int j = 0; j < SPLIT_TEST_NUM / 3; j++)
+		{
+			cl_float3 c = center(members[i]);
+			if ((float)i / (float)box->member_count < (float)(j + 1) / (float)(SPLIT_TEST_NUM / 3 + 1) || c.z == objects[j]->left->max.z)
+			{
+				flex_box(objects[j + 2 * SPLIT_TEST_NUM / 3]->left_flex, members[i]);
+				objects[j + 2 * SPLIT_TEST_NUM / 3]->left_count++;
+				objects[j + 2 * SPLIT_TEST_NUM / 3]->left->max.z = c.z;
+			}
+			else
+			{
+				flex_box(objects[j + 2 * SPLIT_TEST_NUM / 3]->right_flex, members[i]);
+				objects[j + 2 * SPLIT_TEST_NUM / 3]->right_count++;
+			}
+		}
 	//measure and choose best split
+
+	free(members);
 
 	float min_SAH = FLT_MAX;
 	int min_ind = -1;
@@ -558,18 +685,16 @@ void partition(AABB *box)
 	Split *spatial = best_spatial_split(box);
 	Split *object = best_object_split(box);
 
+	//printf("spatial %p - object %p\n", spatial, object);
 
-	float sp = spatial ? SAH(spatial, box) : FLT_MAX;
-	float ob = object ? SAH(object, box) : FLT_MAX;
-	float no = TRIANGLE_COMP_COST * box->member_count;
-
-	if (spatial == NULL && object == NULL || (sp < no && ob < no))
+	if (spatial == NULL && object == NULL)
 	{
 		printf("bailing out!\n");
 		return;
 	}
 	else if (spatial == NULL || (object != NULL && SAH(object, box) < SAH(spatial, box)))
 	{
+		printf("OBJECT, children are %.2f%% of parent area\n", 100.0f * (area(object->left_flex) + area(object->right_flex)) / area(box));
 		//printf("doing the object split\n");
 		box->left = dupe_box(object->left_flex);
 		box->right = dupe_box(object->right_flex);
@@ -599,6 +724,8 @@ void partition(AABB *box)
 	}
 	else
 	{
+		
+		printf("SPATIAL, children are %.2f%% of parent area\n", 100.0f * (area(spatial->left_flex) + area(spatial->right_flex)) / area(box));
 		//printf("doing the spatial split\n");
 		box->left = dupe_box(spatial->left_flex);
 		box->right = dupe_box(spatial->right_flex);
@@ -636,6 +763,8 @@ void partition(AABB *box)
 				printf("\n\nnot in any final box, real problem\n");
 				print_box(b);
 				print_split(spatial);
+				print_box(box);
+				getchar();
 			}
 			b = tmp;
 		}
