@@ -246,7 +246,7 @@ AABB *sbvh(Face *faces, int *box_count, int *ref_count);
 void study_tree(AABB *tree, int ray_count);
 void flatten_faces(Scene *scene);
 gpu_bin *flatten_bvh(Scene *scene);
-
+float area(AABB *box);
 
 
 Face *ply_import(char *ply_file);

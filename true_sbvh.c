@@ -5,7 +5,7 @@
 #define EPSILON 0.001f
 
 #define SPLIT_TEST_NUM 32
-#define LEAF_THRESHOLD 32
+#define LEAF_THRESHOLD 16
 
 enum axis{
 	X_AXIS,
@@ -118,9 +118,9 @@ AABB *dupe_box(AABB* box)
 
 int point_in_box(cl_float3 point, AABB *box)
 {
-	if (box->min.x - point.x <= EPSILON && point.x - box->max.x <= EPSILON)
-		if (box->min.y - point.y <= EPSILON && point.y - box->max.y <= EPSILON)
-			if (box->min.z - point.z <= EPSILON && point.z - box->max.z <= EPSILON)
+	if (box->min.x <= point.x && point.x <= box->max.x)
+		if (box->min.y <= point.y  && point.y <= box->max.y)
+			if (box->min.z <= point.z && point.z <= box->max.z)
 				return 1;
 	return 0;
 }
@@ -258,22 +258,30 @@ void clip_box(AABB *box, AABB *bound)
 	// print_face(box->f);
 	// printf("with this box\n");
 	// print_box(bound);
-	//initial clip is easy because they're AABBs
 
+	//initial clip is easy because they're AABBs
 	if (point_in_box(box->min, bound))
 	{
-		//min is in so we update max
-		box->max.x = fmin(box->max.x, bound->max.x);
-		box->max.y = fmin(box->max.y, bound->max.y);
-		box->max.z = fmin(box->max.z, bound->max.z);
+		if (!point_in_box((cl_float3){box->max.x, box->min.y, box->min.z}, bound))
+			box->max.x = bound->max.x;
+		else if (!point_in_box((cl_float3){box->min.x, box->max.y, box->min.z}, bound))
+			box->max.y = bound->max.y;
+		else
+			box->max.z = bound->max.z;
 	}
 	else
 	{
-		//max is in so we update min
-		box->min.x = fmax(box->min.x, bound->min.x);
-		box->min.y = fmax(box->min.y, bound->min.y);
-		box->max.z = fmax(box->min.z, bound->min.z);
+		if (!point_in_box((cl_float3){box->min.x, box->max.y, box->max.z}, bound))
+			box->min.x = bound->min.x;
+		else if (!point_in_box((cl_float3){box->max.x, box->min.y, box->max.z}, bound))
+			box->min.y = bound->min.y;
+		else
+			box->min.z = bound->min.z;
 	}
+
+	// printf("after initial clip\n");
+	// print_box(box);
+	// getchar();
 
 	cl_float3 A, B, C;
 	A = box->f->verts[0];
@@ -287,9 +295,9 @@ void clip_box(AABB *box, AABB *bound)
 	cl_float3 points[6];
 	int pt_count = 0;
 
-	edge_clip(A, B, bound, points, &pt_count, &res_a, &res_b);
-	edge_clip(A, C, bound, points, &pt_count, &res_a, &res_c);
-	edge_clip(B, C, bound, points, &pt_count, &res_b, &res_c);
+	edge_clip(A, B, box, points, &pt_count, &res_a, &res_b);
+	edge_clip(A, C, box, points, &pt_count, &res_a, &res_c);
+	edge_clip(B, C, box, points, &pt_count, &res_b, &res_c);
 
 	//basically, if we get an "update" for a, b or c, we don't consider the original point anymore.
 	//but we do consider both possible "updates", and if we don't get any we consider the original point.
@@ -309,14 +317,13 @@ void clip_box(AABB *box, AABB *bound)
 
 	//i hope this is this easy.
 
-	box->max.x = fmin(clippy->max.x, bound->max.x);
-	box->max.y = fmin(clippy->max.y, bound->max.y);
-	box->max.z = fmin(clippy->max.z, bound->max.z);
+	box->max.x = fmin(clippy->max.x, box->max.x);
+	box->max.y = fmin(clippy->max.y, box->max.y);
+	box->max.z = fmin(clippy->max.z, box->max.z);
 
-	box->min.x = fmax(clippy->min.x, bound->min.x);
-	box->min.y = fmax(clippy->min.y, bound->min.y);
-	box->min.z = fmax(clippy->min.z, bound->min.z);
-	// getchar();
+	box->min.x = fmax(clippy->min.x, box->min.x);
+	box->min.y = fmax(clippy->min.y, box->min.y);
+	box->min.z = fmax(clippy->min.z, box->min.z);
 }
 
 Split *new_split(AABB *box, enum axis a, float ratio)
@@ -422,6 +429,17 @@ Split *best_spatial_split(AABB *box)
 
 				clip_box(lclip, spatials[i]->left);
 				clip_box(rclip, spatials[i]->right);
+
+				// if (area(lclip) + area(rclip) > area(b) * 1.01f)
+				// {
+				// 	printf("\nERROR: clip boxes bigger than original\n");
+				// 	print_box(b);
+				// 	printf("%.2f\n", area(b));
+				// 	print_box(lclip);
+				// 	printf("%.2f\n", area(lclip));
+				// 	print_box(rclip);
+				// 	printf("%.2f\n", area(rclip));
+				// }
 
 				flex_box(spatials[i]->left_flex, lclip);
 				flex_box(spatials[i]->right_flex, rclip);
@@ -567,6 +585,8 @@ void partition(AABB *box)
 				printf("\n\nnot in any final box, real problem\n");
 				print_box(b);
 				print_split(object);
+				print_box(box);
+				getchar();
 			}
 			b = tmp;
 		}
@@ -585,8 +605,8 @@ void partition(AABB *box)
 				AABB *lclip = dupe_box(b);
 				AABB *rclip = dupe_box(b);
 
-				clip_box(lclip, box->left);
-				clip_box(rclip, box->right);
+				clip_box(lclip, spatial->left);
+				clip_box(rclip, spatial->right);
 
 				push(&box->left->members, lclip);
 				box->left->member_count++;
