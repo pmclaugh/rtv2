@@ -85,7 +85,7 @@ int main(int ac, char **av)
 	printf("finished with %d boxes\n", box_count);
 	study_tree(tree, 100000);
 
-	return 0;
+	//return 0;
 
 	sponza->bins = tree;
 	sponza->bin_count = box_count;
@@ -107,37 +107,37 @@ int main(int ac, char **av)
 	init_camera(&cam, XDIM, YDIM);
 	//printf("%lu\n", sizeof(gpu_bin));
 
-	for (int i = 0; i < 180; i++)
-	{
-		cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM, (float)i * M_PI / 180.0f);
+	// for (int i = 0; i < 180; i++)
+	// {
+		cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM, M_PI_2);
 
-		char *filename;
-		asprintf(&filename, "%d.ppm", i);
-		FILE *f = fopen(filename, "w");
-		fprintf(f, "P3\n%d %d\n%d\n ",XDIM,YDIM,255);
-		for (int row=0; row<YDIM; row++)
-		{
-			for (int col=0;col<XDIM;col++) {
-				fprintf(f,"%d %d %d ", (int)(pixels[row * XDIM + (XDIM - col)].x * 255), (int)(pixels[row * XDIM + (XDIM - col)].y * 255), (int)(pixels[row * XDIM + (XDIM - col)].z * 255));
-			}
-			fprintf(f, "\n");
-		}
-		free(filename);
-		fclose(f);
-		free(pixels);
-	}
+		// char *filename;
+		// asprintf(&filename, "%d.ppm", i);
+		// FILE *f = fopen("out.ppm", "w");
+		// fprintf(f, "P3\n%d %d\n%d\n ",XDIM,YDIM,255);
+		// for (int row=0; row<YDIM; row++)
+		// {
+		// 	for (int col=0;col<XDIM;col++) {
+		// 		fprintf(f,"%d %d %d ", (int)(pixels[row * XDIM + (XDIM - col)].x * 255), (int)(pixels[row * XDIM + (XDIM - col)].y * 255), (int)(pixels[row * XDIM + (XDIM - col)].z * 255));
+		// 	}
+		// 	fprintf(f, "\n");
+		// }
+		// //free(filename);
+		// fclose(f);
+		// free(pixels);
+	//}
 
-	// void *mlx = mlx_init();
-	// void *win = mlx_new_window(mlx, XDIM, YDIM, "RTV1");
-	// void *img = mlx_new_image(mlx, XDIM, YDIM);
-	// draw_pixels(img, XDIM, YDIM, pixels);
-	// mlx_put_image_to_window(mlx, win, img, 0, 0);
+	void *mlx = mlx_init();
+	void *win = mlx_new_window(mlx, XDIM, YDIM, "RTV1");
+	void *img = mlx_new_image(mlx, XDIM, YDIM);
+	draw_pixels(img, XDIM, YDIM, pixels);
+	mlx_put_image_to_window(mlx, win, img, 0, 0);
 
-	// t_param *param = calloc(1, sizeof(t_param));
-	// *param = (t_param){mlx, win, img, XDIM, YDIM, sponza, cam, NULL, 0};
+	t_param *param = calloc(1, sizeof(t_param));
+	*param = (t_param){mlx, win, img, XDIM, YDIM, sponza, cam, NULL, 0};
 	
-	// mlx_key_hook(win, key_hook, param);
-	// mlx_loop(mlx);
+	mlx_key_hook(win, key_hook, param);
+	mlx_loop(mlx);
 
 	printf("all done\n");
 }

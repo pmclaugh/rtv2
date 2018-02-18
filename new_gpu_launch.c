@@ -1,7 +1,7 @@
 #include "rt.h"
 #include <fcntl.h>
 
-#define SAMPLES_PER_DEVICE 100
+#define SAMPLES_PER_DEVICE 50
 
 char *load_cl_file(char *file)
 {
@@ -147,7 +147,7 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 
 gpu_context *prep_gpu(void)
 {
-	printf("prepping for GPU launch\n");
+	// printf("prepping for GPU launch\n");
 	gpu_context *gpu = calloc(1, sizeof(gpu_context));
     int err;
 
@@ -184,7 +184,7 @@ gpu_context *prep_gpu(void)
     		gpu->commands[offset + j] = clCreateCommandQueue(gpu->contexts[i], device_ids[offset + j], CL_QUEUE_PROFILING_ENABLE, &err);
     	offset += d;
     }
-    printf("made contexts and CQs\n");
+    // printf("made contexts and CQs\n");
 
     #ifdef __APPLE__
     char *source = load_cl_file("osx_kernel.cl");
@@ -246,14 +246,14 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution)
 		else
 			printf("NaN alert\n");
 	}
-	printf("Lw is %lf\n", Lw);
+	// printf("Lw is %lf\n", Lw);
 	
 
 	Lw /= (double)resolution;
-	printf("Lw is %lf\n", Lw);
+	// printf("Lw is %lf\n", Lw);
 
 	Lw = exp(Lw);
-	printf("Lw is %lf\n", Lw);
+	// printf("Lw is %lf\n", Lw);
 
 	for (int j = 0; j < resolution; j++)
 	{
@@ -275,6 +275,7 @@ cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution)
 	{
 		for (int j = 0; j < resolution; j++)
 		{
+
 			output_sum[j].x += (double)outputs[i][j].x;
 			output_sum[j].y += (double)outputs[i][j].y;
 			output_sum[j].z += (double)outputs[i][j].z;
@@ -322,7 +323,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, float sun_pos
 	cl_mem d_TN;
 	cl_mem d_BTN;
 
-	printf("alloc:\n");
+	// printf("alloc:\n");
 	
 	//per-platform allocs
 	d_V = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_float3) * scene->tri_count, NULL, NULL);
@@ -335,12 +336,12 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, float sun_pos
 	d_bins = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(gpu_bin) * scene->bin_count, NULL, NULL);
 	d_tex = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_uchar) * scene->tex_size, NULL, NULL);
 
-	printf("copy:\n");
+	// printf("copy:\n");
 
 	//per-platform copies
 	
 
-	printf("per-platform copies done\n");
+	// printf("per-platform copies done\n");
 
 	//per-device pointers
 	cl_mem *d_outputs = calloc(CL->numDevices, sizeof(cl_mem));;
@@ -355,7 +356,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, float sun_pos
 	size_t width = xdim;
 	float sun = sun_pos;
 
-	printf("per-device alloc and copy\n");
+	// printf("per-device alloc and copy\n");
 
 	//per-device allocs and copies
 	for (int i = 0; i < d; i++)
@@ -377,10 +378,10 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, float sun_pos
 	for (int i = 0; i < d; i++)
 		clFinish(CL->commands[i]);
 
-	printf("per-device copies done\n");
+	//printf("per-device copies done\n");
 
 	cl_kernel render = clCreateKernel(CL->programs[0], "render_kernel", NULL);
-	printf("made kernel\n");
+	//printf("made kernel\n");
 
 	//per-platform args
 	clSetKernelArg(render, 0, sizeof(cl_mem), &d_V);
@@ -401,16 +402,17 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, float sun_pos
 	clSetKernelArg(render, 17, sizeof(float), &sun);
 
 	//per-device args and launch
-	printf("about to launch\n");
+	//printf("about to launch\n");
 
+	//printf("%d %d\n", CL->numDevices, d);
 	cl_event done[CL->numDevices];
 	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
 	for (int i = 0; i < d; i++)
 		outputs[i] = calloc(resolution, sizeof(cl_float3));
-	
+
 	for (int i = 0; i < d; i++)
 	{
-		printf("device %d\n", i);
+		//printf("device %d\n", i);
 		clSetKernelArg(render, 12, sizeof(cl_mem), &d_seeds[i]);
 		clSetKernelArg(render, 13, sizeof(cl_mem), &d_outputs[i]);
 		cl_int err = clEnqueueNDRangeKernel(CL->commands[i], render, 1, 0, &resolution, &groupsize, 0, NULL, &done[i]);
@@ -430,7 +432,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, float sun_pos
 		printf("device %d took %.3f seconds\n", i, (float)(end - start) / 1000000000.0f);
 		clReleaseEvent(done[i]);
 	}
-	printf("done?\n");
+	//printf("done?\n");
 
 	clReleaseMemObject(d_V);
 	clReleaseMemObject(d_T);
@@ -452,5 +454,6 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, float sun_pos
 
 	clReleaseKernel(render);
 
+	//printf("going to composite\n");
 	return composite(outputs, d, resolution);
 }

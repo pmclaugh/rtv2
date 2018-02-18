@@ -4,7 +4,9 @@
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
 #define SPLIT_TEST_NUM 100
-#define LEAF_THRESHOLD 16
+#define LEAF_THRESHOLD 3
+
+#define ALPHA 0.0001f
 
 enum axis{
 	X_AXIS,
@@ -595,7 +597,10 @@ int z_sort(const void *arg1, const void *arg2)
 
 Split *best_object_split(AABB *box)
 {
-	//printf("enter best object split\n");
+	// printf("enter best object split\n");
+
+	// printf("%d\n", box->member_count);
+
 	//alloc blank splits
 	Split **objects = calloc(SPLIT_TEST_NUM, sizeof(Split *));
 	for (int i = 0; i < SPLIT_TEST_NUM; i++)
@@ -706,15 +711,40 @@ Split *best_object_split(AABB *box)
 int spatial_wins;
 int object_wins;
 
+float root_SA;
+
 float SA_overlap(Split *split)
 {
-	
+	AABB *L = split->left_flex;
+	AABB *R = split->right_flex;
+	if (!box_in_box(L, R) && !box_in_box(R,L))
+		return 0.0f;
+
+	if (all_in(L, R))
+		return SA(R);
+	if (all_in(R, L))
+		return SA(L);
+
+	AABB *overlap = empty_box();
+
+	overlap->min.x = fmax(L->min.x, R->min.x);
+	overlap->min.y = fmax(L->min.y, R->min.y);
+	overlap->min.z = fmax(L->min.z, R->min.z);
+
+	overlap->max.x = fmin(L->max.x, R->max.x);
+	overlap->max.y = fmin(L->max.y, R->max.y);
+	overlap->max.z = fmin(L->max.z, R->max.z);
+
+	return SA(overlap);
 }
 
 void partition(AABB *box)
 {
-	Split *spatial = best_spatial_split(box);
 	Split *object = best_object_split(box);
+	Split *spatial = NULL;
+
+	if (!object || SA_overlap(object) / root_SA > ALPHA)
+		spatial = best_spatial_split(box);
 
 	//printf("spatial %p - object %p\n", spatial, object);
 
@@ -817,6 +847,9 @@ void partition(AABB *box)
 
 AABB *sbvh(Face *faces, int *box_count, int *refs)
 {
+
+	Split *test = calloc(1, sizeof(Split));
+
 	//put all faces in AABBs
 	AABB *boxes = NULL;
 	int fcount = 0;
@@ -829,6 +862,8 @@ AABB *sbvh(Face *faces, int *box_count, int *refs)
 	printf("faces are in boxes, %d\n", fcount);
 
 	AABB *root_box = box_from_boxes(boxes);
+
+	root_SA = SA(root_box);
 
 	printf("root box made\n");
 	print_vec(root_box->min);
