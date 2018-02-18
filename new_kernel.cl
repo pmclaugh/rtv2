@@ -24,6 +24,7 @@
 
 #define SUN (float3)(0.0f, 10000.0f, 0.0f)
 #define SUN_BRIGHTNESS 60000.0f
+#define SUN_RAD 1.0f;
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
@@ -306,11 +307,22 @@ static float3 trace(Ray ray,
 					unsigned int *seed1,
 					__constant int *M,
 					__constant float3 *TN,
-					__constant float3 *BTN)
+					__constant float3 *BTN,
+					const float sun_theta)
 {
 
 	float3 color = BLACK;
 	float3 mask = WHITE;
+
+	// //brute performance testing
+	// int total = 0;
+	// float t = FLT_MAX;
+	// float u, v;
+	// int best_ind = 0;
+	// for (int i = 0; i < 30000; i += 3)
+	// 	intersect_triangle(ray, V, i, &best_ind, &t, &u, &v);
+	// return WHITE * t;
+
 
 	for (int j = 0; j < 5 || get_random(seed0, seed1) < stop_prob; j++)
 	{
@@ -320,7 +332,8 @@ static float3 trace(Ray ray,
 
 		if (hit_ind == -1)
 		{
-			color = mask * SUN_BRIGHTNESS;
+			float3 sunward = (float3)(cos(sun_theta), sin(sun_theta), 0.0f);
+			color = mask * SUN_BRIGHTNESS * pow(fmax(dot(ray.direction, sunward), 0.0f), 20.0f);
 			break;
 		}
 
@@ -340,6 +353,14 @@ static float3 trace(Ray ray,
 		}
 
 		sample_N = bump_map(TN, BTN, hit_ind / 3, sample_N, bump);
+
+		// //experimental NEE
+		// Ray to_sun;
+		// to_sun.origin = ray.origin + ray.direction * t + sample_N * NORMAL_SHIFT;
+		// to_sun.direction = normalize((float3)(sun_pos, 10000.0f, 0.0f) - to_sun.origin);
+		// to_sun.inv_dir = 1.0f / to_sun.direction;
+		// float st, su, sv;
+		// int sun_hit = hit_bvh(to_sun, V, boxes, &st, &su, &sv);
 		
 		mask *= j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0f;
 		float spec_importance = spec.x + spec.y + spec.z;
@@ -352,7 +373,7 @@ static float3 trace(Ray ray,
 		float r2 = get_random(seed0, seed1);
 		if(get_random(seed0, seed1) < spec_importance)
 		{
-			float3 spec_dir = ray.direction - 2.0f * dot(ray.direction, sample_N) * sample_N;
+			float3 spec_dir = normalize(ray.direction - 2.0f * dot(ray.direction, sample_N) * sample_N);
 
 			//local orthonormal system
 			float3 axis = fabs(spec_dir.x) > fabs(spec_dir.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -369,6 +390,10 @@ static float3 trace(Ray ray,
 			if (dot(new_dir, sample_N) < 0.0f) // pick mirror of sample (same importance)
 				new_dir = z - x - y;
 			mask *= spec;
+
+			
+			// if (sun_hit == -1)
+			// 	color += mask * fmax(pow(dot(to_sun.direction, spec_dir), 100.0f * spec.x), 0.0f) * SUN_BRIGHTNESS;
 		}
 		else
 		{
@@ -385,6 +410,9 @@ static float3 trace(Ray ray,
 			//combine for new direction
 			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - r1)));
 			mask *= diff;
+
+			// if (sun_hit == -1)
+			// 	color += mask * fmax(dot(to_sun.direction, sample_N), 0.0f) * SUN_BRIGHTNESS;
 		}
 
 		ray.origin = ray.origin + ray.direction * t + sample_N * NORMAL_SHIFT;
@@ -423,7 +451,8 @@ __kernel void render_kernel(__constant float3 *V,
 							__global float3* output,
 							__constant int *M,
 							__constant float3 *TN,
-							__constant float3 *BTN)
+							__constant float3 *BTN,
+							const float sun_pos)
 {
 	unsigned int pixel_id = get_global_id(0);
 	unsigned int x = pixel_id % width;
@@ -445,7 +474,7 @@ __kernel void render_kernel(__constant float3 *V,
 		float x_coord = (float)x + get_random(&seed0, &seed1);
 		float y_coord = (float)y + get_random(&seed0, &seed1);
 		Ray ray = ray_from_cam(cam, x_coord, y_coord, &seed0, &seed1);
-		sum_color += trace(ray, V, T, N, boxes, mats, tex, &seed0, &seed1, M, TN, BTN);
+		sum_color += trace(ray, V, T, N, boxes, mats, tex, &seed0, &seed1, M, TN, BTN, sun_pos);
 	}
 	
 	output[pixel_id] = sum_color;

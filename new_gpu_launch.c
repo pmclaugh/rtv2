@@ -12,6 +12,15 @@ char *load_cl_file(char *file)
 	return source;
 }
 
+void reseed(gpu_scene *scene)
+{
+	cl_uint *h_seeds = calloc(scene->seed_count, sizeof(cl_uint));
+	for (int i = 0; i < scene->seed_count; i++)
+		h_seeds[i] = rand();
+	free(scene->seeds);
+	scene->seeds = h_seeds;
+}
+
 gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 {
 	//SEEDS
@@ -218,6 +227,7 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution)
 		free(outputs[i]);
 	}
 
+	free(outputs);
 	// for (int i = 0; i < 10; i++)
 	// 	printf("%lf %lf %lf\n", output_sum[i].x, output_sum[i].y, output_sum[i].z);
 
@@ -271,6 +281,7 @@ cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution)
 		}
 		free(outputs[i]);
 	}
+	free(outputs);
 
 	for (int j = 0;j < resolution; j++)
 	{
@@ -287,10 +298,16 @@ cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution)
 	return output_sum;
 }
 
-cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
+cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, float sun_pos)
 {
-	gpu_context *CL = prep_gpu();
-	gpu_scene *scene = prep_scene(S, CL, xdim, ydim);
+	static gpu_context *CL;
+	if (!CL)
+		CL = prep_gpu();
+	static gpu_scene *scene;
+	if (!scene)
+		scene = prep_scene(S, CL, xdim, ydim);
+	else
+		reseed(scene);
 
 	//for simplicity assuming one platform for now. can easily be extended, see old gpu_launch.c
 
@@ -336,6 +353,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	size_t groupsize = 256;
 	size_t samples = SAMPLES_PER_DEVICE;
 	size_t width = xdim;
+	float sun = sun_pos;
 
 	printf("per-device alloc and copy\n");
 
@@ -380,6 +398,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	clSetKernelArg(render, 14, sizeof(cl_mem), &d_M);
 	clSetKernelArg(render, 15, sizeof(cl_mem), &d_TN);
 	clSetKernelArg(render, 16, sizeof(cl_mem), &d_BTN);
+	clSetKernelArg(render, 17, sizeof(float), &sun);
 
 	//per-device args and launch
 	printf("about to launch\n");
@@ -412,5 +431,26 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 		clReleaseEvent(done[i]);
 	}
 	printf("done?\n");
+
+	clReleaseMemObject(d_V);
+	clReleaseMemObject(d_T);
+	clReleaseMemObject(d_N);
+	clReleaseMemObject(d_bins);
+	clReleaseMemObject(d_mats);
+	clReleaseMemObject(d_tex);
+	clReleaseMemObject(d_M);
+	clReleaseMemObject(d_TN);
+	clReleaseMemObject(d_BTN);
+	for (int i = 0; i < d; i++)
+	{
+		clReleaseMemObject(d_seeds[i]);
+		clReleaseMemObject(d_outputs[i]);
+	}
+
+	free(d_seeds);
+	free(d_outputs);
+
+	clReleaseKernel(render);
+
 	return composite(outputs, d, resolution);
 }

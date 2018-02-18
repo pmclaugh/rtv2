@@ -3,13 +3,8 @@
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
-#define SPLIT_TEST_NUM 15
+#define SPLIT_TEST_NUM 64
 #define LEAF_THRESHOLD 16
-#define SOFT_LEAF_THRESHOLD 32
-
-#define TRAVERSAL_COST 10000
-#define TRIANGLE_COST 1
-#define BOX_COST 2
 
 enum axis{
 	X_AXIS,
@@ -707,18 +702,6 @@ void partition(AABB *box)
 	Split *object = best_object_split(box);
 
 	//printf("spatial %p - object %p\n", spatial, object);
-
-	if (box->member_count < SOFT_LEAF_THRESHOLD)
-	{
-		//consider not splitting
-		float parent_SAH = SA(box) * box->member_count;
-		if (!spatial || parent_SAH < TRAVERSAL_COST + SAH(spatial, box))
-			if (!object || parent_SAH < TRAVERSAL_COST + SAH(object, box))
-			{
-				//printf("best not to split\n");
-				return;
-			}
-	}
 
 	if (spatial == NULL && object == NULL)
 	{
