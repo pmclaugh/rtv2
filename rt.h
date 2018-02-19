@@ -58,8 +58,8 @@ typedef struct s_camera
 {
 	cl_float3 center;
 	cl_float3 normal;
-	float width;
-	float height;
+	cl_float width;
+	cl_float height;
 
 	cl_float3 focus;
 	cl_float3 origin;
@@ -259,7 +259,7 @@ void init_camera(t_camera *camera, int xres, int yres);
 
 Scene *scene_from_obj(char *rel_path, char *filename);
 
-cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, float sun_pos);
+cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
 
 void old_bvh(Scene *S);
 Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);

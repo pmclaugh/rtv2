@@ -215,9 +215,9 @@ int depth(AABB *box)
 
 void study_tree(AABB *tree, int ray_count)
 {
-	printf("\n\n\nentering the lab\n");
+	printf("\nentering the lab\n");
 
-	printf("\nmeasuring tree:\n");
+	printf("measuring tree:\n");
 
 	float root_area = area(tree);
 
@@ -259,7 +259,7 @@ void study_tree(AABB *tree, int ray_count)
 	printf("leaves are %.2f%% of root box area\n", 100.0f * leaf_area_subtotal / root_area);
 
 
-	printf("\ntesting the tree:\n");
+	printf("testing the tree:\n");
 	Traversal *sum = calloc(1, sizeof(Traversal));
 
 	int i;
