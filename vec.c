@@ -14,14 +14,6 @@ void print_3x3(const t_3x3 mat)
 	print_vec(mat.row3);
 }
 
-void print_ray(const t_ray ray)
-{
-	printf("ray from:\n");
-	print_vec(ray.origin);
-	printf("with direction\n");
-	print_vec(ray.direction);
-}
-
 float vec_mag(const cl_float3 vec)
 {
 	return sqrt(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z);

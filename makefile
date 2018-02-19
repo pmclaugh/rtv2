@@ -1,12 +1,12 @@
 NAME = raytrace
 
-SRCS = vec.c obj_import.c bvh.c main.c gpu_launch.c mlx_stuff.c
-OBJS = vec.o obj_import.o bvh.o main.o gpu_launch.o mlx_stuff.o
+SRCS = vec.c obj_import.c main.c mlx_stuff.c ply_import.c scene.c new_gpu_launch.c true_sbvh.c bvh_lab.c
+OBJS = vec.o obj_import.o main.o mlx_stuff.o ply_import.o scene.o new_gpu_launch.o true_sbvh.o bvh_lab.o
 
 
-FLAGS = -m64 -O3 -flto -march=native -funroll-loops
+FLAGS = -O3 -m64 -march=native -funroll-loops -flto 
 MACLIBS = mac-mlx/libmlx.a -framework OpenCL -framework OpenGL -framework AppKit
-LINUXLIBS = linux-mlx/libmlx.a -lOpenCL -lm -lXext -lX11
+LINUXLIBS = -fopenmp linux-mlx/libmlx.a -lOpenCL -lm -lXext -lX11 
 
 
 OS := $(shell uname)

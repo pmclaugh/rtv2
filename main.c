@@ -6,6 +6,9 @@
 # define quit_key 12
 #endif
 
+#define XDIM 1024
+#define YDIM 1024
+
 typedef struct s_param
 {
 	void *mlx;
@@ -20,31 +23,16 @@ typedef struct s_param
 	int samplecount;
 }				t_param;
 
-#define rot_angle M_PI_2 * 4.0 / 90.0
-
-cl_float3 *baby_tone_dupe(cl_float3 *pixels, int count, int samplecount)
-{
-	cl_float3 *toned = calloc(count, sizeof(cl_float3));
-	for (int i = 0; i < count; i++)
-	{
-		toned[i].x = pixels[i].x / ((float)samplecount);
-		toned[i].y = pixels[i].y / ((float)samplecount);
-		toned[i].z = pixels[i].z / ((float)samplecount);
-		toned[i].x = toned[i].x / (toned[i].x + 1.0);
-		toned[i].y = toned[i].y / (toned[i].y + 1.0);
-		toned[i].z = toned[i].z / (toned[i].z + 1.0);
-	}
-	return toned;
-}
-
-#define H_FOV M_PI_2 * 60.0 / 90.0 	//60 degrees. eventually this will be dynamic with aspect
-									// V_FOV is implicit with aspect of view-plane
-
+//THIS DOESNT WORK RIGHT, JUST FOR TESTING
+#define H_FOV M_PI_2 * 60.0 / 90.0
 void init_camera(t_camera *camera, int xres, int yres)
 {
 	//printf("init camera %d %d\n", xres, yres);
 	//determine a focus point in front of the view-plane
 	//such that the edge-focus-edge vertex has angle H_FOV
+
+	camera->normal = unit_vec(camera->normal);
+
 	float d = (camera->width / 2.0) / tan(H_FOV / 2.0);
 	camera->focus = vec_add(camera->center, vec_scale(camera->normal, d));
 
@@ -79,98 +67,77 @@ int main(int ac, char **av)
 {
 	srand(time(NULL));
 
-	//bvh construction now happens inside scene_from_obj
-	Scene *scene = scene_from_obj("objects/sponza/", "sponza.obj");
+	Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 
-	printf("loaded scene. it has %d faces and %d materials\n", scene->face_count, scene->mat_count);
+	//LL is best for this bvh. don't want to rearrange import for now, will do later
+	Face *face_list = NULL;
+	for (int i = 0; i < sponza->face_count; i++)
+	{
+		Face *f = calloc(1, sizeof(Face));
+		memcpy(f, &sponza->faces[i], sizeof(Face));
+		f->next = face_list;
+		face_list = f;
+	}
+	free(sponza->faces);
 
-	int xdim, ydim;
-	if (ac < 2)
-	{
-		xdim = 512;
-		ydim = 512;
-	}
-	else
-	{
-		xdim = atoi(av[1]);
-		ydim = atoi(av[2]);
-	}
+	int box_count, ref_count;
+	AABB *tree = sbvh(face_list, &box_count, &ref_count);
+	printf("finished with %d boxes\n", box_count);
+	study_tree(tree, 100000);
+
+	//return 0;
+
+	sponza->bins = tree;
+	sponza->bin_count = box_count;
+	sponza->face_count = ref_count;
+	printf("about to flatten\n");
+	flatten_faces(sponza);
 
 	t_camera cam;
-
-	if (ac <= 3)
-	{
-		//default view
-		cam.center = (cl_float3){800.0, 600.0, 0.0};
-		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
-	}
-	//pointed at hanging vase
-	if (strcmp(av[3], "vase") == 0)
-	{
-		cam.center = (cl_float3){-620.0, 130.0, 50.0};
-		cam.normal = (cl_float3){0.0, 0.0, 1.0};
-	}
-
-	//central view
-	if (strcmp(av[3], "center") == 0)
-	{
-		cam.center = (cl_float3){-100.0, 330.0, 0.0};
-		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
-	}
-
-	//central view with drape
-	if (strcmp(av[3], "drape") == 0)
-	{
-		cam.center = (cl_float3){800.0, 600.0, 0.0};
-		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
-	}
-
-	//2nd floor hall right
-	if (strcmp(av[3], "hall") == 0)
-	{
-		cam.center = (cl_float3){700.0, 500.0, 350.0};
-		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
-	}
-
-	//rounded column and some drape
-	if (strcmp(av[3], "mix") == 0)
-	{
-		cam.center = (cl_float3){200.0, 650.0, -200.0};
-		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
-	}
-	//rounded column
-	if (strcmp(av[3], "column") == 0)
-	{
-		cam.center = (cl_float3){40.0, 600.0, -280.0};
-		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
-	}
-
-	//lion
-	if (strcmp(av[3], "lion") == 0)
-	{
-		cam.center = (cl_float3){-1050.0, 160.0, -40.0};
-		cam.normal = (cl_float3){-1.0, 0.0, 0.0};
-	}
-
-	cam.normal = unit_vec(cam.normal);
+	//cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
+	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
+	cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
+	//cam.center = (cl_float3){-800.0, 600.0, 350.0}; upstairs left
+	//cam.center = (cl_float3){800.0, 100.0, 350.0}; //down left
+	//cam.center = (cl_float3){900.0, 150.0, -35.0}; //lion
+	//cam.center = (cl_float3){-250.0, 100.0, 0.0};
+	cam.normal = (cl_float3){1.0, 0.0, 0.0};
 	cam.width = 1.0;
 	cam.height = 1.0;
-	init_camera(&cam, xdim, ydim);
+	init_camera(&cam, XDIM, YDIM);
+	//printf("%lu\n", sizeof(gpu_bin));
 
-	cl_float3 *pixels = gpu_render(scene, cam, xdim, ydim);
+	// for (int i = 0; i < 180; i++)
+	// {
+		cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM, M_PI_2);
 
-	//baby_tone_map(pixels, xdim * ydim);
-	
+		// char *filename;
+		// asprintf(&filename, "%d.ppm", i);
+		// FILE *f = fopen("out.ppm", "w");
+		// fprintf(f, "P3\n%d %d\n%d\n ",XDIM,YDIM,255);
+		// for (int row=0; row<YDIM; row++)
+		// {
+		// 	for (int col=0;col<XDIM;col++) {
+		// 		fprintf(f,"%d %d %d ", (int)(pixels[row * XDIM + (XDIM - col)].x * 255), (int)(pixels[row * XDIM + (XDIM - col)].y * 255), (int)(pixels[row * XDIM + (XDIM - col)].z * 255));
+		// 	}
+		// 	fprintf(f, "\n");
+		// }
+		// //free(filename);
+		// fclose(f);
+		// free(pixels);
+	//}
+
 	void *mlx = mlx_init();
-	void *win = mlx_new_window(mlx, xdim, ydim, "RTV1");
-	void *img = mlx_new_image(mlx, xdim, ydim);
-	draw_pixels(img, xdim, ydim, pixels);
+	void *win = mlx_new_window(mlx, XDIM, YDIM, "RTV1");
+	void *img = mlx_new_image(mlx, XDIM, YDIM);
+	draw_pixels(img, XDIM, YDIM, pixels);
 	mlx_put_image_to_window(mlx, win, img, 0, 0);
 
 	t_param *param = calloc(1, sizeof(t_param));
-	*param = (t_param){mlx, win, img, xdim, ydim, scene, cam, NULL, 0};
+	*param = (t_param){mlx, win, img, XDIM, YDIM, sponza, cam, NULL, 0};
 	
 	mlx_key_hook(win, key_hook, param);
-	//mlx_loop_hook(mlx, loop_hook, param);
 	mlx_loop(mlx);
+
+	printf("all done\n");
 }

@@ -24,13 +24,15 @@
 #define UNIT_Y (cl_float3){0, 1, 0}
 #define UNIT_Z (cl_float3){0, 0, 1}
 
-#define ERROR 1e-5
+#define ERROR 1e-4
 
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
 #define RED (cl_float3){1.0, 0.2, 0.2}
 #define GREEN (cl_float3){0.2, 1.0, 0.2}
 #define BLUE (cl_float3){0.2, 0.2, 1.0}
 #define WHITE (cl_float3){1.0, 1.0, 1.0}
+
+#define ORIGIN (cl_float3){0.0f, 0.0f, 0.0f}
 
 
 #define GPU_MAT_DIFFUSE 1
@@ -54,7 +56,6 @@ typedef struct s_3x3
 
 typedef struct s_camera
 {
-	//keep this and turn it into t_camera
 	cl_float3 center;
 	cl_float3 normal;
 	float width;
@@ -65,127 +66,6 @@ typedef struct s_camera
 	cl_float3 d_x;
 	cl_float3 d_y;
 }				t_camera;
-
-typedef struct s_object
-{
-	enum type shape;
-	enum mat material;
-	cl_float3 position;
-	cl_float3 normal;
-	cl_float3 corner;
-	cl_float3 color;
-	float emission;
-	struct s_object *next;
-}				t_object;
-
-typedef struct s_ray
-{
-	cl_float3 origin;
-	cl_float3 direction;
-	cl_float3 inv_dir;
-}				t_ray;
-
-typedef struct s_box
-{
-	cl_float3 max;
-	cl_float3 min;
-	cl_float3 mid;
-	uint64_t morton;
-	struct s_box *children;
-	int children_count;
-	t_object *object;
-}				t_box;
-
-typedef struct s_scene
-{
-	t_camera camera;
-	t_object *objects;
-	t_box *bvh;
-	t_box *bvh_debug;
-	int box_count;
-}				t_scene;
-
-typedef struct s_import
-{
-	t_object *head;
-	t_object *tail;
-	int obj_count;
-	cl_float3 min;
-	cl_float3 max;
-}				t_import;
-
-typedef struct s_halton
-{
-	double value;
-	double inv_base;
-}				t_halton;
-
-int hit(t_ray *ray, const t_scene *scene, int do_shade);
-void draw_pixels(void *img, int xres, int yres, cl_float3 *pixels);
-
-void print_vec(const cl_float3 vec);
-void print_3x3(const t_3x3 mat);
-void print_ray(const t_ray ray);
-void print_object(const t_object *object);
-
-float vec_mag(const cl_float3 vec);
-cl_float3 unit_vec(const cl_float3 vec);
-float dot(const cl_float3 a, const cl_float3 b);
-cl_float3 cross(const cl_float3 a, const cl_float3 b);
-cl_float3 vec_sub(const cl_float3 a, const cl_float3 b);
-cl_float3 vec_add(const cl_float3 a, const cl_float3 b);
-cl_float3 vec_scale(const cl_float3 vec, const float scalar);
-cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
-cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec);
-t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b);
-cl_float3 bounce(const cl_float3 in, const cl_float3 norm);
-float dist(const cl_float3 a, const cl_float3 b);
-cl_float3 vec_rev(cl_float3 v);
-cl_float3 vec_inv(const cl_float3 v);
-int vec_equ(const cl_float3 a, const cl_float3 b);
-void orthonormal(cl_float3 a, cl_float3 *b, cl_float3 *c);
-cl_float3 vec_had(const cl_float3 a, const cl_float3 b);
-
-int intersect_object(const t_ray *ray, const t_object *object, float *d);
-cl_float3 norm_object(const t_object *object, const t_ray *ray);
-
-void new_sphere(t_scene *scene, cl_float3 center, float r, cl_float3 color, enum mat material, float emission);
-void new_plane(t_scene *scene, cl_float3 corner_A, cl_float3 corner_B, cl_float3 corner_C, cl_float3 color, enum mat material, float emission);
-void new_cylinder(t_scene *scene, cl_float3 center, cl_float3 radius, cl_float3 extent, cl_float3 color);
-void new_triangle(t_scene *scene, cl_float3 vertex0, cl_float3 vertex1, cl_float3 vertex2, cl_float3 color, enum mat material, float emission);
-
-int intersect_triangle(const t_ray *ray, const t_object *triangle, float *d);
-
-void make_bvh(t_scene *scene);
-void hit_nearest(const t_ray *ray, const t_box *box, t_object **hit, float *d);
-void hit_nearest_faster(const t_ray * const ray, t_box const * const box, t_object **hit, float *d);
-
-t_import load_file(int ac, char **av, cl_float3 color, enum mat material, float emission);
-void unit_scale(t_import import, cl_float3 offset, float rescale);
-
-float max3(float a, float b, float c);
-float min3(float a, float b, float c);
-
-cl_float3 *simple_render(const t_scene *scene, const int xres, const int yres);
-cl_float3 *mt_render(t_scene const *scene, const int xres, const int yres);
-void init_camera(t_camera *camera, int xres, int yres);
-
-float rand_unit(void);
-cl_float3 hemisphere(float u1, float u2);
-cl_float3 better_hemisphere(float u1, float u2);
-double next_hal(t_halton *hal);
-t_halton setup_halton(int i, int base);
-float rand_unit_sin(void);
-
-
-t_ray ray_from_camera(t_camera cam, float x, float y);
-
-
-
-
-
-
-///New Obj Import///
 
 typedef struct s_map
 {
@@ -219,6 +99,9 @@ typedef struct s_material
 
 	char *map_d_path;
 	Map *map_d;
+
+	char *map_Ks_path;
+	Map *map_Ks;
 }				Material;
 
 typedef struct s_face
@@ -231,14 +114,10 @@ typedef struct s_face
 	cl_float3 norms[4];
 	cl_float3 tex[4];
 	cl_float3 N;
-}				Face;
 
-typedef struct compact_box
-{
-	cl_float3 min;
-	cl_float3 max;
-	cl_int key;
-}				C_Box;
+	cl_float3 center;
+	struct s_face *next;
+}				Face;
 
 typedef struct s_Box
 {
@@ -250,25 +129,163 @@ typedef struct s_Box
 	cl_int children_count;
 }				Box;
 
+typedef struct s_gpu_bin
+{
+	cl_float minx;
+	cl_float miny;
+	cl_float minz;
+	cl_int lind;
+	cl_float maxx;
+	cl_float maxy;
+	cl_float maxz;
+	cl_int rind;
+}				gpu_bin;
+
+typedef struct bvh_struct
+{
+	cl_float3 min; //spatial boundary
+	cl_float3 max; //spatial boundary
+	struct bvh_struct *left; 
+	struct bvh_struct *right;
+	gpu_bin *parent;
+	Face *faces;
+	int face_ind;
+	int count;
+	//maybe more?
+	struct bvh_struct *next; //for tree building not for tracing
+}				tree_box;
+
+typedef struct s_AABB
+{
+	cl_float3 min;
+	cl_float3 max;
+
+	struct s_AABB *members;
+	struct s_AABB *left;
+	struct s_AABB *right;
+	struct s_AABB *next;
+	struct s_AABB *parent;
+
+	int start_ind;
+	int member_count;
+	int flat_ind;
+
+	Face *f;
+}				AABB;
+
 typedef struct s_new_scene
 {
 	Material *materials;
 	int mat_count;
 	Face *faces;
 	int face_count;
-	Box *boxes;
-	int box_count;
-	C_Box *c_boxes;
-	int c_box_count;
+	AABB *bins;
+	int bin_count;
 }				Scene;
+
+typedef struct s_gpu_context
+{
+	cl_context *contexts;
+	cl_command_queue *commands;
+	cl_program *programs;
+	cl_uint numPlatforms;
+	cl_uint numDevices;
+	cl_platform_id *platform;
+}				gpu_context;
+
+typedef struct s_gpu_mat
+{
+	cl_float3 Ka;
+	cl_float3 Kd;
+	cl_float3 Ns;
+	cl_float3 Ke;
+
+	cl_int diff_ind;
+	cl_int diff_h;
+	cl_int diff_w;
+
+	cl_int spec_ind;
+	cl_int spec_h;
+	cl_int spec_w;
+
+	cl_int bump_ind;
+	cl_int bump_h;
+	cl_int bump_w;
+
+	cl_int trans_ind;
+	cl_int trans_h;
+	cl_int trans_w;
+}				gpu_mat;
+
+typedef struct s_gpu_scene
+{
+	cl_float3 *V;
+	cl_float3 *T;
+	cl_float3 *N;
+	cl_int *M;
+	cl_float3 *TN;
+	cl_float3 *BTN;
+	cl_uint tri_count;
+
+	gpu_bin *bins;
+	cl_uint bin_count;
+
+	cl_uchar *tex;
+	cl_uint tex_size;
+
+	gpu_mat *mats;
+	cl_uint mat_count;
+
+	cl_uint *seeds;
+	cl_uint seed_count;
+}				gpu_scene;
+
+
+
+AABB *sbvh(Face *faces, int *box_count, int *ref_count);
+void study_tree(AABB *tree, int ray_count);
+void flatten_faces(Scene *scene);
+gpu_bin *flatten_bvh(Scene *scene);
+float area(AABB *box);
+
+
+Face *ply_import(char *ply_file);
+Face *object_flatten(Face *faces, int *face_count);
+
+////Old stuff
+void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);
+
+void init_camera(t_camera *camera, int xres, int yres);
 
 Scene *scene_from_obj(char *rel_path, char *filename);
 
-
-cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim);
-
-Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
-void gpu_ready_bvh(Scene *S, int *counts, int obj_count);
-void print_clf3(cl_float3 v);
+cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, float sun_pos);
 
 void old_bvh(Scene *S);
+Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
+void gpu_ready_bvh(Scene *S, int *counts, int obj_count);
+
+uint64_t splitBy3(const unsigned int a);
+uint64_t mortonEncode_magicbits(const unsigned int x, const unsigned int y, const unsigned int z);
+uint64_t morton64(float x, float y, float z);
+
+//vector helpers
+float vec_mag(const cl_float3 vec);
+cl_float3 unit_vec(const cl_float3 vec);
+float dot(const cl_float3 a, const cl_float3 b);
+cl_float3 cross(const cl_float3 a, const cl_float3 b);
+cl_float3 vec_sub(const cl_float3 a, const cl_float3 b);
+cl_float3 vec_add(const cl_float3 a, const cl_float3 b);
+cl_float3 vec_scale(const cl_float3 vec, const float scalar);
+cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
+cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec);
+t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b);
+cl_float3 vec_rev(cl_float3 v);
+
+
+//utility functions
+void print_vec(const cl_float3 vec);
+void print_3x3(const t_3x3 mat);
+void print_clf3(cl_float3 v);
+float max3(float a, float b, float c);
+float min3(float a, float b, float c);
