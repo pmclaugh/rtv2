@@ -95,7 +95,7 @@ typedef struct s_box
 	int rind;
 }				Box;
 
-float get_random(unsigned int *seed0, unsigned int *seed1) {
+static float get_random(unsigned int *seed0, unsigned int *seed1) {
 
 	/* hash the seeds using bitwise AND operations and bitshifts */
 	*seed0 = 36969 * ((*seed0) & 65535) + ((*seed0) >> 16);  
@@ -114,7 +114,7 @@ float get_random(unsigned int *seed0, unsigned int *seed1) {
 }
 
 //intersect_box
-int intersect_box(Ray ray, Box b, float t)
+static int intersect_box(Ray ray, Box b, float t)
 {
 	//the if tmin >=t checks are new, should be fine, should help. will toggle to see effect.
 
@@ -154,7 +154,7 @@ int intersect_box(Ray ray, Box b, float t)
 	return (1);
 }
 
-void intersect_triangle(Ray ray, __global float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
+static void intersect_triangle(Ray ray, __global float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
 {
 	//we don't need v1 or v2 after initial calc of e1, e2. could just store them in same memory. wonder if compiler does this.
 	float this_t, this_u, this_v;
@@ -189,7 +189,7 @@ void intersect_triangle(Ray ray, __global float3 *V, int test_i, int *best_i, fl
 	}
 }
 
-float3 fetch_tex(	float3 txcrd,
+static float3 fetch_tex(	float3 txcrd,
 							int offset,
 							int height,
 							int width,
@@ -206,7 +206,7 @@ float3 fetch_tex(	float3 txcrd,
 	return out;
 }
 
-void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *tex, float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
+static void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *tex, float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
 {
 	Material mat = mats[m_ind];
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
@@ -215,7 +215,7 @@ void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *tex, floa
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : (float3)(0.6f, 0.6f, 0.6f);
 }
 
-void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
+static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
 {
 	float3 v0 = V[ind];
 	float3 v1 = V[ind + 1];
@@ -239,7 +239,7 @@ void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3
 	*txcrd_out = txcrd;	
 }
 
-float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float3 sample_N, float3 bump)
+static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float3 sample_N, float3 bump)
 {
 	float3 tangent = TN[ind];
 	float3 bitangent = BTN[ind];
@@ -397,7 +397,9 @@ __kernel void collect(	__global Ray *rays,
 
 __kernel void traverse(	__global Ray *rays,
 						__global Box *boxes,
-						__global float3 *V)
+						__global float3 *V,
+						__constant Box *boost,
+						const int boost_count)
 {
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];

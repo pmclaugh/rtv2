@@ -230,6 +230,9 @@ typedef struct s_gpu_scene
 	gpu_bin *bins;
 	cl_uint bin_count;
 
+	gpu_bin *boost;
+	cl_uint boost_count;
+
 	cl_uchar *tex;
 	cl_uint tex_size;
 
@@ -245,9 +248,10 @@ typedef struct s_gpu_scene
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
 void study_tree(AABB *tree, int ray_count);
 void flatten_faces(Scene *scene);
-gpu_bin *flatten_bvh(Scene *scene);
+gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count);
 float area(AABB *box);
 cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_int **counts);
+int depth(AABB *box);
 
 Face *ply_import(char *ply_file);
 Face *object_flatten(Face *faces, int *face_count);

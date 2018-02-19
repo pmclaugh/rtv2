@@ -3,8 +3,9 @@
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
-#define SPLIT_TEST_NUM 15
+#define SPLIT_TEST_NUM 30
 #define LEAF_THRESHOLD 16
+#define BOOST_DEPTH 9
 
 #define ALPHA 0.001f
 
@@ -541,22 +542,6 @@ int x_sort(const void *arg1, const void *arg2)
 		return 0;
 }
 
-// int x_sort_corner(const void *arg1, const void *arg2)
-// {
-// 	AABB **ap = arg1;
-// 	AABB **bp = arg2;
-
-// 	AABB *a = *ap;
-// 	AABB *b = *bp;
-
-// 	if (a->min.x > b->min.x)
-// 		return 1;
-// 	else if (a->min.x< b->min.x)
-// 		return -1;
-// 	else
-// 		return 0;
-// }
-
 int y_sort(const void *arg1, const void *arg2)
 {
 	AABB **ap = arg1;
@@ -978,10 +963,11 @@ gpu_bin bin_from_box(AABB *box)
 	return bin;
 }
 
-gpu_bin *flatten_bvh(Scene *scene)
+gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count)
 {
 	gpu_bin *bins = calloc(scene->bin_count, sizeof(gpu_bin));
 	int bin_ind = 0;
+	int boost_ind = 0;
 
 	//do a "dummy" traversal and fill in flat_ind for each AABB
 
@@ -991,6 +977,8 @@ gpu_bin *flatten_bvh(Scene *scene)
 	while (queue_head)
 	{
 		queue_head->flat_ind = bin_ind++;
+		if (depth(queue_head) == BOOST_DEPTH || (!queue_head->left && depth(queue_head) < BOOST_DEPTH))
+			boost_ind++;
 
 		if (queue_head->left)
 		{
@@ -1005,6 +993,9 @@ gpu_bin *flatten_bvh(Scene *scene)
 
 	printf("bin_ind got to %d, should equal %d\n", bin_ind, scene->bin_count);
 
+	gpu_bin *boost_arr = calloc(boost_ind, sizeof(gpu_bin));
+	boost_ind = 0;
+
 	//second pass to actually populate the gpu_bins
 	queue_head = scene->bins;
 	queue_tail = scene->bins;
@@ -1012,6 +1003,8 @@ gpu_bin *flatten_bvh(Scene *scene)
 	while (queue_head)
 	{
 		bins[queue_head->flat_ind] = bin_from_box(queue_head);
+		if (depth(queue_head) == BOOST_DEPTH || (!queue_head->left && depth(queue_head) < BOOST_DEPTH))
+			boost_arr[boost_ind++] = bin_from_box(queue_head);
 		if (queue_head->left)
 		{
 			queue_head->left->next = queue_head->right;
@@ -1023,9 +1016,10 @@ gpu_bin *flatten_bvh(Scene *scene)
 		queue_head = queue_head->next;
 	}
 
-
 	// for (int i = 0; i < scene->bin_count; i++)
 	// 	printf("%d, L %d R %d\n", i, bins[i].lind, bins[i].rind);
+	*boost = boost_arr;
+	*boost_count = boost_ind;
 
 	return bins;
 }
