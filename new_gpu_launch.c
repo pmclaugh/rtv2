@@ -300,7 +300,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 	d_materials = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_mat) * scene->mat_count, scene->mats, NULL);
 	d_tex = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * scene->tex_size, scene->tex, NULL);
 	d_material_indices= clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * scene->tri_count / 3, scene->M, NULL);
-	d_boost = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_bin) * scene->boost_count, scene->boost, NULL)
+	d_boost = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_bin) * scene->boost_count, scene->boost, NULL);
 
 	//per-device
 	cl_mem *d_outputs = calloc(CL->numDevices, sizeof(cl_mem));
@@ -433,29 +433,29 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 
 			//below here shouldn't go in the loop but it makes things convenient for now.
 
-			clFinish(CL->commands[i]);
-			printf("\n");
+			// clFinish(CL->commands[i]);
+			// printf("\n");
 
 			
-			clGetEventProfilingInfo(collectE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-			clGetEventProfilingInfo(collectE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-			printf("collect took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
-			//clReleaseEvent(collectE);
+			// clGetEventProfilingInfo(collectE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+			// clGetEventProfilingInfo(collectE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+			// printf("collect took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
+			// //clReleaseEvent(collectE);
 
-			clGetEventProfilingInfo(traverseE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-			clGetEventProfilingInfo(traverseE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-			printf("traverse took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
-			//clReleaseEvent(traverseE);
+			// clGetEventProfilingInfo(traverseE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+			// clGetEventProfilingInfo(traverseE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+			// printf("traverse took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
+			// //clReleaseEvent(traverseE);
 
-			clGetEventProfilingInfo(fetchE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-			clGetEventProfilingInfo(fetchE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-			printf("fetch took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
-			//clReleaseEvent(fetchE);
+			// clGetEventProfilingInfo(fetchE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+			// clGetEventProfilingInfo(fetchE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+			// printf("fetch took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
+			// //clReleaseEvent(fetchE);
 
-			clGetEventProfilingInfo(bounceE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-			clGetEventProfilingInfo(bounceE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-			printf("bounce took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
-			//clReleaseEvent(bounceE);
+			// clGetEventProfilingInfo(bounceE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+			// clGetEventProfilingInfo(bounceE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+			// printf("bounce took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
+			// //clReleaseEvent(bounceE);
 		}
 
 	for (int i = 0; i < d; i++)

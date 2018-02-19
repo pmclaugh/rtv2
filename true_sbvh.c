@@ -7,7 +7,7 @@
 #define LEAF_THRESHOLD 16
 #define BOOST_DEPTH 9
 
-#define ALPHA 0.001f
+#define ALPHA 0.00001f
 
 enum axis{
 	X_AXIS,
@@ -1022,6 +1022,7 @@ gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count)
 
 	// for (int i = 0; i < scene->bin_count; i++)
 	// 	printf("%d, L %d R %d\n", i, bins[i].lind, bins[i].rind);
+	printf("boost is %d nodes, %d bytes\n", boost_ind, boost_ind * 32);
 	*boost = boost_arr;
 	*boost_count = boost_ind;
 
