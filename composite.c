@@ -19,7 +19,7 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_in
 		free(counts[i]);
 	}
 
-	printf("%.1f avg samples/pixel\n", (float)sum / (float)(resolution * numDevices));
+	printf("%.1f avg samples/pixel\n", (float)sum / (float)(resolution));
 
 	free(outputs);
 	free(counts);
