@@ -310,7 +310,7 @@ __kernel void bounce( 	__global Ray *rays,
 		float3 x = hem_x * sin(theta) * cos(phi);
 		float3 y = hem_y * sin(theta) * sin(phi);
 		float3 z = spec_dir * cos(theta);
-		new_dir = x + y + z;
+		new_dir = normalize(x + y + z);
 		if (dot(new_dir, ray.N) < 0.0f) // pick mirror of sample (same importance)
 			new_dir = z - x - y;
 		ray.mask *= ray.spec;
@@ -338,6 +338,8 @@ __kernel void bounce( 	__global Ray *rays,
 	ray.status = TRAVERSE;
 
 	rays[gid] = ray;
+	seeds[2 * gid] = seed0;
+	seeds[2 * gid + 1] = seed1;
 }
 
 __kernel void collect(	__global Ray *rays,
@@ -366,7 +368,7 @@ __kernel void collect(	__global Ray *rays,
 	}
 	if (ray.status == DEAD)
 	{
-		output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS;
+		output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(dot(ray.direction, UNIT_Y), 10.0f);
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
 	}
@@ -388,6 +390,8 @@ __kernel void collect(	__global Ray *rays,
 	}
 
 	rays[gid] = ray;
+	seeds[2 * gid] = seed0;
+	seeds[2 * gid + 1] = seed1;
 }
 
 __kernel void traverse(	__global Ray *rays,

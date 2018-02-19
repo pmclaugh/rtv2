@@ -482,7 +482,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 	printf("any key to launch\n");
 	getchar();
 	//ACTUAL LAUNCH TIME
-	for (int j = 0; j < 50; j++)
+	for (int j = 0; j < samples; j++)
 		for (int i = 0; i < d; i++)
 		{
 			cl_event collectE, traverseE, fetchE, bounceE;
@@ -522,5 +522,5 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 
 	printf("read complete\n");
 
-	return composite(outputs, d, worksize, 10);
+	return composite(outputs, d, worksize, samples);
 }
