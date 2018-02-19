@@ -85,14 +85,13 @@ int main(int ac, char **av)
 	printf("finished with %d boxes\n", box_count);
 	study_tree(tree, 100000);
 
-	//return 0;
 
 	sponza->bins = tree;
 	sponza->bin_count = box_count;
 	sponza->face_count = ref_count;
 	printf("about to flatten\n");
 	flatten_faces(sponza);
-
+	
 	t_camera cam;
 	//cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
 	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
