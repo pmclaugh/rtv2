@@ -1004,7 +1004,11 @@ gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count)
 	{
 		bins[queue_head->flat_ind] = bin_from_box(queue_head);
 		if (depth(queue_head) == BOOST_DEPTH || (!queue_head->left && depth(queue_head) < BOOST_DEPTH))
-			boost_arr[boost_ind++] = bin_from_box(queue_head);
+		{
+			boost_arr[boost_ind] = bin_from_box(queue_head);
+			boost_arr[boost_ind].lind = queue_head->flat_ind;
+			boost_ind++;
+		}
 		if (queue_head->left)
 		{
 			queue_head->left->next = queue_head->right;

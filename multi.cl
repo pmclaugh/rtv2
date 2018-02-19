@@ -407,15 +407,19 @@ __kernel void traverse(	__global Ray *rays,
 	if (ray.status != TRAVERSE)
 		return ;
 
-	int stack[32];
-	int s_i = 1;
-	stack[0] = 0;
-
 	float t = FLT_MAX;
 	float u, v;
 	int ind = -1;
 
+	int stack[64];
+	int s_i = 0;
 	Box b;
+	for (int i = 0; i < boost_count; i++)
+	{
+		b = boost[i];
+		if (intersect_box(ray, b, t))
+			stack[s_i++] = b.lind;
+	}
 	while (s_i)
 	{
 		//pop
