@@ -450,16 +450,21 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 		}
 
 	for (int i = 0; i < d; i++)
+		clFlush(CL->commands[i]);
+
+	for (int i = 0; i < d; i++)
 		clFinish(CL->commands[i]);
 
 	cl_ulong s, e;
 	clGetEventProfilingInfo(start, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &s, NULL);
 	clGetEventProfilingInfo(end, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &e, NULL);
 	printf("took %.3f seconds\n", (float)(e - s) / 1000000000.0f);
-		
-	clEnqueueReadBuffer(CL->commands[0], d_outputs[0], CL_TRUE, 0, worksize * sizeof(cl_float3), outputs[0], 0, NULL, NULL);
-
-	clEnqueueReadBuffer(CL->commands[0], d_counts[0], CL_TRUE, 0, worksize * sizeof(cl_int), counts[0], 0, NULL, NULL);
+	
+	for (int i = 0; i < d; i++)
+	{
+		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_TRUE, 0, worksize * sizeof(cl_float3), outputs[i], 0, NULL, NULL);
+		clEnqueueReadBuffer(CL->commands[i], d_counts[i], CL_TRUE, 0, worksize * sizeof(cl_int), counts[i], 0, NULL, NULL);
+	}
 
 	printf("read complete\n");
 
