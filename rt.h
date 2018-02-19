@@ -247,7 +247,7 @@ void study_tree(AABB *tree, int ray_count);
 void flatten_faces(Scene *scene);
 gpu_bin *flatten_bvh(Scene *scene);
 float area(AABB *box);
-
+cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_int **counts);
 
 Face *ply_import(char *ply_file);
 Face *object_flatten(Face *faces, int *face_count);

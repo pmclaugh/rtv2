@@ -203,6 +203,14 @@ gpu_context *prep_gpu(void)
     	if (err != CL_SUCCESS)
     	{
     	 	printf("bad compile\n");
+    	 	char *build_log;
+			size_t ret_val_size = 0;
+			clGetProgramBuildInfo(gpu->programs[i], device_ids[i], CL_PROGRAM_BUILD_LOG, 0, NULL, &ret_val_size);
+			printf("ret val %lu\n", ret_val_size);
+			build_log = malloc(ret_val_size + 1);
+			clGetProgramBuildInfo(gpu->programs[i], device_ids[i], CL_PROGRAM_BUILD_LOG, ret_val_size, build_log, NULL);
+			printf("%s\n", build_log);
+			free(build_log);
     	 	exit(0);
     	}
 	    free(source);
@@ -210,93 +218,6 @@ gpu_context *prep_gpu(void)
     printf("good compile\n");
     //getchar();
     return gpu;
-}
-
-cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, int samples_per_device)
-{
-	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
-	for (int i = 0; i < numDevices; i++)
-	{
-		for (int j = 0; j < resolution; j++)
-		{
-			output_sum[j].x += (double)outputs[i][j].x;
-			output_sum[j].y += (double)outputs[i][j].y;
-			output_sum[j].z += (double)outputs[i][j].z;
-		}
-		free(outputs[i]);
-	}
-
-	free(outputs);
-	// for (int i = 0; i < 10; i++)
-	// 	printf("%lf %lf %lf\n", output_sum[i].x, output_sum[i].y, output_sum[i].z);
-
-	//average samples and apply tone mapping
-	double Lw = 0.0;
-	for (int j = 0;j < resolution; j++)
-	{
-		double scale = 1.0 / (double)(samples_per_device * numDevices);
-		output_sum[j].x *= scale;
-		output_sum[j].y *= scale;
-		output_sum[j].z *= scale;
-
-		double this_lw = log(0.1 + 0.2126 * output_sum[j].x + 0.7152 * output_sum[j].y + 0.0722 * output_sum[j].z);
-		if (this_lw == this_lw)
-			Lw += this_lw;
-		else
-			printf("NaN alert\n");
-	}
-	// printf("Lw is %lf\n", Lw);
-	
-
-	Lw /= (double)resolution;
-	// printf("Lw is %lf\n", Lw);
-
-	Lw = exp(Lw);
-	// printf("Lw is %lf\n", Lw);
-
-	for (int j = 0; j < resolution; j++)
-	{
-		output_sum[j].x = output_sum[j].x * 0.36 / Lw;
-		output_sum[j].y = output_sum[j].y * 0.36 / Lw;
-		output_sum[j].z = output_sum[j].z * 0.36 / Lw;
-
-		output_sum[j].x = output_sum[j].x / (output_sum[j].x + 1.0);
-		output_sum[j].y = output_sum[j].y / (output_sum[j].y + 1.0);
-		output_sum[j].z = output_sum[j].z / (output_sum[j].z + 1.0);
-	}
-	printf("done composite\n");
-	return output_sum;
-}
-
-cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution, int samples_per_device)
-{
-	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
-	for (int i = 0; i < numDevices; i++)
-	{
-		for (int j = 0; j < resolution; j++)
-		{
-
-			output_sum[j].x += (double)outputs[i][j].x;
-			output_sum[j].y += (double)outputs[i][j].y;
-			output_sum[j].z += (double)outputs[i][j].z;
-		}
-		free(outputs[i]);
-	}
-	free(outputs);
-
-	for (int j = 0;j < resolution; j++)
-	{
-		double scale = 1.0 / (double)(samples_per_device * numDevices);
-		output_sum[j].x *= scale;
-		output_sum[j].y *= scale;
-		output_sum[j].z *= scale;
-
-		output_sum[j].x = output_sum[j].x / (1.0f + output_sum[j].x);
-		output_sum[j].y = output_sum[j].y / (1.0f + output_sum[j].y);
-		output_sum[j].z = output_sum[j].z / (1.0f + output_sum[j].z);
-	}
-
-	return output_sum;
 }
 
 typedef struct s_gpu_ray {
@@ -479,22 +400,32 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 	for (int i = 0; i < CL->numDevices; i++)
 		outputs[i] = calloc(worksize, sizeof(cl_float3));
 
+	cl_int **counts = calloc(CL->numDevices, sizeof(cl_int *));
+	for (int i = 0; i < CL->numDevices; i++)
+		counts[i] = calloc(worksize, sizeof(cl_int));
+
 	printf("any key to launch\n");
 	getchar();
 	//ACTUAL LAUNCH TIME
+	cl_event start, end;
 	for (int j = 0; j < samples; j++)
 		for (int i = 0; i < d; i++)
 		{
 			cl_event collectE, traverseE, fetchE, bounceE;
-			clEnqueueNDRangeKernel(CL->commands[i], collect[i], 1, 0, &worksize, &localsize, 0, NULL, &collectE);
+			clEnqueueNDRangeKernel(CL->commands[i], collect[i], 1, 0, &worksize, &localsize, j == 0 ? 0 : 1, j == 0 ? NULL : &bounceE, &collectE);
 			clEnqueueNDRangeKernel(CL->commands[i], traverse[i], 1, 0, &worksize, &localsize, 1, &collectE, &traverseE);
 			clEnqueueNDRangeKernel(CL->commands[i], fetch[i], 1, 0, &worksize, &localsize, 1, &traverseE, &fetchE);
 			clEnqueueNDRangeKernel(CL->commands[i], bounce[i], 1, 0, &worksize, &localsize, 1, &fetchE, &bounceE);
 			
+			if (j == 0)
+				start = collectE;
+			if (j == samples - 1)
+				end = bounceE;
+
 			//below here shouldn't go in the loop but it makes things convenient for now.
 
 			clFinish(CL->commands[i]);
-			printf("\n");
+			// printf("\n");
 
 			cl_ulong start, end;
 			clGetEventProfilingInfo(collectE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
@@ -517,10 +448,20 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 			printf("bounce took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
 			clReleaseEvent(bounceE);
 		}
+
+	for (int i = 0; i < d; i++)
+		clFinish(CL->commands[i]);
+
+	cl_ulong s, e;
+	clGetEventProfilingInfo(start, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &s, NULL);
+	clGetEventProfilingInfo(end, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &e, NULL);
+	printf("took %.3f seconds\n", (float)(e - s) / 1000000000.0f);
 		
 	clEnqueueReadBuffer(CL->commands[0], d_outputs[0], CL_TRUE, 0, worksize * sizeof(cl_float3), outputs[0], 0, NULL, NULL);
 
+	clEnqueueReadBuffer(CL->commands[0], d_counts[0], CL_TRUE, 0, worksize * sizeof(cl_int), counts[0], 0, NULL, NULL);
+
 	printf("read complete\n");
 
-	return composite(outputs, d, worksize, samples);
+	return composite(outputs, d, worksize, counts);
 }

@@ -1,6 +1,7 @@
 
 #define PI 3.14159265359f
 #define NORMAL_SHIFT 0.0001f
+#define COLLISION_ERROR 0.0003f
 
 #define BLACK (float3)(0.0f, 0.0f, 0.0f)
 #define WHITE (float3)(1.0f, 1.0f, 1.0f)
@@ -179,7 +180,7 @@ void intersect_triangle(Ray ray, __global float3 *V, int test_i, int *best_i, fl
 	if (this_v < 0.0 || this_u + this_v > 1.0)
 		return;
 	this_t = f * dot(e2, q);
-	if (this_t < *t && this_t > 0.0f)
+	if (this_t < *t && this_t > COLLISION_ERROR)
 	{
 		*t = this_t;
 		*u = this_u;
@@ -312,7 +313,7 @@ __kernel void bounce( 	__global Ray *rays,
 		float3 z = spec_dir * cos(theta);
 		new_dir = normalize(x + y + z);
 		if (dot(new_dir, ray.N) < 0.0f) // pick mirror of sample (same importance)
-			new_dir = z - x - y;
+			new_dir = normalize(z - x - y);
 		ray.mask *= ray.spec;
 	}
 	else
@@ -361,14 +362,15 @@ __kernel void collect(	__global Ray *rays,
 		if (ray.bounce_count > MIN_BOUNCES)
 		{
 			if (get_random(&seed0, &seed1) < RR_PROB)
-				ray.mask *= 1.0f / (1.0f - RR_PROB);
+				ray.mask = ray.mask / (1.0f - RR_PROB);
 			else
 				ray.status = DEAD;
 		}
 	}
 	if (ray.status == DEAD)
 	{
-		output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(dot(ray.direction, UNIT_Y), 10.0f);
+		if (ray.hit_ind == -1)
+			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS;
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
 	}
@@ -382,10 +384,9 @@ __kernel void collect(	__global Ray *rays,
 		ray.inv_dir = 1.0f / ray.direction;
 		
 		ray.status = TRAVERSE;
-		ray.t = FLT_MAX;
 		ray.color = BLACK;
 		ray.mask = WHITE;
-		ray.hit_ind = -1;
+		ray.bounce_count = 0;
 		ray.pixel_id = gid;
 	}
 
@@ -408,7 +409,7 @@ __kernel void traverse(	__global Ray *rays,
 	int s_i = 1;
 	stack[0] = 0;
 
-	float t = ray.t;
+	float t = FLT_MAX;
 	float u, v;
 	int ind = -1;
 

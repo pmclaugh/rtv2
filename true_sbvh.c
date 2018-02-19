@@ -6,7 +6,7 @@
 #define SPLIT_TEST_NUM 15
 #define LEAF_THRESHOLD 16
 
-#define ALPHA 0.0001f
+#define ALPHA 0.001f
 
 enum axis{
 	X_AXIS,
