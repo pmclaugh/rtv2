@@ -3,9 +3,9 @@
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
-#define SPLIT_TEST_NUM 30
-#define LEAF_THRESHOLD 16
-#define BOOST_DEPTH 9
+#define SPLIT_TEST_NUM 255
+#define LEAF_THRESHOLD 2
+#define BOOST_DEPTH 11
 
 #define ALPHA 0.00001f
 
@@ -454,17 +454,6 @@ Split *best_spatial_split(AABB *box)
 				clip_box(lclip, spatials[i]->left);
 				clip_box(rclip, spatials[i]->right);
 
-				// if (area(lclip) + area(rclip) > area(b) * 1.01f)
-				// {
-				// 	printf("\nERROR: clip boxes bigger than original\n");
-				// 	print_box(b);
-				// 	printf("%.2f\n", area(b));
-				// 	print_box(lclip);
-				// 	printf("%.2f\n", area(lclip));
-				// 	print_box(rclip);
-				// 	printf("%.2f\n", area(rclip));
-				// }
-
 				flex_box(spatials[i]->left_flex, lclip);
 				flex_box(spatials[i]->right_flex, rclip);
 
@@ -728,8 +717,8 @@ void partition(AABB *box)
 	Split *object = best_object_split(box);
 	Split *spatial = NULL;
 
-	if (!object || SA_overlap(object) / root_SA > ALPHA)
-		spatial = best_spatial_split(box);
+	// if (!object || SA_overlap(object) / root_SA > ALPHA)
+	// 	spatial = best_spatial_split(box);
 
 	//printf("spatial %p - object %p\n", spatial, object);
 
