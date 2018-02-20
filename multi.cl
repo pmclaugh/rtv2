@@ -114,10 +114,8 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 }
 
 //intersect_box
-static int intersect_box(Ray ray, Box b, float t)
+static inline int intersect_box(Ray ray, Box b, float t)
 {
-	//the if tmin >=t checks are new, should be fine, should help. will toggle to see effect.
-
 	float tx0 = (b.minx - ray.origin.x) * ray.inv_dir.x;
 	float tx1 = (b.maxx - ray.origin.x) * ray.inv_dir.x;
 	float tmin = fmin(tx0, tx1);
@@ -149,14 +147,13 @@ static int intersect_box(Ray ray, Box b, float t)
 	if (tmin > t)
 		return (0);
 
-	if (tmin <= 0.0 && tmax <= 0.0)
+	if (tmin <= 0.0f && tmax <= 0.0f)
 		return (0);
 	return (1);
 }
 
-static void intersect_triangle(Ray ray, __global float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
+static inline void intersect_triangle(Ray ray, __global float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
 {
-	//we don't need v1 or v2 after initial calc of e1, e2. could just store them in same memory. wonder if compiler does this.
 	float this_t, this_u, this_v;
 	float3 v0 = V[test_i];
 	float3 v1 = V[test_i + 1];
@@ -212,7 +209,7 @@ static void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *te
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
 	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : BLACK;
-	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : (float3)(0.6f, 0.6f, 0.6f);
+	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : (float3)(0.8f, 0.3f, 0.3f);
 }
 
 static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)

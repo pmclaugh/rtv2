@@ -274,7 +274,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 	//for simplicity assuming one platform for now. can easily be extended, see old gpu_launch.c
 
 	size_t worksize = xdim * ydim;
-	size_t localsize = 256;
+	size_t localsize = 32;
 	size_t sample_max = samples;
 	size_t width = xdim;
 
