@@ -3,11 +3,11 @@
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
-#define SPLIT_TEST_NUM 255
-#define LEAF_THRESHOLD 2
+#define SPLIT_TEST_NUM 100
+#define LEAF_THRESHOLD 8
 #define BOOST_DEPTH 11
 
-#define ALPHA 0.00001f
+#define ALPHA 0.0001f
 
 enum axis{
 	X_AXIS,
@@ -285,47 +285,47 @@ void clip_box(AABB *box, AABB *bound)
 	// print_box(box);
 	// getchar();
 
-	cl_float3 A, B, C;
-	A = box->f->verts[0];
-	B = box->f->verts[1];
-	C = box->f->verts[2];
+	// cl_float3 A, B, C;
+	// A = box->f->verts[0];
+	// B = box->f->verts[1];
+	// C = box->f->verts[2];
 
-	int res_a = 0;
-	int res_b = 0;
-	int res_c = 0;
+	// int res_a = 0;
+	// int res_b = 0;
+	// int res_c = 0;
 
-	cl_float3 points[6];
-	int pt_count = 0;
+	// cl_float3 points[6];
+	// int pt_count = 0;
 
-	edge_clip(A, B, box, points, &pt_count, &res_a, &res_b);
-	edge_clip(A, C, box, points, &pt_count, &res_a, &res_c);
-	edge_clip(B, C, box, points, &pt_count, &res_b, &res_c);
+	// edge_clip(A, B, box, points, &pt_count, &res_a, &res_b);
+	// edge_clip(A, C, box, points, &pt_count, &res_a, &res_c);
+	// edge_clip(B, C, box, points, &pt_count, &res_b, &res_c);
 
-	//basically, if we get an "update" for a, b or c, we don't consider the original point anymore.
-	//but we do consider both possible "updates", and if we don't get any we consider the original point.
-	if (res_a == 0)
-		points[pt_count++] = A;
-	if (res_b == 0)
-		points[pt_count++] = B;
-	if (res_c == 0)
-		points[pt_count++] = C;
-	//printf("%d points in input\n", pt_count);
-	// for (int i = 0; i < pt_count; i++)
-	// 	print_vec(points[i]);
+	// //basically, if we get an "update" for a, b or c, we don't consider the original point anymore.
+	// //but we do consider both possible "updates", and if we don't get any we consider the original point.
+	// if (res_a == 0)
+	// 	points[pt_count++] = A;
+	// if (res_b == 0)
+	// 	points[pt_count++] = B;
+	// if (res_c == 0)
+	// 	points[pt_count++] = C;
+	// //printf("%d points in input\n", pt_count);
+	// // for (int i = 0; i < pt_count; i++)
+	// // 	print_vec(points[i]);
 
-	AABB *clippy = box_from_points(points, pt_count);
-	// printf("clippy box\n");
-	// print_box(clippy);
+	// AABB *clippy = box_from_points(points, pt_count);
+	// // printf("clippy box\n");
+	// // print_box(clippy);
 
-	//i hope this is this easy.
+	// //i hope this is this easy.
 
-	box->max.x = fmin(clippy->max.x, box->max.x);
-	box->max.y = fmin(clippy->max.y, box->max.y);
-	box->max.z = fmin(clippy->max.z, box->max.z);
+	// box->max.x = fmin(clippy->max.x, box->max.x);
+	// box->max.y = fmin(clippy->max.y, box->max.y);
+	// box->max.z = fmin(clippy->max.z, box->max.z);
 
-	box->min.x = fmax(clippy->min.x, box->min.x);
-	box->min.y = fmax(clippy->min.y, box->min.y);
-	box->min.z = fmax(clippy->min.z, box->min.z);
+	// box->min.x = fmax(clippy->min.x, box->min.x);
+	// box->min.y = fmax(clippy->min.y, box->min.y);
+	// box->min.z = fmax(clippy->min.z, box->min.z);
 }
 
 Split *new_split(AABB *box, enum axis a, float ratio)
@@ -717,8 +717,8 @@ void partition(AABB *box)
 	Split *object = best_object_split(box);
 	Split *spatial = NULL;
 
-	// if (!object || SA_overlap(object) / root_SA > ALPHA)
-	// 	spatial = best_spatial_split(box);
+	if (!object || SA_overlap(object) / root_SA > ALPHA)
+		spatial = best_spatial_split(box);
 
 	//printf("spatial %p - object %p\n", spatial, object);
 
