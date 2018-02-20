@@ -272,6 +272,13 @@ __kernel void fetch(	__global Ray *rays,
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
 	ray.status = BOUNCE;
 
+	if (ray.trans.x < 1.0)
+	{
+		ray.origin = ray.origin + ray.direction * (ray.t + NORMAL_SHIFT);
+		ray.bounce_count--;
+		ray.status = TRAVERSE;
+	}
+
 	rays[gid] = ray;
 }
 
