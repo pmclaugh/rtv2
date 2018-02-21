@@ -68,14 +68,15 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_in
 	return output_sum;
 }
 
-cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution, int samples_per_device)
+cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution, int **counts)
 {
 	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
+	int *count_sum = calloc(resolution, sizeof(int));
 	for (int i = 0; i < numDevices; i++)
 	{
 		for (int j = 0; j < resolution; j++)
 		{
-
+			count_sum[j] += counts[i][j];
 			output_sum[j].x += (double)outputs[i][j].x;
 			output_sum[j].y += (double)outputs[i][j].y;
 			output_sum[j].z += (double)outputs[i][j].z;
@@ -83,10 +84,11 @@ cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution,
 		free(outputs[i]);
 	}
 	free(outputs);
+	free(counts);
 
 	for (int j = 0;j < resolution; j++)
 	{
-		double scale = 1.0 / (double)(samples_per_device * numDevices);
+		double scale = 1.0 / (double)(count_sum[j] * numDevices);
 		output_sum[j].x *= scale;
 		output_sum[j].y *= scale;
 		output_sum[j].z *= scale;

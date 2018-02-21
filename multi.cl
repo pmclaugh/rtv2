@@ -300,7 +300,7 @@ __kernel void bounce( 	__global Ray *rays,
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
 
-	if(get_random(&seed0, &seed1) < spec_importance)
+	if(0 && get_random(&seed0, &seed1) < spec_importance)
 	{
 		float3 spec_dir = normalize(ray.direction - 2.0f * dot(ray.direction, ray.N) * ray.N);
 

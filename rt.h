@@ -251,6 +251,7 @@ void flatten_faces(Scene *scene);
 gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count);
 float area(AABB *box);
 cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_int **counts);
+cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution, int **counts);
 int depth(AABB *box);
 
 Face *ply_import(char *ply_file);
