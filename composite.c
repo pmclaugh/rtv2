@@ -4,7 +4,7 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_in
 {
 	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
 	int *count_sum = calloc(resolution, sizeof(int));
-	int sum = 0;
+	size_t sum = 0;
 	for (int i = 0; i < numDevices; i++)
 	{
 		for (int j = 0; j < resolution; j++)

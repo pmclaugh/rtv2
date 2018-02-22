@@ -300,7 +300,7 @@ __kernel void bounce( 	__global Ray *rays,
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
 
-	if(0 && get_random(&seed0, &seed1) < spec_importance)
+	if(get_random(&seed0, &seed1) < spec_importance)
 	{
 		float3 spec_dir = normalize(ray.direction - 2.0f * dot(ray.direction, ray.N) * ray.N);
 
@@ -310,7 +310,7 @@ __kernel void bounce( 	__global Ray *rays,
 		float3 hem_y = cross(spec_dir, hem_x);
 
 		float phi = 2.0f * PI * r1;
-		float theta = acos(pow((1.0f - r2), 1.0f / (100.0f * ray.spec.x)));
+		float theta = acos(pow((1.0f - r2), 1.0f / (50.0f)));
 
 		float3 x = hem_x * sin(theta) * cos(phi);
 		float3 y = hem_y * sin(theta) * sin(phi);
@@ -318,7 +318,7 @@ __kernel void bounce( 	__global Ray *rays,
 		new_dir = normalize(x + y + z);
 		if (dot(new_dir, ray.N) < 0.0f) // pick mirror of sample (same importance)
 			new_dir = normalize(z - x - y);
-		ray.mask *= ray.spec;
+		ray.mask *= spec_importance > 0 ? ray.spec / spec_importance : 0;
 	}
 	else
 	{
@@ -334,7 +334,7 @@ __kernel void bounce( 	__global Ray *rays,
 
 		//combine for new direction
 		new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + ray.N * sqrt(max(0.0f, 1.0f - r1)));
-		ray.mask *= ray.diff;
+		ray.mask *= diff_importance > 0 ? ray.diff / diff_importance : 0;
 	}
 
 	ray.origin = ray.origin + ray.direction * ray.t + ray.N * NORMAL_SHIFT;

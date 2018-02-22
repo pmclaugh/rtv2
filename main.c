@@ -8,7 +8,7 @@
 
 #define XDIM 1024
 #define YDIM 1024
-#define SPP_PER_DEVICE 500
+#define SPP_PER_DEVICE 100000
 
 typedef struct s_param
 {
@@ -96,13 +96,18 @@ int main(int ac, char **av)
 
 	t_camera cam;
 	cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
+	//cam.center = (cl_float3){-320.0, 60.0, -220.0}; // vase view (1,0,0)
 	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
 	//cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
+	//cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
 	//cam.center = (cl_float3){-800.0, 600.0, 350.0}; //upstairs left
-	//cam.center = (cl_float3){800.0, 100.0, 350.0}; //down left
-	//cam.center = (cl_float3){900.0, 150.0, -35.0}; //lion
+	//cam.center = (cl_float3){0.0, 30.0, 400.0}; //down left
+	//cam.center = (cl_float3){800.0, 150.0, -35.0}; //lion
+	//cam.center = (cl_float3){780.0, 650.0, -35.0}; //lion
 	//cam.center = (cl_float3){-250.0, 100.0, 0.0};
+	//cam.center = (cl_float3){-3000.0, 2200.0, 0.0}; //outside
 	cam.normal = (cl_float3){1.0, 0.0, 0.0};
+	cam.normal = unit_vec(cam.normal);
 	cam.width = 1.0;
 	cam.height = 1.0;
 	init_camera(&cam, XDIM, YDIM);
