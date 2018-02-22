@@ -7,15 +7,15 @@ typedef struct s_traversal
 	cl_float3 inv_dir;
 	float t;
 
-	int box_comps;
-	int boxes_hit;
-	int inside_comps;
-	int insides_hit;
-	int tri_comps;
-	int tris_hit;
+	size_t box_comps;
+	size_t boxes_hit;
+	size_t inside_comps;
+	size_t insides_hit;
+	size_t tri_comps;
+	size_t tris_hit;
 
-	int max_tris;
-	int max_boxes;
+	size_t max_tris;
+	size_t max_boxes;
 }			Traversal;
 
 typedef struct s_triangle
@@ -273,6 +273,6 @@ void study_tree(AABB *tree, int ray_count)
 	}
 
 	printf("%d rays complete\n", ray_count);
-	printf("%.2f box comparisons per ray avg, %d max\n", (float)sum->box_comps / (float)ray_count, sum->max_boxes);
-	printf("%.2f triangle comparisons per ray avg, %d max\n", (float)sum->tri_comps / (float)ray_count, sum->max_tris);
+	printf("%.2f box comparisons per ray avg, %lu max\n", (float)sum->box_comps / (float)ray_count, sum->max_boxes);
+	printf("%.2f triangle comparisons per ray avg, %lu max\n", (float)sum->tri_comps / (float)ray_count, sum->max_tris);
 }

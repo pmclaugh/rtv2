@@ -3,11 +3,11 @@
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
-#define SPLIT_TEST_NUM 50
+#define SPLIT_TEST_NUM 31
 #define LEAF_THRESHOLD 8
 #define BOOST_DEPTH 11
 
-#define ALPHA 0.0001f
+#define ALPHA 0.01f
 
 enum axis{
 	X_AXIS,
@@ -15,7 +15,7 @@ enum axis{
 	Z_AXIS
 };
 
-cl_float3 center(AABB *box)
+cl_float3 center(const AABB *box)
 {
 	cl_float3 span = vec_sub(box->max, box->min);
 	return vec_add(box->min, vec_scale(span, 0.5));
@@ -194,6 +194,9 @@ typedef struct s_split
 	int left_count;
 	int right_count;
 	int both_count;
+
+	enum axis ax;
+	float ratio;
 }				Split;
 
 //intersect_box
@@ -417,10 +420,10 @@ float SAH(Split *split, AABB *parent)
 
 Split **allocate_splits(AABB *box)
 {
+	//this may be behaving poorly. can choose absurd splits like 99%-1%
+
 	cl_float3 span = vec_sub(box->max, box->min);
 	float spread = span.x + span.y + span.z;
-	//print_vec(span);
-	//printf("x %.2f%% y %.2f%% z %.2f%%\n", 100.0f * span.x / spread, 100.0f * span.y / spread, 100.0f * span.z / spread);
 
 	Split **spatials = calloc(SPLIT_TEST_NUM, sizeof(Split *));
 
@@ -514,18 +517,15 @@ Split *best_spatial_split(AABB *box)
 
 int x_sort(const void *arg1, const void *arg2)
 {
-	AABB **ap = arg1;
-	AABB **bp = arg2;
+	AABB **ap = (AABB **)arg1;
+	AABB **bp = (AABB **)arg2;
 
 	AABB *a = *ap;
 	AABB *b = *bp;
 
-	cl_float3 center_a = center(a);
-	cl_float3 center_b = center(b);
-
-	if (center_a.x > center_b.x)
+	if (a->min.x > b->min.x)
 		return 1;
-	else if (center_a.x < center_b.x)
+	else if (a->min.x < b->min.x)
 		return -1;
 	else
 		return 0;
@@ -533,18 +533,15 @@ int x_sort(const void *arg1, const void *arg2)
 
 int y_sort(const void *arg1, const void *arg2)
 {
-	AABB **ap = arg1;
-	AABB **bp = arg2;
+	AABB **ap = (AABB **)arg1;
+	AABB **bp = (AABB **)arg2;
 
 	AABB *a = *ap;
 	AABB *b = *bp;
 
-	cl_float3 center_a = center(a);
-	cl_float3 center_b = center(b);
-
-	if (center_a.y > center_b.y)
+	if (a->min.y > b->min.y)
 		return 1;
-	else if (center_a.y < center_b.y)
+	else if (a->min.y < b->min.y)
 		return -1;
 	else
 		return 0;
@@ -552,28 +549,109 @@ int y_sort(const void *arg1, const void *arg2)
 
 int z_sort(const void *arg1, const void *arg2)
 {
-	AABB **ap = arg1;
-	AABB **bp = arg2;
+	AABB **ap = (AABB **)arg1;
+	AABB **bp = (AABB **)arg2;
 
 	AABB *a = *ap;
 	AABB *b = *bp;
 
-	cl_float3 center_a = center(a);
-	cl_float3 center_b = center(b);
-
-	if (center_a.z > center_b.z)
+	if (a->min.z > b->min.z)
 		return 1;
-	else if (center_a.z < center_b.z)
+	else if (a->min.z < b->min.z)
 		return -1;
 	else
 		return 0;
 }
 
-Split *best_object_split(AABB *box)
+void axis_sort(AABB **boxes, int count, enum axis ax)
 {
-	// printf("enter best object split\n");
+	if (ax == X_AXIS)
+		qsort(boxes, count, sizeof(AABB *), x_sort);
+	else if (ax == Y_AXIS)
+		qsort(boxes, count, sizeof(AABB *), y_sort);
+	else if (ax == Z_AXIS)
+		qsort(boxes, count, sizeof(AABB *), z_sort);
+}
 
-	// printf("%d\n", box->member_count);
+Split *better_object_split(AABB *box)
+{
+
+	AABB **members = calloc(box->member_count, sizeof(AABB *));
+	AABB *b = box->members;
+	for (int i = 0; b; b = b->next, i++)
+		members[i] = b;
+
+	//pick longest axis
+	enum axis ax;
+	if (box->max.x - box->min.x > box->max.y - box->min.y && 
+		box->max.x - box->min.x > box->max.z - box->min.z)
+		ax = X_AXIS;
+	else if (box->max.y - box->min.y > box->max.x - box->min.x && 
+		box->max.y - box->min.y > box->max.z - box->min.z)
+		ax = Y_AXIS;
+	else
+		ax = Z_AXIS;
+
+	axis_sort(members, box->member_count, ax);
+
+	//alloc blank splits
+	Split **objects = calloc(SPLIT_TEST_NUM, sizeof(Split *));
+	for (int i = 0; i < SPLIT_TEST_NUM; i++)
+	{
+		objects[i] = calloc(1, sizeof(Split));
+		objects[i]->left_flex = empty_box();
+		objects[i]->right_flex = empty_box();
+		objects[i]->left = dupe_box(box);
+		objects[i]->right = dupe_box(box);
+		objects[i]->ax = ax;
+		objects[i]->ratio = (float)(i + 1) / (float)(SPLIT_TEST_NUM + 1);
+	}
+
+	for (int i = 0; i < box->member_count; i++)
+		for (int j = 0; j < SPLIT_TEST_NUM; j++)
+		{
+			if ((float) i / (float)box->member_count < objects[j]->ratio)
+			{
+				flex_box(objects[j]->left_flex, members[i]);
+				objects[j]->left_count++;
+			}
+			else
+			{
+				flex_box(objects[j]->right_flex, members[i]);
+				objects[j]->right_count++;
+			}
+		}
+
+	//measure and choose best split
+	float min_SAH = FLT_MAX;
+	int min_ind = -1;
+	for (int i = 0; i < SPLIT_TEST_NUM; i++)
+	{
+		if (objects[i]->left_count == 0 || objects[i]->right_count == 0)
+			continue ;
+		float res = SAH(objects[i], box);
+		if (res < min_SAH)
+		{
+			min_SAH = res;
+			min_ind = i;
+		}
+	}
+
+	//clean up
+	Split *winner = min_ind == -1 ? NULL : objects[min_ind];
+	for (int i = 0; i < SPLIT_TEST_NUM - 1; i++)
+		if (i == min_ind)
+			continue;
+		else
+			free_split(objects[i]);
+	free(objects);
+	free(members);
+
+	return winner;
+}
+
+Split *old_object_split(AABB *box)
+{
 
 	//alloc blank splits
 	Split **objects = calloc(SPLIT_TEST_NUM, sizeof(Split *));
@@ -652,10 +730,8 @@ Split *best_object_split(AABB *box)
 				objects[j + 2 * SPLIT_TEST_NUM / 3]->right_count++;
 			}
 		}
+
 	//measure and choose best split
-
-	free(members);
-
 	float min_SAH = FLT_MAX;
 	int min_ind = -1;
 	for (int i = 0; i < SPLIT_TEST_NUM - 1; i++)
@@ -678,6 +754,7 @@ Split *best_object_split(AABB *box)
 		else
 			free_split(objects[i]);
 	free(objects);
+	free(members);
 
 	return winner;
 }
@@ -714,13 +791,11 @@ float SA_overlap(Split *split)
 
 void partition(AABB *box)
 {
-	Split *object = best_object_split(box);
+	Split *object = better_object_split(box);
 	Split *spatial = NULL;
 
 	if (!object || SA_overlap(object) / root_SA > ALPHA)
 		spatial = best_spatial_split(box);
-
-	//printf("spatial %p - object %p\n", spatial, object);
 
 	if (spatial == NULL && object == NULL)
 	{
@@ -729,48 +804,32 @@ void partition(AABB *box)
 	}
 	else if (spatial == NULL || (object != NULL && SAH(object, box) < SAH(spatial, box)))
 	{
-		//printf("OBJECT, children are %.2f%% of parent area\n", 100.0f * (area(object->left_flex) + area(object->right_flex)) / area(box));
-		//printf("doing the object split\n");
+		AABB **members = calloc(box->member_count, sizeof(AABB *));
+		AABB *b = box->members;
+		for (int i = 0; b; b = b->next, i++)
+			members[i] = b;
+
+		axis_sort(members, box->member_count, object->ax);
+
 		box->left = dupe_box(object->left_flex);
 		box->right = dupe_box(object->right_flex);
-		for (AABB *b = box->members; b != NULL;)
+		for (int i = 0; i < box->member_count; i++)
 		{
-			AABB *tmp = b->next;
-			if (point_in_box(center(b), object->left))
+			if ((float)i / (float)box->member_count < object->ratio)
 			{
-				push(&box->left->members, b);
+				push(&box->left->members, members[i]);
 				box->left->member_count++;
-			}
-			else if (point_in_box(center(b), object->right))
-			{
-				push(&box->right->members, b);
-				box->right->member_count++;
 			}
 			else
 			{
-				printf("\n\nnot in any final box, real problem (object)\n");
-				print_box(b);
-				print_split(object);
-				print_box(box);
-				getchar();
+				push(&box->right->members, members[i]);
+				box->right->member_count++;
 			}
-			b = tmp;
 		}
-
-		// printf("object split complete, did we do it right?\n");
-		// printf("split was calculated with L %d R %d\n", object->left_count, object->right_count);
-		// printf("we ended up with L %d R %d\n", box->left->member_count, box->right->member_count);
-		// if (object->left_count != box->left->member_count || object->right_count != box->right->member_count)
-		// {
-		// 	printf("mismatch\n");
-		// 	getchar();
-		// }
+		free(members);
 	}
 	else
 	{
-		
-		//printf("SPATIAL, children are %.2f%% of parent area\n", 100.0f * (area(spatial->left_flex) + area(spatial->right_flex)) / area(box));
-		//printf("doing the spatial split\n");
 		box->left = dupe_box(spatial->left_flex);
 		box->right = dupe_box(spatial->right_flex);
 
@@ -913,18 +972,6 @@ void flatten_faces(Scene *scene)
 
 	scene->faces = faces;
 }
-
-// typedef struct s_gpu_bin
-// {
-// 	cl_float minx;
-// 	cl_float miny;
-// 	cl_float minz;
-// 	cl_int lind;
-// 	cl_float maxx;
-// 	cl_float maxy;
-// 	cl_float maxz;
-// 	cl_int rind;
-// }				gpu_bin;
 
 gpu_bin bin_from_box(AABB *box)
 {

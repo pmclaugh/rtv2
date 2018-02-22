@@ -135,7 +135,7 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 
 	//BINS
 	gpu_bin *boost;
-	cl_uint boost_count;
+	cl_int boost_count;
 	gpu_bin *flat_bvh = flatten_bvh(s, &boost, &boost_count);
 	printf("BVH has been flattened (?)\n");
 
