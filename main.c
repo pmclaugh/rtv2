@@ -86,6 +86,9 @@ Scene *scene_from_ply(char *filename)
 	scene->face_count = ref_count;
 	scene->bin_count = box_count;
 	flatten_faces(scene);
+
+	//need to add a default material
+
 	return scene;
 }
 

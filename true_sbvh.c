@@ -242,7 +242,7 @@ int edge_clip(cl_float3 A, cl_float3 B, AABB *clipping, cl_float3 *points, int *
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
 
-	//need to make sure we're not updating with a point that goes past far vertex (not sure if even possible)
+	//need to make sure we're not updating with a point that goes past far vertex
 
 	if (tmin > 0 && tmin < edge_t)
 	{
@@ -292,6 +292,7 @@ void clip_box(AABB *box, AABB *bound)
 	// print_box(box);
 
 	//code below has some sort of bug or misconception in it. it needs fixed though because it's vital for performance
+	//UPDATE: I believe this is now resolved but needs deeper testing to be sure.
 
 	cl_float3 A, B, C;
 	A = box->f->verts[0];
@@ -326,7 +327,7 @@ void clip_box(AABB *box, AABB *bound)
 	// printf("clippy box\n");
 	// print_box(clippy);
 
-	//i hope this is this easy.
+	//the result we want is the overlap of clippy and box
 
 	box->max.x = fmin(clippy->max.x, box->max.x);
 	box->max.y = fmin(clippy->max.y, box->max.y);
@@ -682,115 +683,6 @@ Split *better_object_split(AABB *box)
 	float min_SAH = FLT_MAX;
 	int min_ind = -1;
 	for (int i = 0; i < SPLIT_TEST_NUM; i++)
-	{
-		if (objects[i]->left_count == 0 || objects[i]->right_count == 0)
-			continue ;
-		float res = SAH(objects[i], box);
-		if (res < min_SAH)
-		{
-			min_SAH = res;
-			min_ind = i;
-		}
-	}
-
-	//clean up
-	Split *winner = min_ind == -1 ? NULL : objects[min_ind];
-	for (int i = 0; i < SPLIT_TEST_NUM - 1; i++)
-		if (i == min_ind)
-			continue;
-		else
-			free_split(objects[i]);
-	free(objects);
-	free(members);
-
-	return winner;
-}
-
-Split *old_object_split(AABB *box)
-{
-
-	//alloc blank splits
-	Split **objects = calloc(SPLIT_TEST_NUM, sizeof(Split *));
-	for (int i = 0; i < SPLIT_TEST_NUM; i++)
-	{
-		objects[i] = calloc(1, sizeof(Split));
-		objects[i]->left_flex = empty_box();
-		objects[i]->right_flex = empty_box();
-		objects[i]->left = dupe_box(box);
-		objects[i]->right = dupe_box(box);
-	}
-	// printf("blanks made\n");
-
-	//make array of box members
-	AABB **members = calloc(box->member_count, sizeof(AABB *));
-	AABB *b = box->members;
-	for (int i = 0; b; b = b->next, i++)
-		members[i] = b;
-
-	qsort(members, box->member_count, sizeof(AABB *), x_sort);
-	// printf("sorted x\n");
-
-	for (int i = 0; i < box->member_count; i++)
-		for (int j = 0; j < SPLIT_TEST_NUM / 3; j++)
-		{
-			cl_float3 c = center(members[i]);
-			if ((float)i / (float)box->member_count < (float)(j + 1) / (float)(SPLIT_TEST_NUM / 3 + 1) || c.x == objects[j]->left->max.x)
-			{
-				flex_box(objects[j]->left_flex, members[i]);
-				objects[j]->left_count++;
-				objects[j]->left->max.x = c.x;
-			}
-			else
-			{
-				flex_box(objects[j]->right_flex, members[i]);
-				objects[j]->right_count++;
-			}
-		}
-
-	qsort(members, box->member_count, sizeof(AABB *), y_sort);
-	// printf("sorted y\n");
-
-	for (int i = 0; i < box->member_count; i++)
-		for (int j = 0; j < SPLIT_TEST_NUM / 3; j++)
-		{
-			cl_float3 c = center(members[i]);
-			if ((float)i / (float)box->member_count < (float)(j + 1) / (float)(SPLIT_TEST_NUM / 3 + 1) || c.y == objects[j + SPLIT_TEST_NUM / 3]->left->max.y)
-			{
-				flex_box(objects[j + SPLIT_TEST_NUM / 3]->left_flex, members[i]);
-				objects[j + SPLIT_TEST_NUM / 3]->left_count++;
-				objects[j + SPLIT_TEST_NUM / 3]->left->max.y = c.y;
-			}
-			else
-			{
-				flex_box(objects[j + SPLIT_TEST_NUM / 3]->right_flex, members[i]);
-				objects[j + SPLIT_TEST_NUM / 3]->right_count++;
-			}
-		}
-
-	qsort(members, box->member_count, sizeof(AABB *), z_sort);
-	// printf("sorted z\n");
-
-	for (int i = 0; i < box->member_count; i++)
-		for (int j = 0; j < SPLIT_TEST_NUM / 3; j++)
-		{
-			cl_float3 c = center(members[i]);
-			if ((float)i / (float)box->member_count < (float)(j + 1) / (float)(SPLIT_TEST_NUM / 3 + 1) || c.z == objects[j + 2 * SPLIT_TEST_NUM / 3]->left->max.z)
-			{
-				flex_box(objects[j + 2 * SPLIT_TEST_NUM / 3]->left_flex, members[i]);
-				objects[j + 2 * SPLIT_TEST_NUM / 3]->left_count++;
-				objects[j + 2 * SPLIT_TEST_NUM / 3]->left->max.z = c.z;
-			}
-			else
-			{
-				flex_box(objects[j + 2 * SPLIT_TEST_NUM / 3]->right_flex, members[i]);
-				objects[j + 2 * SPLIT_TEST_NUM / 3]->right_count++;
-			}
-		}
-
-	//measure and choose best split
-	float min_SAH = FLT_MAX;
-	int min_ind = -1;
-	for (int i = 0; i < SPLIT_TEST_NUM - 1; i++)
 	{
 		if (objects[i]->left_count == 0 || objects[i]->right_count == 0)
 			continue ;
