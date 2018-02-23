@@ -58,6 +58,10 @@ Face *ply_import(char *ply_file)
 		face->norms[1] = N;
 		face->norms[2] = N;
 
+		face->tex[0] = (cl_float3){0.0f, 0.0f, 0.0f};
+		face->tex[1] = (cl_float3){0.0f, 0.0f, 0.0f};
+		face->tex[2] = (cl_float3){0.0f, 0.0f, 0.0f};
+
 		face->next = list;
 		list = face;
 	}
