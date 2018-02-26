@@ -447,8 +447,24 @@ Split **allocate_splits(AABB *box)
 	return spatials;
 }
 
+Split **new_allocate_splits(AABB *box)
+{
+	cl_float3 span = vec_sub(box->max, box->min);
+	float total = span.x + span.y + span.z;
+	int x_splits = (int)ceil((float)SPLIT_TEST_NUM * span.x / total);
+	int y_splits = (int)ceil((float)SPLIT_TEST_NUM * span.y / total);
+	int z_splits = SPLIT_TEST_NUM - x_splits - y_splits;
+
+	printf("%d %d %d %d\n", x_splits, y_splits, z_splits, SPLIT_TEST_NUM);
+	return NULL;
+}
+
 Split *best_spatial_split(AABB *box)
 {
+
+
+	new_allocate_splits(box);
+	getchar();
 	// printf("enter best spatial split\n");
 	Split **spatials = allocate_splits(box);
 
@@ -631,7 +647,6 @@ void axis_sort(AABB **boxes, int count, enum axis ax)
 Split *better_object_split(AABB *box)
 {
 	//this can be substantially optimized by splitting into SPLIT_TEST_NUM bins and then looking at sets of bins
-
 
 	AABB **members = calloc(box->member_count, sizeof(AABB *));
 	AABB *b = box->members;
