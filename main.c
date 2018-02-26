@@ -83,6 +83,7 @@ Scene *scene_from_ply(char *filename)
 	scene->materials = calloc(1, sizeof(Material));
 	scene->mat_count = 1;
 	scene->bins = sbvh(ply, &box_count, &ref_count);
+	study_tree(scene->bins, 10000);
 	scene->face_count = ref_count;
 	scene->bin_count = box_count;
 	flatten_faces(scene);
@@ -97,7 +98,6 @@ int main(int ac, char **av)
 	srand(time(NULL));
 
 	Scene *bunny = scene_from_ply("objects/ply/bunny.ply");
-	return 0;
 
 	// Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 
@@ -124,7 +124,7 @@ int main(int ac, char **av)
 	// printf("about to flatten\n");
 	// flatten_faces(sponza);
 
-	// return 0;
+	return 0;
 
 	// t_camera cam;
 	// cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
