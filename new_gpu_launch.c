@@ -142,6 +142,7 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 	//COMBINE
 	gpu_scene *gs = calloc(1, sizeof(gpu_scene));
 	*gs = (gpu_scene){V, T, N, M, TN, BTN, s->face_count * 3, flat_bvh, s->bin_count, h_tex, tex_size, simple_mats, s->mat_count, h_seeds, xdim * ydim * 2 * CL->numDevices * CL->numPlatforms};
+	printf("made gs\n");
 	return gs;
 }
 
@@ -186,13 +187,8 @@ gpu_context *prep_gpu(void)
     }
     // printf("made contexts and CQs\n");
 
-    #ifdef __APPLE__
-    char *source = load_cl_file("osx_kernel.cl");
-    #endif
 
-    #ifndef __APPLE__
     char *source = load_cl_file("new_kernel.cl");
-    #endif
 
 
     //create (platforms) programs and build them
@@ -323,7 +319,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	cl_mem d_TN;
 	cl_mem d_BTN;
 
-	// printf("alloc:\n");
+	 printf("alloc:\n");
 	
 	//per-platform allocs
 	d_V = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_float3) * scene->tri_count, NULL, NULL);
@@ -341,7 +337,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	//per-platform copies
 	
 
-	// printf("per-platform copies done\n");
+	 printf("per-platform copies done\n");
 
 	//per-device pointers
 	cl_mem *d_outputs = calloc(CL->numDevices, sizeof(cl_mem));;
@@ -355,7 +351,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	size_t samples = SAMPLES_PER_DEVICE;
 	size_t width = xdim;
 
-	// printf("per-device alloc and copy\n");
+	 printf("per-device alloc and copy\n");
 
 	//per-device allocs and copies
 	for (int i = 0; i < d; i++)
@@ -377,10 +373,10 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	for (int i = 0; i < d; i++)
 		clFinish(CL->commands[i]);
 
-	//printf("per-device copies done\n");
+	printf("per-device copies done\n");
 
 	cl_kernel render = clCreateKernel(CL->programs[0], "render_kernel", NULL);
-	//printf("made kernel\n");
+	printf("made kernel\n");
 
 	//per-platform args
 	clSetKernelArg(render, 0, sizeof(cl_mem), &d_V);
@@ -400,7 +396,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	clSetKernelArg(render, 16, sizeof(cl_mem), &d_BTN);
 
 	//per-device args and launch
-	//printf("about to launch\n");
+	printf("about to launch\n");
 
 	//printf("%d %d\n", CL->numDevices, d);
 	cl_event done[CL->numDevices];
@@ -410,7 +406,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 
 	for (int i = 0; i < d; i++)
 	{
-		//printf("device %d\n", i);
+		// printf("device %d\n", i);
 		clSetKernelArg(render, 12, sizeof(cl_mem), &d_seeds[i]);
 		clSetKernelArg(render, 13, sizeof(cl_mem), &d_outputs[i]);
 		cl_int err = clEnqueueNDRangeKernel(CL->commands[i], render, 1, 0, &resolution, &groupsize, 0, NULL, &done[i]);
@@ -420,7 +416,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	for (int i = 0; i < d; i++)
 		clFlush(CL->commands[i]);
 
-	printf("all enqueued\n");
+	// printf("all enqueued\n");
 	for (int i = 0; i < d; i++)
 	{
 		clFinish(CL->commands[i]);

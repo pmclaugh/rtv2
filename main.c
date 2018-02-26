@@ -6,8 +6,8 @@
 # define quit_key 12
 #endif
 
-#define XDIM 1024
-#define YDIM 1024
+#define XDIM 512
+#define YDIM 512
 
 typedef struct s_param
 {
@@ -105,6 +105,8 @@ int main(int ac, char **av)
 	cam.height = 1.0;
 	init_camera(&cam, XDIM, YDIM);
 
+	printf("about to gpu launch, press any key\n");
+	getchar();
 	cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM);
 
 	void *mlx = mlx_init();

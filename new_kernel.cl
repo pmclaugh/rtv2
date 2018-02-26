@@ -153,7 +153,7 @@ static const int intersect_box(const Ray ray, const Box b, const float t)
 	return (1);
 }
 
-static void intersect_triangle(const Ray ray, __constant float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
+static void intersect_triangle(const Ray ray, __global float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
 {
 	//we don't need v1 or v2 after initial calc of e1, e2. could just store them in same memory. wonder if compiler does this.
 	float this_t, this_u, this_v;
@@ -189,8 +189,8 @@ static void intersect_triangle(const Ray ray, __constant float3 *V, int test_i, 
 }
 
 static int hit_bvh(	const Ray ray,
-					__constant float3 *V,
-					__constant Box *boxes,
+					__global float3 *V,
+					__global Box *boxes,
 					float *t_out,
 					float *u_out,
 					float *v_out)
@@ -239,7 +239,7 @@ static float3 fetch_tex(	const float3 txcrd,
 							const int offset,
 							const int height,
 							const int width,
-							__constant uchar *tex)
+							__global uchar *tex)
 {
 	int x = floor((float)width * txcrd.x);
 	int y = floor((float)height * txcrd.y);
@@ -252,7 +252,7 @@ static float3 fetch_tex(	const float3 txcrd,
 	return out;
 }
 
-static void fetch_all_tex(__constant Material *mats, const int m_ind, __constant uchar *tex, const float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
+static void fetch_all_tex(__global Material *mats, const int m_ind, __global uchar *tex, const float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
 {
 	Material mat = mats[m_ind];
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
@@ -261,7 +261,7 @@ static void fetch_all_tex(__constant Material *mats, const int m_ind, __constant
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : (float3)(0.6f, 0.6f, 0.6f);
 }
 
-static void fetch_NT(__constant float3 *V, __constant float3 *N, __constant float3 *T, const float3 dir, const int ind, const float u, const float v, float3 *N_out, float3 *txcrd_out)
+static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, const float3 dir, const int ind, const float u, const float v, float3 *N_out, float3 *txcrd_out)
 {
 	float3 v0 = V[ind];
 	float3 v1 = V[ind + 1];
@@ -285,7 +285,7 @@ static void fetch_NT(__constant float3 *V, __constant float3 *N, __constant floa
 	*txcrd_out = txcrd;	
 }
 
-static float3 bump_map(__constant float3 *TN, __constant float3 *BTN, const int ind, const float3 sample_N, const float3 bump)
+static float3 bump_map(__global float3 *TN, __global float3 *BTN, const int ind, const float3 sample_N, const float3 bump)
 {
 	float3 tangent = TN[ind];
 	float3 bitangent = BTN[ind];
@@ -294,17 +294,17 @@ static float3 bump_map(__constant float3 *TN, __constant float3 *BTN, const int 
 }
 
 static float3 trace(Ray ray,
-					__constant float3 *V,
-					__constant float3 *T,
-					__constant float3 *N,
-					__constant Box *boxes,
-					__constant Material *mats,
-					__constant uchar *tex, 
+					__global float3 *V,
+					__global float3 *T,
+					__global float3 *N,
+					__global Box *boxes,
+					__global Material *mats,
+					__global uchar *tex, 
 					unsigned int *seed0, 
 					unsigned int *seed1,
-					__constant int *M,
-					__constant float3 *TN,
-					__constant float3 *BTN)
+					__global int *M,
+					__global float3 *TN,
+					__global float3 *BTN)
 {
 
 	float3 color = BLACK;
@@ -405,23 +405,23 @@ static Ray ray_from_cam(const Camera cam, float x, float y, uint *s0, uint *s1)
 	return ray;
 }
 
-__kernel void render_kernel(__constant float3 *V,
-							__constant float3 *T,
-							__constant float3 *N,
-							__constant Box *boxes,
-							__constant Material *mats,
-							__constant uchar *tex,
+__kernel void render_kernel(__global float3 *V,
+							__global float3 *T,
+							__global float3 *N,
+							__global Box *boxes,
+							__global Material *mats,
+							__global uchar *tex,
 							const float3 cam_origin,
 							const float3 cam_focus,
 							const float3 cam_dx,
 							const float3 cam_dy,
 							const uint sample_count,
 							const uint width,
-							__constant uint* seeds,
+							__global uint* seeds,
 							__global float3* output,
-							__constant int *M,
-							__constant float3 *TN,
-							__constant float3 *BTN)
+							__global int *M,
+							__global float3 *TN,
+							__global float3 *BTN)
 {
 	unsigned int pixel_id = get_global_id(0);
 	unsigned int x = pixel_id % width;
