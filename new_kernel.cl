@@ -310,16 +310,6 @@ static float3 trace(Ray ray,
 	float3 color = BLACK;
 	float3 mask = WHITE;
 
-	// //brute performance testing
-	// int total = 0;
-	// float t = FLT_MAX;
-	// float u, v;
-	// int best_ind = 0;
-	// for (int i = 0; i < 30000; i += 3)
-	// 	intersect_triangle(ray, V, i, &best_ind, &t, &u, &v);
-	// return WHITE * t;
-
-
 	for (int j = 0; j < 5 || get_random(seed0, seed1) < stop_prob; j++)
 	{
 		//collide
@@ -328,8 +318,7 @@ static float3 trace(Ray ray,
 
 		if (hit_ind == -1)
 		{
-			float3 sunward = (float3)(cos(sun_theta), sin(sun_theta), 0.0f);
-			color = mask * SUN_BRIGHTNESS * pow(fmax(dot(ray.direction, sunward), 0.0f), 20.0f);
+			color = mask * SUN_BRIGHTNESS;
 			break;
 		}
 
@@ -349,14 +338,6 @@ static float3 trace(Ray ray,
 		}
 
 		sample_N = bump_map(TN, BTN, hit_ind / 3, sample_N, bump);
-
-		// //experimental NEE
-		// Ray to_sun;
-		// to_sun.origin = ray.origin + ray.direction * t + sample_N * NORMAL_SHIFT;
-		// to_sun.direction = normalize((float3)(sun_pos, 10000.0f, 0.0f) - to_sun.origin);
-		// to_sun.inv_dir = 1.0f / to_sun.direction;
-		// float st, su, sv;
-		// int sun_hit = hit_bvh(to_sun, V, boxes, &st, &su, &sv);
 		
 		mask *= j >= 5 ? 1.0f / (1.0f - stop_prob) : 1.0f;
 		float spec_importance = spec.x + spec.y + spec.z;
@@ -386,10 +367,6 @@ static float3 trace(Ray ray,
 			if (dot(new_dir, sample_N) < 0.0f) // pick mirror of sample (same importance)
 				new_dir = z - x - y;
 			mask *= spec;
-
-			
-			// if (sun_hit == -1)
-			// 	color += mask * fmax(pow(dot(to_sun.direction, spec_dir), 100.0f * spec.x), 0.0f) * SUN_BRIGHTNESS;
 		}
 		else
 		{
@@ -399,16 +376,13 @@ static float3 trace(Ray ray,
 			float3 hem_x = cross(axis, sample_N);
 			float3 hem_y = cross(sample_N, hem_x);
 
-			//generate random direction on the unit hemisphere (cosine-weighted fo)
+			//generate random direction on the unit hemisphere (cosine-weighted for importance sampling)
 			float r = sqrt(r1);
 			float theta = 2 * PI * r2;
 
 			//combine for new direction
 			new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + sample_N * sqrt(max(0.0f, 1.0f - r1)));
 			mask *= diff;
-
-			// if (sun_hit == -1)
-			// 	color += mask * fmax(dot(to_sun.direction, sample_N), 0.0f) * SUN_BRIGHTNESS;
 		}
 
 		ray.origin = ray.origin + ray.direction * t + sample_N * NORMAL_SHIFT;
@@ -424,7 +398,7 @@ static float3 trace(Ray ray,
 static Ray ray_from_cam(const Camera cam, float x, float y, uint *s0, uint *s1)
 {
 	Ray ray;
-	ray.origin = cam.focus; //+ (float3)(0.0f, (get_random(s0, s1) - 0.5) * DOF_rad, (get_random(s0, s1) - 0.5) * DOF_rad);
+	ray.origin = cam.focus;
 	float3 through = cam.origin + cam.d_x * x + cam.d_y * y;
 	ray.direction = normalize(cam.focus - through);
 	ray.inv_dir = 1.0f / ray.direction;
