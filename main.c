@@ -104,27 +104,8 @@ int main(int ac, char **av)
 	cam.width = 1.0;
 	cam.height = 1.0;
 	init_camera(&cam, XDIM, YDIM);
-	//printf("%lu\n", sizeof(gpu_bin));
 
-	// for (int i = 0; i < 180; i++)
-	// {
-		cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM, M_PI_2);
-
-		// char *filename;
-		// asprintf(&filename, "%d.ppm", i);
-		// FILE *f = fopen("out.ppm", "w");
-		// fprintf(f, "P3\n%d %d\n%d\n ",XDIM,YDIM,255);
-		// for (int row=0; row<YDIM; row++)
-		// {
-		// 	for (int col=0;col<XDIM;col++) {
-		// 		fprintf(f,"%d %d %d ", (int)(pixels[row * XDIM + (XDIM - col)].x * 255), (int)(pixels[row * XDIM + (XDIM - col)].y * 255), (int)(pixels[row * XDIM + (XDIM - col)].z * 255));
-		// 	}
-		// 	fprintf(f, "\n");
-		// }
-		// //free(filename);
-		// fclose(f);
-		// free(pixels);
-	//}
+	cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM);
 
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, XDIM, YDIM, "RTV1");

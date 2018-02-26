@@ -524,8 +524,8 @@ Split *best_spatial_split(AABB *box)
 
 int x_sort(const void *arg1, const void *arg2)
 {
-	AABB **ap = arg1;
-	AABB **bp = arg2;
+	AABB **ap = (AABB **)arg1;
+	AABB **bp = (AABB **)arg2;
 
 	AABB *a = *ap;
 	AABB *b = *bp;
@@ -559,8 +559,8 @@ int x_sort(const void *arg1, const void *arg2)
 
 int y_sort(const void *arg1, const void *arg2)
 {
-	AABB **ap = arg1;
-	AABB **bp = arg2;
+	AABB **ap = (AABB **)arg1;
+	AABB **bp = (AABB **)arg2;
 
 	AABB *a = *ap;
 	AABB *b = *bp;
@@ -578,8 +578,8 @@ int y_sort(const void *arg1, const void *arg2)
 
 int z_sort(const void *arg1, const void *arg2)
 {
-	AABB **ap = arg1;
-	AABB **bp = arg2;
+	AABB **ap = (AABB **)arg1;
+	AABB **bp = (AABB **)arg2;
 
 	AABB *a = *ap;
 	AABB *b = *bp;

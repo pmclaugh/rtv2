@@ -299,7 +299,7 @@ cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution)
 	return output_sum;
 }
 
-cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, float sun_pos)
+cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 {
 	static gpu_context *CL;
 	if (!CL)
@@ -354,7 +354,6 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, float sun_pos
 	size_t groupsize = 256;
 	size_t samples = SAMPLES_PER_DEVICE;
 	size_t width = xdim;
-	float sun = sun_pos;
 
 	// printf("per-device alloc and copy\n");
 
@@ -399,7 +398,6 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, float sun_pos
 	clSetKernelArg(render, 14, sizeof(cl_mem), &d_M);
 	clSetKernelArg(render, 15, sizeof(cl_mem), &d_TN);
 	clSetKernelArg(render, 16, sizeof(cl_mem), &d_BTN);
-	clSetKernelArg(render, 17, sizeof(float), &sun);
 
 	//per-device args and launch
 	//printf("about to launch\n");

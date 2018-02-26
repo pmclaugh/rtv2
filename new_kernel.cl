@@ -304,8 +304,7 @@ static float3 trace(Ray ray,
 					unsigned int *seed1,
 					__constant int *M,
 					__constant float3 *TN,
-					__constant float3 *BTN,
-					const float sun_theta)
+					__constant float3 *BTN)
 {
 
 	float3 color = BLACK;
@@ -448,8 +447,7 @@ __kernel void render_kernel(__constant float3 *V,
 							__global float3* output,
 							__constant int *M,
 							__constant float3 *TN,
-							__constant float3 *BTN,
-							const float sun_pos)
+							__constant float3 *BTN)
 {
 	unsigned int pixel_id = get_global_id(0);
 	unsigned int x = pixel_id % width;
@@ -471,7 +469,7 @@ __kernel void render_kernel(__constant float3 *V,
 		float x_coord = (float)x + get_random(&seed0, &seed1);
 		float y_coord = (float)y + get_random(&seed0, &seed1);
 		Ray ray = ray_from_cam(cam, x_coord, y_coord, &seed0, &seed1);
-		sum_color += trace(ray, V, T, N, boxes, mats, tex, &seed0, &seed1, M, TN, BTN, sun_pos);
+		sum_color += trace(ray, V, T, N, boxes, mats, tex, &seed0, &seed1, M, TN, BTN);
 	}
 	
 	output[pixel_id] = sum_color;
