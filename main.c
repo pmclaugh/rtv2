@@ -97,7 +97,9 @@ int main(int ac, char **av)
 {
 	srand(time(NULL));
 
-	//Scene *bunny = scene_from_ply("objects/ply/bunny.ply");
+	Scene *bunny = scene_from_ply("objects/ply/bunny.ply");
+
+	return 0;
 
 	Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 
