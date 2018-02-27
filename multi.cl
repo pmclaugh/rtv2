@@ -208,7 +208,7 @@ static void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *te
 	Material mat = mats[m_ind];
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
-	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : mat.Ka;
+	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : BLACK;
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 }
 
@@ -415,7 +415,7 @@ __kernel void traverse(	__global Ray *rays,
 	float u, v;
 	int ind = -1;
 
-	int stack[64];
+	int stack[512];
 	int s_i = 0;
 	Box b;
 	for (int i = 0; i < boost_count; i++)
