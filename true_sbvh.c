@@ -10,7 +10,6 @@
 
 #define ALPHA 0.001f
 
-#define CENTER_SORT 1
 #define SPATIAL_ENABLE 1
 
 #define VERBOSE 0
@@ -554,22 +553,10 @@ int x_sort(const void *arg1, const void *arg2)
 	cl_float3 ca = center(a);
 	cl_float3 cb = center(b);
 
-	if (CENTER_SORT)
-	{
-		if (ca.x > cb.x)
-			return 1;
-		else if (ca.x < cb.x)
-			return -1;
-		else
-		{
-			if (a > b)
-				return 1;
-			else if (a < b)
-				return -1;
-			else
-				return 0;
-		}
-	}
+	if (ca.x > cb.x)
+		return 1;
+	else if (ca.x < cb.x)
+		return -1;
 	else
 	{
 		if (a->min.x > b->min.x)
@@ -577,7 +564,15 @@ int x_sort(const void *arg1, const void *arg2)
 		else if (a->min.x < b->min.x)
 			return -1;
 		else
-			return 0;
+		{
+			//sort needs to be fully deterministic so use pointer address as tiebreaker
+			if (a > b)
+				return 1;
+			else if (a < b)
+				return -1;
+			else
+				return 0;
+		}
 	}
 }
 
@@ -592,11 +587,16 @@ int y_sort(const void *arg1, const void *arg2)
 	cl_float3 ca = center(a);
 	cl_float3 cb = center(b);
 
-	if (CENTER_SORT)
+
+	if (ca.y > cb.y)
+		return 1;
+	else if (ca.y < cb.y)
+		return -1;
+	else
 	{
-		if (ca.y > cb.y)
+		if (a->min.y > b->min.y)
 			return 1;
-		else if (ca.y < cb.y)
+		else if (a->min.y < b->min.y)
 			return -1;
 		else
 		{
@@ -606,16 +606,7 @@ int y_sort(const void *arg1, const void *arg2)
 				return -1;
 			else
 				return 0;
-		};
-	}
-	else
-	{
-		if (a->min.y > b->min.y)
-			return 1;
-		else if (a->min.y < b->min.y)
-			return -1;
-		else
-			return 0;
+		}
 	}
 }
 
@@ -630,11 +621,15 @@ int z_sort(const void *arg1, const void *arg2)
 	cl_float3 ca = center(a);
 	cl_float3 cb = center(b);
 
-	if (CENTER_SORT)
+	if (ca.z > cb.z)
+		return 1;
+	else if (ca.z < cb.z)
+		return -1;
+	else
 	{
-		if (ca.z > cb.z)
+		if (a->min.z > b->min.z)
 			return 1;
-		else if (ca.z < cb.z)
+		else if (a->min.z < b->min.z)
 			return -1;
 		else
 		{
@@ -645,15 +640,6 @@ int z_sort(const void *arg1, const void *arg2)
 			else
 				return 0;
 		}
-	}
-	else
-	{
-		if (a->min.z > b->min.z)
-			return 1;
-		else if (a->min.z < b->min.z)
-			return -1;
-		else
-			return 0;
 	}
 }
 
