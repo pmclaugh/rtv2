@@ -30,21 +30,22 @@ Face *ply_import(char *ply_file)
 	printf("%s: %d vertices, %d faces\n", ply_file, v_total, f_total);
 
 	cl_float3 *V = calloc(v_total, sizeof(cl_float3));
-	//the ply files i'm using only have triangles
+
 	for (int i = 0; i < v_total; i++)
 	{
+		float duh, buh;
 		fgets(line, 512, fp);
-		sscanf(line, "%f %f %f", &V[i].x, &V[i].y, &V[i].z);
+		sscanf(line, "%f %f %f %f %f\n", &V[i].x, &V[i].y, &V[i].z, &duh, &buh);
 	}
 
 	//now faces
 	for (int i = 0; i < f_total; i++)
 	{
-		int a, b, c;
+		int a, b, c, d;
 		fgets(line, 512, fp);
-		sscanf(line, "%d %d %d", &a, &b, &c);
+		sscanf(line, "%d %d %d %d", &d, &a, &b, &c);
 		Face *face = calloc(1, sizeof(Face));
-		face->shape = 3;
+		face->shape = d;
 		face->mat_type = GPU_MAT_DIFFUSE;
 		face->mat_ind = 0; //some default material
 		face->verts[0] = V[a];

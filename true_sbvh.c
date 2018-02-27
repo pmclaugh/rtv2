@@ -3,9 +3,9 @@
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
-#define SPLIT_TEST_NUM 32
+#define SPLIT_TEST_NUM 25
 
-#define LEAF_THRESHOLD 16
+#define LEAF_THRESHOLD 8
 #define BOOST_DEPTH 11
 
 #define ALPHA 0.001f
@@ -340,6 +340,7 @@ void clip_box(AABB *box, AABB *bound)
 	// printf("final result\n");
 	// print_box(box);
 	// getchar();
+	free(clippy);
 }
 
 Split *new_split(AABB *box, enum axis a, float ratio)

@@ -8,7 +8,7 @@
 
 #define XDIM 1024
 #define YDIM 1024
-#define SPP_PER_DEVICE 1000
+#define SPP_PER_DEVICE 10
 
 typedef struct s_param
 {
@@ -112,6 +112,7 @@ Scene *scene_from_ply(char *filename)
 	Scene *scene = calloc(1, sizeof(Scene));
 	scene->materials = calloc(1, sizeof(Material));
 	scene->materials->Kd = (cl_float3){0.2f, 0.2f, 0.7f};
+	scene->materials->Ka = (cl_float3){0.4f, 0.4f, 0.4f};
 	scene->mat_count = 1;
 	scene->bins = sbvh(ply, &box_count, &ref_count);
 	study_tree(scene->bins, 10000);
@@ -126,10 +127,9 @@ int main(int ac, char **av)
 {
 	srand(time(NULL));
 
-	Scene *bunny = scene_from_ply("objects/ply/bunny.ply");
+	Scene *bunny = scene_from_ply("objects/ply/dragon.ply");
 
 	//return 0;
-
 	//Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 
 	//LL is best for this bvh. don't want to rearrange import for now, will do later
@@ -158,7 +158,7 @@ int main(int ac, char **av)
 	//return 0;
 
 	t_camera cam;
-	cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
+	//cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
 	//cam.center = (cl_float3){-320.0, 60.0, -220.0}; // vase view (1,0,0)
 	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
 	//cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
@@ -169,7 +169,10 @@ int main(int ac, char **av)
 	//cam.center = (cl_float3){780.0, 650.0, -35.0}; //lion
 	//cam.center = (cl_float3){-250.0, 100.0, 0.0};
 	//cam.center = (cl_float3){-3000.0, 2200.0, 0.0}; //outside
-	cam.normal = (cl_float3){1.0, 0.0, 0.0};
+
+
+	cam.center = (cl_float3){0.0, 0.1, -1.15};
+	cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
 	cam.normal = unit_vec(cam.normal);
 	cam.width = (float)XDIM / (float)YDIM;
