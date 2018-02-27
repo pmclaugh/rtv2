@@ -310,11 +310,11 @@ __kernel void bounce( 	__global Ray *rays,
 		float3 hem_y = cross(spec_dir, hem_x);
 
 		float phi = 2.0f * PI * r1;
-		float theta = acos(pow((1.0f - r2), 1.0f / (50.0f)));
+		float theta = acos(native_powr((1.0f - r2), 1.0f / (50.0f)));
 
-		float3 x = hem_x * sin(theta) * cos(phi);
-		float3 y = hem_y * sin(theta) * sin(phi);
-		float3 z = spec_dir * cos(theta);
+		float3 x = hem_x * native_sin(theta) * native_cos(phi);
+		float3 y = hem_y * native_sin(theta) * native_sin(phi);
+		float3 z = spec_dir * native_cos(theta);
 		new_dir = normalize(x + y + z);
 		if (dot(new_dir, ray.N) < 0.0f) // pick mirror of sample (same importance)
 			new_dir = normalize(z - x - y);
@@ -329,11 +329,11 @@ __kernel void bounce( 	__global Ray *rays,
 		float3 hem_y = cross(ray.N, hem_x);
 
 		//generate random direction on the unit hemisphere (cosine-weighted fo)
-		float r = sqrt(r1);
+		float r = native_sqrt(r1);
 		float theta = 2 * PI * r2;
 
 		//combine for new direction
-		new_dir = normalize(hem_x * r * cos(theta) + hem_y * r * sin(theta) + ray.N * sqrt(max(0.0f, 1.0f - r1)));
+		new_dir = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		ray.mask *= diff_importance > 0 ? ray.diff / diff_importance : 0;
 	}
 
@@ -415,19 +415,16 @@ __kernel void traverse(	__global Ray *rays,
 	float u, v;
 	int ind = -1;
 
-	int stack[512];
-	int s_i = 0;
-	Box b;
-	for (int i = 0; i < boost_count; i++)
-	{
-		b = boost[i];
-		if (intersect_box(ray, b, t))
-			stack[s_i++] = b.lind;
-	}
+	int stack[32];
+	stack[0] = 0;
+	int s_i = 1;
+
+	int leaves[512];
+	int l_i = 0;
 	while (s_i)
 	{
 		//pop
-		b = boxes[stack[--s_i]];
+		Box b = boxes[stack[--s_i]];
 
 		//check
 		if (intersect_box(ray, b, t))
@@ -435,10 +432,8 @@ __kernel void traverse(	__global Ray *rays,
 			//leaf? brute check.
 			if (b.rind < 0)
 			{
-				int start = -1 * b.lind;
-				int count = -1 * b.rind;
-				for (int i = start; i < start + count; i += 3)
-					intersect_triangle(ray, V, i, &ind, &t, &u, &v); //will update if success
+				leaves[l_i++] = -1 * b.lind;
+				leaves[l_i++] = -1 * b.rind;	
 			}
 			else
 			{
@@ -447,6 +442,14 @@ __kernel void traverse(	__global Ray *rays,
 			}
 		}
 	}
+	while(l_i)
+	{
+		const int count = leaves[--l_i];
+		const int start = leaves[--l_i];
+		for (int i = start; i < start + count; i += 3)
+			intersect_triangle(ray, V, i, &ind, &t, &u, &v);
+	}
+	
 
 	ray.t = t;
 	ray.u = u;
