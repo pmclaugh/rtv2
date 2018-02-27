@@ -74,6 +74,36 @@ int key_hook(int keycode, void *param)
 // 	int bin_count;
 // }				Scene;
 
+// typedef struct s_material
+// {
+// 	char *friendly_name;
+// 	float Ns; //specular exponent
+// 	float Ni; //index of refraction
+// 	float d; //opacity
+// 	float Tr; //transparency (1 - d)
+// 	cl_float3 Tf; //transmission filter (ie color)
+// 	int illum; //flag for illumination model, raster only
+// 	cl_float3 Ka; //ambient mask
+// 	cl_float3 Kd; //diffuse mask
+// 	cl_float3 Ks; //specular mask
+// 	cl_float3 Ke; //emission mask
+
+// 	char *map_Ka_path;
+// 	Map *map_Ka;
+
+// 	char *map_Kd_path;
+// 	Map *map_Kd;
+
+// 	char *map_bump_path;
+// 	Map *map_bump;
+
+// 	char *map_d_path;
+// 	Map *map_d;
+
+// 	char *map_Ks_path;
+// 	Map *map_Ks;
+// }				Material;
+
 Scene *scene_from_ply(char *filename)
 {
 	Face *ply = ply_import(filename);
@@ -81,14 +111,13 @@ Scene *scene_from_ply(char *filename)
 
 	Scene *scene = calloc(1, sizeof(Scene));
 	scene->materials = calloc(1, sizeof(Material));
+	scene->materials->Kd = (cl_float3){0.2f, 0.2f, 0.7f};
 	scene->mat_count = 1;
 	scene->bins = sbvh(ply, &box_count, &ref_count);
 	study_tree(scene->bins, 10000);
 	scene->face_count = ref_count;
 	scene->bin_count = box_count;
 	flatten_faces(scene);
-
-	//need to add a default material
 
 	return scene;
 }
@@ -99,32 +128,32 @@ int main(int ac, char **av)
 
 	Scene *bunny = scene_from_ply("objects/ply/bunny.ply");
 
-	return 0;
+	//return 0;
 
-	Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
+	//Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 
 	//LL is best for this bvh. don't want to rearrange import for now, will do later
-	Face *face_list = NULL;
-	for (int i = 0; i < sponza->face_count; i++)
-	{
-		Face *f = calloc(1, sizeof(Face));
-		memcpy(f, &sponza->faces[i], sizeof(Face));
-		f->next = face_list;
-		face_list = f;
-	}
-	free(sponza->faces);
+	// Face *face_list = NULL;
+	// for (int i = 0; i < sponza->face_count; i++)
+	// {
+	// 	Face *f = calloc(1, sizeof(Face));
+	// 	memcpy(f, &sponza->faces[i], sizeof(Face));
+	// 	f->next = face_list;
+	// 	face_list = f;
+	// }
+	// free(sponza->faces);
 
-	int box_count, ref_count;
-	AABB *tree = sbvh(face_list, &box_count, &ref_count);
-	printf("finished with %d boxes\n", box_count);
-	study_tree(tree, 100000);
+	// int box_count, ref_count;
+	// AABB *tree = sbvh(face_list, &box_count, &ref_count);
+	// printf("finished with %d boxes\n", box_count);
+	// study_tree(tree, 100000);
 
 
-	sponza->bins = tree;
-	sponza->bin_count = box_count;
-	sponza->face_count = ref_count;
-	printf("about to flatten\n");
-	flatten_faces(sponza);
+	// sponza->bins = tree;
+	// sponza->bin_count = box_count;
+	// sponza->face_count = ref_count;
+	// printf("about to flatten\n");
+	// flatten_faces(sponza);
 
 	//return 0;
 
@@ -148,7 +177,7 @@ int main(int ac, char **av)
 	init_camera(&cam, XDIM, YDIM);
 	//printf("%lu\n", sizeof(gpu_bin));
 
-	cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM, SPP_PER_DEVICE);
+	cl_double3 *pixels = gpu_render(bunny, cam, XDIM, YDIM, SPP_PER_DEVICE);
 
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, XDIM, YDIM, "RTV1");
@@ -158,7 +187,7 @@ int main(int ac, char **av)
 	mlx_put_image_to_window(mlx, win, img, 0, 0);
 
 	t_param *param = calloc(1, sizeof(t_param));
-	*param = (t_param){mlx, win, img, XDIM, YDIM, sponza, cam, NULL, 0};
+	*param = (t_param){mlx, win, img, XDIM, YDIM, bunny, cam, NULL, 0};
 	
 	mlx_key_hook(win, key_hook, param);
 	mlx_loop(mlx);

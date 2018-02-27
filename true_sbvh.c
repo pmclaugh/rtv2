@@ -794,15 +794,6 @@ void partition(AABB *box)
 			printf("SAH obj %.2f SAH spatial %.2f\n", SAH(object, box), SAH(spatial, box));
 	}
 
-	if (spatial && object)
-	{
-		if (SAH(spatial, box) < SA(box) * box->member_count && SAH(object, box) < SA(box) * box->member_count)
-		{
-			printf("best not to split\n");
-			return;
-		}
-	}
-
 	if (spatial == NULL && object == NULL)
 	{
 		printf("splits failed, bailing out!\n");
