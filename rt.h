@@ -24,6 +24,9 @@
 #define UNIT_Y (cl_float3){0, 1, 0}
 #define UNIT_Z (cl_float3){0, 0, 1}
 
+#define XDIM 1000
+#define YDIM 1000
+
 #define ERROR 1e-4
 
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
@@ -34,7 +37,6 @@
 
 #define ORIGIN (cl_float3){0.0f, 0.0f, 0.0f}
 
-
 #define GPU_MAT_DIFFUSE 1
 #define GPU_MAT_SPECULAR 2
 #define GPU_MAT_REFRACTIVE 3
@@ -43,6 +45,14 @@
 #define GPU_SPHERE 1
 #define GPU_TRIANGLE 3
 #define GPU_QUAD 4
+
+# define KEY_ESC 53
+# define KEY_W 13
+# define KEY_A 0
+# define KEY_S 1
+# define KEY_D 2
+# define KEY_LARR 123
+# define KEY_RARR 124
 
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
@@ -53,19 +63,6 @@ typedef struct s_3x3
 	cl_float3 row2;
 	cl_float3 row3;
 }				t_3x3;
-
-typedef struct s_camera
-{
-	cl_float3 center;
-	cl_float3 normal;
-	float width;
-	float height;
-
-	cl_float3 focus;
-	cl_float3 origin;
-	cl_float3 d_x;
-	cl_float3 d_y;
-}				t_camera;
 
 typedef struct s_map
 {
@@ -240,7 +237,48 @@ typedef struct s_gpu_scene
 	cl_uint seed_count;
 }				gpu_scene;
 
+typedef struct	s_key
+{
+	_Bool		w;
+	_Bool		a;
+	_Bool		s;
+	_Bool		d;
+	_Bool		uarr;
+	_Bool		darr;
+	_Bool		larr;
+	_Bool		rarr;
+	_Bool		space;
+	_Bool		ctrl;
+}				t_key;
 
+typedef struct	s_camera
+{
+	cl_float3	pos;
+	cl_float3	dir;
+	float		width;
+	float		height;
+	float		dist;
+
+	cl_float3	focus;
+	cl_float3	origin;
+	cl_float3	d_x;
+	cl_float3	d_y;
+}				t_camera;
+
+typedef struct s_env
+{
+	void *mlx;
+	void *win;
+	void *img;
+	int x;
+	int y;
+
+	Scene *scene;
+	t_camera cam;
+	cl_double3 *pixels;
+	t_key	key;
+	int samplecount;
+}				t_env;
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
 void study_tree(AABB *tree, int ray_count);
@@ -254,8 +292,6 @@ Face *object_flatten(Face *faces, int *face_count);
 
 ////Old stuff
 void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);
-
-void init_camera(t_camera *camera, int xres, int yres);
 
 Scene *scene_from_obj(char *rel_path, char *filename);
 
@@ -289,3 +325,19 @@ void print_3x3(const t_3x3 mat);
 void print_clf3(cl_float3 v);
 float max3(float a, float b, float c);
 float min3(float a, float b, float c);
+
+//main.c
+void		set_camera(t_camera *cam, int xres, int yres);
+t_camera	init_camera(int xres, int yres);
+t_env		*init_env(Scene *S);
+
+
+//interactive.c
+int		key_hook(int keycode, t_env *env);
+void	greyscale(t_env *env);
+
+//key_command.c
+int		exit_hook(int key, t_env *env);
+int		key_press(int key, t_env *env);
+int		key_release(int key, t_env *env);
+int		forever_loop(t_env *env);
