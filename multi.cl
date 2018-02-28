@@ -429,7 +429,6 @@ __kernel void traverse(	__global Ray *rays,
 		//check
 		if (intersect_box(ray, b, t))
 		{
-			//leaf? brute check.
 			if (b.rind < 0)
 			{
 				leaves[l_i++] = -1 * b.lind;
