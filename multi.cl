@@ -279,6 +279,80 @@ __kernel void fetch(	__global Ray *rays,
 	rays[gid] = ray;
 }
 
+/////Bounce stuff
+
+static float GGX_D(const float3 m, const float3 n, const float a)
+{
+	float a2 = a * a;
+	float mdn = dot(m,n);
+	float chi = mdn > 0 ? 1 : 0;
+	float tant = native_tan(mdn);
+	tant *= tant;
+	tant += a2;
+	tant *= tant; //(a2 + tan^2(mdn))^2
+
+	float num = chi * a2;
+	float denom = PI * mdn * mdn * mdn * mdn * tant;
+
+	return num / denom;
+}
+
+static float GGX_G(const float3 v, const float3 m, const float3 n, const float a)
+{
+	float chi = dot(v,m) / dot(v,n) > 0.0f ? 1.0f : 0.0f;
+
+	//constants from B. Walter et al., Microfacet Models for Refraction.
+	//goal is to cheaply approximate: 2 / (1 + erf(a) + (1 / a * sqrt(pi)) * e ^ -a^2)
+
+	float num = 3.535f * a + 2.181 * a * a;
+	float denom = 1 + 2.276 * a + 2.577 * a * a;
+
+	return chi * num / denom;
+}
+
+static float GGX_F(const float3 i, const float3 m, const float n1, const float n2)
+{
+	float c = fabs(dot(i, m));
+	float g = sqrt(n1 / n2 - 1 + c * c);
+
+	float gminc = g - c;
+	float gplusc = g + c;
+
+	float top = c * gplusc - 1;
+	top *= top;
+	float bot = c * gminc + 1;
+	bot *= bot;
+
+	return 0.5f * (gminc * gminc) / (gplusc * gplusc) * (1.0f + top / bot);
+}
+
+static float GGX_eval(const float3 i, const float3 o, const float3 m, const float3 n, const float a, const float n1, const float n2)
+{
+	// == F * G * D / 4 |i dot n| |o dot n|
+	float denom = 4.0f * fabs(dot(i, n)) * fabs(dot(o, n));
+	return GGX_F(i, m, n1, n2) * GGX_G(i, m, n, a) * GGX_G(o, m, n, a) * GGX_D(m, n, a) / denom;
+}
+
+static float3 GGX_NDF(float3 n, uint *seed0, unit *seed1, float a)
+{
+	//return a direction m with relative probability GGX_D(m)|m dot n|
+	float r1 = get_random(seed0, seed1);
+	float r2 = get_random(seed0, seed1);
+	float theta = atan(a * sqrt(r1) * rsqrt(1 - r1));
+	float phi = 2.0f * pi * r2;
+	
+	//local orthonormal system
+	float3 axis = fabs(n.x) > fabs(n.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+	float3 hem_x = cross(axis, n);
+	float3 hem_y = cross(n, hem_x);
+
+	float3 x = hem_x * native_sin(theta) * native_cos(phi);
+	float3 y = hem_y * native_sin(theta) * native_sin(phi);
+	float3 z = spec_dir * native_cos(theta);
+
+	return normalize(x + y + z);
+}
+
 __kernel void bounce( 	__global Ray *rays,
 						__global uint *seeds)
 {
@@ -290,56 +364,19 @@ __kernel void bounce( 	__global Ray *rays,
 	uint seed0 = seeds[2 * gid];
 	uint seed1 = seeds[2 * gid + 1];
 
-	float spec_importance = ray.spec.x + ray.spec.y + ray.spec.z;
-	float diff_importance = ray.diff.x + ray.diff.y + ray.diff.z;
-	float total = spec_importance + diff_importance;
-	spec_importance /= total;
-	diff_importance /= total;
+	//let's just hardcode these for now
+	float a = 0.5f;
+	float n1 = 1.0f;
+	float n2 = 1.0f;
 
-	float3 new_dir;
-	float r1 = get_random(&seed0, &seed1);
-	float r2 = get_random(&seed0, &seed1);
+	float3 m = GGX_NDF(ray.N, &seed0, &seed1, a); //sampling microfacet normal
+	float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
 
-	if(get_random(&seed0, &seed1) < spec_importance)
-	{
-		float3 spec_dir = normalize(ray.direction - 2.0f * dot(ray.direction, ray.N) * ray.N);
-
-		//local orthonormal system
-		float3 axis = fabs(spec_dir.x) > fabs(spec_dir.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-		float3 hem_x = cross(axis, spec_dir);
-		float3 hem_y = cross(spec_dir, hem_x);
-
-		float phi = 2.0f * PI * r1;
-		float theta = acos(native_powr((1.0f - r2), 1.0f / (50.0f)));
-
-		float3 x = hem_x * native_sin(theta) * native_cos(phi);
-		float3 y = hem_y * native_sin(theta) * native_sin(phi);
-		float3 z = spec_dir * native_cos(theta);
-		new_dir = normalize(x + y + z);
-		if (dot(new_dir, ray.N) < 0.0f) // pick mirror of sample (same importance)
-			new_dir = normalize(z - x - y);
-		ray.mask *= spec_importance > 0 ? ray.spec / spec_importance : 0;
-	}
-	else
-	{
-		//Diffuse reflection (default)
-		//local orthonormal system
-		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-		float3 hem_x = cross(axis, ray.N);
-		float3 hem_y = cross(ray.N, hem_x);
-
-		//generate random direction on the unit hemisphere (cosine-weighted fo)
-		float r = native_sqrt(r1);
-		float theta = 2 * PI * r2;
-
-		//combine for new direction
-		new_dir = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
-		ray.mask *= diff_importance > 0 ? ray.diff / diff_importance : 0;
-	}
+	ray.mask *= ray.diff * GGX_eval(ray.direction, o, m, ray.N, a, n1, n2);
 
 	ray.origin = ray.origin + ray.direction * ray.t + ray.N * NORMAL_SHIFT;
-	ray.direction = new_dir;
-	ray.inv_dir = 1.0f / new_dir;
+	ray.direction = o;
+	ray.inv_dir = 1.0f / o;
 	ray.status = TRAVERSE;
 
 	rays[gid] = ray;
