@@ -333,13 +333,13 @@ static float GGX_eval(const float3 i, const float3 o, const float3 m, const floa
 	return GGX_F(i, m, n1, n2) * GGX_G(i, m, n, a) * GGX_G(o, m, n, a) * GGX_D(m, n, a) / denom;
 }
 
-static float3 GGX_NDF(float3 n, uint *seed0, unit *seed1, float a)
+static float3 GGX_NDF(float3 n, uint *seed0, uint *seed1, float a)
 {
 	//return a direction m with relative probability GGX_D(m)|m dot n|
 	float r1 = get_random(seed0, seed1);
 	float r2 = get_random(seed0, seed1);
 	float theta = atan(a * sqrt(r1) * rsqrt(1 - r1));
-	float phi = 2.0f * pi * r2;
+	float phi = 2.0f * PI * r2;
 	
 	//local orthonormal system
 	float3 axis = fabs(n.x) > fabs(n.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -348,7 +348,7 @@ static float3 GGX_NDF(float3 n, uint *seed0, unit *seed1, float a)
 
 	float3 x = hem_x * native_sin(theta) * native_cos(phi);
 	float3 y = hem_y * native_sin(theta) * native_sin(phi);
-	float3 z = spec_dir * native_cos(theta);
+	float3 z = n * native_cos(theta);
 
 	return normalize(x + y + z);
 }
@@ -356,7 +356,7 @@ static float3 GGX_NDF(float3 n, uint *seed0, unit *seed1, float a)
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
 {
 	float num = fabs(dot(i,m)) * GGX_G(i, m, n, a) * GGX_G(o, m, n, a);
-	float denom = fabs(dot(i, n)) * fabs(dot(m * n));
+	float denom = fabs(dot(i, n)) * fabs(dot(m, n));
 
 	return num / denom;
 }
