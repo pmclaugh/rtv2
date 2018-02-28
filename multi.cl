@@ -353,6 +353,14 @@ static float3 GGX_NDF(float3 n, uint *seed0, unit *seed1, float a)
 	return normalize(x + y + z);
 }
 
+static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
+{
+	float num = fabs(dot(i,m)) * GGX_G(i, m, n, a) * GGX_G(o, m, n, a);
+	float denom = fabs(dot(i, n)) * fabs(dot(m * n));
+
+	return num / denom;
+}
+
 __kernel void bounce( 	__global Ray *rays,
 						__global uint *seeds)
 {
@@ -369,10 +377,12 @@ __kernel void bounce( 	__global Ray *rays,
 	float n1 = 1.0f;
 	float n2 = 1.0f;
 
-	float3 m = GGX_NDF(ray.N, &seed0, &seed1, a); //sampling microfacet normal
+	float3 n = ray.N;
+	float3 m = GGX_NDF(n, &seed0, &seed1, a); //sampling microfacet normal
 	float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
+	float3 i = ray.direction * -1.0f;
 
-	ray.mask *= ray.diff * GGX_eval(ray.direction, o, m, ray.N, a, n1, n2);
+	ray.mask *= ray.diff * GGX_eval(ray.direction, o, m, n, a, n1, n2) / GGX_weight(i, o, m, n, a);
 
 	ray.origin = ray.origin + ray.direction * ray.t + ray.N * NORMAL_SHIFT;
 	ray.direction = o;
