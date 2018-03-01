@@ -24,8 +24,8 @@
 #define UNIT_Y (cl_float3){0, 1, 0}
 #define UNIT_Z (cl_float3){0, 0, 1}
 
-#define XDIM 1000
-#define YDIM 1000
+#define XDIM 300
+#define YDIM 300
 
 #define ERROR 1e-4
 
@@ -46,13 +46,25 @@
 #define GPU_TRIANGLE 3
 #define GPU_QUAD 4
 
-# define KEY_ESC 53
-# define KEY_W 13
-# define KEY_A 0
-# define KEY_S 1
-# define KEY_D 2
-# define KEY_LARR 123
-# define KEY_RARR 124
+#define KEY_ESC		53
+#define KEY_W		13
+#define KEY_A		0
+#define KEY_S		1
+#define KEY_D		2
+#define KEY_LARR	123
+#define KEY_RARR	124
+#define KEY_DARR	125
+#define KEY_UARR	126
+#define KEY_SPACE	49
+#define KEY_CTRL	256
+
+#define MOVE_KEYS	(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_CTRL)
+#define ARR_KEYS	(key >= KEY_LARR  && key <= KEY_UARR)
+
+#define MOVING 
+
+#define MOVE_SPEED	10
+#define TURN_SPEED	M_PI / 30
 
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
@@ -243,10 +255,10 @@ typedef struct	s_key
 	_Bool		a;
 	_Bool		s;
 	_Bool		d;
-	_Bool		uarr;
-	_Bool		darr;
 	_Bool		larr;
 	_Bool		rarr;
+	_Bool		darr;
+	_Bool		uarr;
 	_Bool		space;
 	_Bool		ctrl;
 }				t_key;
@@ -258,6 +270,8 @@ typedef struct	s_camera
 	float		width;
 	float		height;
 	float		dist;
+	float		angle_x;
+	float		angle_y;
 
 	cl_float3	focus;
 	cl_float3	origin;
@@ -316,6 +330,9 @@ cl_float3 vec_scale(const cl_float3 vec, const float scalar);
 cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
 cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec);
 t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b);
+cl_float3	vec_rotate_xy(const cl_float3 a, const float angle);
+cl_float3	vec_rotate_yz(const cl_float3 a, const float angle);
+cl_float3	vec_rotate_xz(const cl_float3 a, const float angle);
 cl_float3 vec_rev(cl_float3 v);
 
 
@@ -327,13 +344,11 @@ float max3(float a, float b, float c);
 float min3(float a, float b, float c);
 
 //main.c
-void		set_camera(t_camera *cam, int xres, int yres);
-t_camera	init_camera(int xres, int yres);
+void		set_camera(t_camera *cam);
+t_camera	init_camera(void);
 t_env		*init_env(Scene *S);
 
-
 //interactive.c
-int		key_hook(int keycode, t_env *env);
 void	greyscale(t_env *env);
 
 //key_command.c

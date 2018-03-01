@@ -4,7 +4,7 @@ SRCS = vec.c obj_import.c main.c mlx_stuff.c ply_import.c scene.c new_gpu_launch
 OBJS = vec.o obj_import.o main.o mlx_stuff.o ply_import.o scene.o new_gpu_launch.o true_sbvh.o bvh_lab.o interactive.o key_command.o
 
 
-FLAGS = -O3 -m64 -march=native -funroll-loops -flto 
+FLAGS = -O3 -m64 -march=native -funroll-loops -flto
 MACLIBS = mac-mlx/libmlx.a -framework OpenCL -framework OpenGL -framework AppKit
 LINUXLIBS = -fopenmp linux-mlx/libmlx.a -lOpenCL -lm -lXext -lX11 
 

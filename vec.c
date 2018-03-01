@@ -92,6 +92,33 @@ t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b)
 	return rotation;
 }
 
+cl_float3	vec_rotate_xy(const cl_float3 a, const float angle)
+{
+	cl_float3	res;
+	res.x = (a.x * cos(angle)) + (a.y * -sin(angle));
+	res.y = (a.x * sin(angle)) + (a.y * cos(angle));
+	res.z = a.z;
+	return res;
+}
+
+cl_float3	vec_rotate_yz(const cl_float3 a, const float angle)
+{
+	cl_float3	res;
+	res.x = a.x;
+	res.y = (a.y * cos(angle)) + (a.z * -sin(angle));
+	res.z = (a.y * sin(angle)) + (a.z * cos(angle));
+	return res;
+}
+
+cl_float3	vec_rotate_xz(const cl_float3 a, const float angle)
+{
+	cl_float3	res;
+	res.x = (a.x * cos(angle)) + (a.z * sin(angle));
+	res.y = a.y;
+	res.z = (a.x * -sin(angle)) + (a.z * cos(angle));
+	return res;
+}
+
 cl_float3 vec_rev(const cl_float3 v)
 {
 	return (cl_float3){v.x * -1.0, v.y * -1.0, v.z * -1.0};

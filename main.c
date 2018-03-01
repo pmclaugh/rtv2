@@ -44,8 +44,11 @@
 // 	return cam;
 // }
 
-void		set_camera(t_camera *cam, int xres, int yres)
+void		set_camera(t_camera *cam)
 {
+	// printf("angle_x = %f\tangle_y = %f\n", cam->angle_x, cam->angle_y);
+	// print_vec(cam->dir);
+
 	cam->focus = vec_add(cam->pos, vec_scale(cam->dir, cam->dist));
 
 	//now i need unit vectors on the plane
@@ -55,15 +58,15 @@ void		set_camera(t_camera *cam, int xres, int yres)
 	camera_y = mat_vec_mult(camera_matrix, UNIT_Y);
 
 	//pixel deltas
-	cam->d_x = vec_scale(camera_x, cam->width / (float)xres);
-	cam->d_y = vec_scale(camera_y, cam->height / (float)yres);
+	cam->d_x = vec_scale(camera_x, cam->width / (float)XDIM);
+	cam->d_y = vec_scale(camera_y, cam->height / (float)YDIM);
 
 	//start at bottom corner (the plane's "origin")
 	cam->origin = vec_sub(cam->pos, vec_scale(camera_x, cam->width / 2.0));
 	cam->origin = vec_sub(cam->origin, vec_scale(camera_y, cam->height / 2.0));
 }
 
-t_camera	init_camera(int xres, int yres)
+t_camera	init_camera(void)
 {
 	t_camera	cam;
 	//cam.pos = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
@@ -76,27 +79,35 @@ t_camera	init_camera(int xres, int yres)
 	cam.dir = unit_vec((cl_float3){1.0, 0.0, 0.0});
 	cam.width = 1.0;
 	cam.height = 1.0;
+	cam.angle_x = 0;
+	cam.angle_y = 0;
 	//determine a focus point in front of the view-plane
 	//such that the edge-focus-edge vertex has angle H_FOV
 
 	cam.dist = (cam.width / 2.0) / tan(H_FOV / 2.0);
-	set_camera(&cam, xres, yres);
+	set_camera(&cam);
 	return cam;
 }
 
 t_env		*init_env(Scene *S)
 {
 	t_env	*env = malloc(sizeof(t_env));
-	env->cam.pos = (cl_float3){-800.0, 450.0, 0.0};
-	env->cam.dir = unit_vec((cl_float3){1.0, 0.0, 0.0});
-	env->cam.width = 1.0;
-	env->cam.height = 1.0;
-	env->cam = init_camera(XDIM, YDIM);
+	env->cam = init_camera();
 	env->pixels = malloc(sizeof(cl_double3) * (XDIM * YDIM));
 	env->scene = S;
 	env->mlx = mlx_init();
 	env->win = mlx_new_window(env->mlx, XDIM, YDIM, "PATH_TRACER");
 	env->img = mlx_new_image(env->mlx, XDIM, YDIM);
+	env->key.w = 0;
+	env->key.a = 0;
+	env->key.s = 0;
+	env->key.d = 0;
+	env->key.uarr = 0;
+	env->key.darr = 0;
+	env->key.larr = 0;
+	env->key.rarr = 0;
+	env->key.space = 0;
+	env->key.ctrl = 0;
 	mlx_hook(env->win, 2, 0, key_press, env);
 	mlx_hook(env->win, 3, 0, key_release, env);
 	// mlx_hook(env->win, 6, 0, mouse_pos, env);
