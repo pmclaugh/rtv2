@@ -66,6 +66,7 @@ AABB *box_from_points(cl_float3 *points, int pt_count)
 AABB *box_from_face(Face *face)
 {
 	AABB *box = empty_box();
+//	printf("in box from face\n");
 	for (int i = 0; i < face->shape; i++)
 	{
 		box->min.x = fmin(box->min.x, face->verts[i].x);
@@ -76,6 +77,7 @@ AABB *box_from_face(Face *face)
 		box->max.y = fmax(box->max.y, face->verts[i].y);
 		box->max.z = fmax(box->max.z, face->verts[i].z);
 	}
+	//printf("in box from face\n");
 
 	box->f = face;
 	//calloced so everything else is already null like it should be.
@@ -847,18 +849,20 @@ void partition(AABB *box)
 
 AABB *sbvh(Face *faces, int *box_count, int *refs)
 {
-
 	Split *test = calloc(1, sizeof(Split));
 
 	//put all faces in AABBs
 	AABB *boxes = NULL;
 	int fcount = 0;
+	printf("inside sbvh\n");
 	for (Face *f = faces; f; f = f->next)
 	{
+	//	printf("%d\n", fcount);
 		push(&boxes, box_from_face(f));
 		fcount++;
 	}
 
+	printf("sbvh\n");
 	printf("faces are in boxes, %d\n", fcount);
 
 	AABB *root_box = box_from_boxes(boxes);

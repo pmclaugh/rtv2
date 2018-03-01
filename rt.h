@@ -249,7 +249,7 @@ gpu_bin *flatten_bvh(Scene *scene);
 float area(AABB *box);
 
 
-Face *ply_import(char *ply_file);
+Face *ply_import(char *ply_file, int *face_count);
 Face *object_flatten(Face *faces, int *face_count);
 
 ////Old stuff
@@ -258,6 +258,7 @@ void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);
 void init_camera(t_camera *camera, int xres, int yres);
 
 Scene *scene_from_obj(char *rel_path, char *filename);
+Scene *scene_from_ply(char *rel_path, char *filename);
 
 cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim);
 

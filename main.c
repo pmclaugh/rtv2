@@ -67,7 +67,8 @@ int main(int ac, char **av)
 {
 	srand(time(NULL));
 
-	Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
+	Scene *sponza = scene_from_ply("./", "lucy.ply");
+//	Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 
 	//LL is best for this bvh. don't want to rearrange import for now, will do later
 	Face *face_list = NULL;
@@ -81,10 +82,12 @@ int main(int ac, char **av)
 	free(sponza->faces);
 
 	int box_count, ref_count;
+	printf("check2 face_count=%d\n", sponza->face_count);
 	AABB *tree = sbvh(face_list, &box_count, &ref_count);
 	printf("finished with %d boxes\n", box_count);
 	study_tree(tree, 100000);
 
+	printf("check3\n");
 
 	sponza->bins = tree;
 	sponza->bin_count = box_count;
@@ -110,7 +113,7 @@ int main(int ac, char **av)
 	cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM);
 
 	void *mlx = mlx_init();
-	void *win = mlx_new_window(mlx, XDIM, YDIM, "RTV1");
+	void *win = mlx_new_window(mlx, XDIM, YDIM, "pathtracer");
 	void *img = mlx_new_image(mlx, XDIM, YDIM);
 	draw_pixels(img, XDIM, YDIM, pixels);
 	mlx_put_image_to_window(mlx, win, img, 0, 0);
