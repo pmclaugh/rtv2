@@ -286,7 +286,7 @@ static float GGX_D(const float3 m, const float3 n, const float a)
 	float a2 = a * a;
 	float mdn = dot(m,n);
 	float chi = mdn > 0 ? 1 : 0;
-	float tant = native_tan(mdn);
+	float tant = native_tan(acos(mdn));
 	tant *= tant;
 	tant += a2;
 	tant *= tant; //(a2 + tan^2(mdn))^2
@@ -294,7 +294,7 @@ static float GGX_D(const float3 m, const float3 n, const float a)
 	float num = chi * a2;
 	float denom = PI * mdn * mdn * mdn * mdn * tant;
 
-	return num / denom;
+	return denom == 0.0f ? 0 : num / denom;
 }
 
 static float GGX_G(const float3 v, const float3 m, const float3 n, const float a)
@@ -330,7 +330,15 @@ static float GGX_eval(const float3 i, const float3 o, const float3 m, const floa
 {
 	// == F * G * D / 4 |i dot n| |o dot n|
 	float denom = 4.0f * fabs(dot(i, n)) * fabs(dot(o, n));
-	return GGX_F(i, m, n1, n2) * GGX_G(i, m, n, a) * GGX_G(o, m, n, a) * GGX_D(m, n, a) / denom;
+
+	float f = GGX_F(i, m, n1, n2);
+	float g1 = GGX_G(i, m, n, a);
+	float g2 = GGX_G(o, m, n, a);
+	float d = GGX_D(m, n, a);
+
+	printf("gi %f go %f d %f / denom %f, eval %f\n", g1, g2, d, denom, g1 * g2 * d / denom);
+
+	return g1 * g2 * d / denom; //
 }
 
 static float3 GGX_NDF(float3 n, uint *seed0, uint *seed1, float a)
@@ -380,9 +388,14 @@ __kernel void bounce( 	__global Ray *rays,
 	float3 n = ray.N;
 	float3 m = GGX_NDF(n, &seed0, &seed1, a); //sampling microfacet normal
 	float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
-	float3 i = ray.direction * -1.0f;
+	float3 i = ray.direction -1.0f;
 
-	ray.mask *= ray.diff * GGX_eval(ray.direction, o, m, n, a, n1, n2) / GGX_weight(i, o, m, n, a);
+	float eval = GGX_eval(ray.direction, o, m, n, a, n1, n2);
+	float weight = GGX_weight(i, o, m, n, a);
+	weight = weight == 0.0f ? 1.0f : weight;
+	//printf("eval %f, weight %f\n", eval, weight);
+
+	ray.mask *= ray.diff * eval / weight;
 
 	ray.origin = ray.origin + ray.direction * ray.t + ray.N * NORMAL_SHIFT;
 	ray.direction = o;
@@ -466,8 +479,6 @@ __kernel void traverse(	__global Ray *rays,
 	stack[0] = 0;
 	int s_i = 1;
 
-	int leaves[512];
-	int l_i = 0;
 	while (s_i)
 	{
 		//pop
@@ -478,8 +489,10 @@ __kernel void traverse(	__global Ray *rays,
 		{
 			if (b.rind < 0)
 			{
-				leaves[l_i++] = -1 * b.lind;
-				leaves[l_i++] = -1 * b.rind;	
+				const int count = -1 * b.rind;
+				const int start = -1 * b.lind;
+				for (int i = start; i < start + count; i += 3)
+					intersect_triangle(ray, V, i, &ind, &t, &u, &v);	
 			}
 			else
 			{
@@ -488,14 +501,6 @@ __kernel void traverse(	__global Ray *rays,
 			}
 		}
 	}
-	while(l_i)
-	{
-		const int count = leaves[--l_i];
-		const int start = leaves[--l_i];
-		for (int i = start; i < start + count; i += 3)
-			intersect_triangle(ray, V, i, &ind, &t, &u, &v);
-	}
-	
 
 	ray.t = t;
 	ray.u = u;
