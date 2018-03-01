@@ -336,7 +336,7 @@ static float GGX_eval(const float3 i, const float3 o, const float3 m, const floa
 	float g2 = GGX_G(o, m, n, a);
 	float d = GGX_D(m, n, a);
 
-	printf("gi %f go %f d %f / denom %f, eval %f\n", g1, g2, d, denom, g1 * g2 * d / denom);
+	//printf("gi %f go %f d %f / denom %f, eval %f\n", g1, g2, d, denom, g1 * g2 * d / denom);
 
 	return g1 * g2 * d / denom; //
 }
@@ -388,7 +388,7 @@ __kernel void bounce( 	__global Ray *rays,
 	float3 n = ray.N;
 	float3 m = GGX_NDF(n, &seed0, &seed1, a); //sampling microfacet normal
 	float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
-	float3 i = ray.direction -1.0f;
+	float3 i = ray.direction * -1.0f;
 
 	float eval = GGX_eval(ray.direction, o, m, n, a, n1, n2);
 	float weight = GGX_weight(i, o, m, n, a);
