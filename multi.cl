@@ -418,9 +418,6 @@ __kernel void traverse(	__global Ray *rays,
 	int stack[32];
 	stack[0] = 0;
 	int s_i = 1;
-
-	int leaves[512];
-	int l_i = 0;
 	while (s_i)
 	{
 		//pop
@@ -431,8 +428,12 @@ __kernel void traverse(	__global Ray *rays,
 		{
 			if (b.rind < 0)
 			{
-				leaves[l_i++] = -1 * b.lind;
-				leaves[l_i++] = -1 * b.rind;	
+				//note: leaf-queue system is almost 2x faster but unstable
+				//find safe way to re-implement
+				const int count = -1 * b.rind;
+				const int start = -1 * b.lind;
+				for (int i = start; i < start + count; i += 3)
+					intersect_triangle(ray, V, i, &ind, &t, &u, &v);	
 			}
 			else
 			{
@@ -441,14 +442,6 @@ __kernel void traverse(	__global Ray *rays,
 			}
 		}
 	}
-	while(l_i)
-	{
-		const int count = leaves[--l_i];
-		const int start = leaves[--l_i];
-		for (int i = start; i < start + count; i += 3)
-			intersect_triangle(ray, V, i, &ind, &t, &u, &v);
-	}
-	
 
 	ray.t = t;
 	ray.u = u;
