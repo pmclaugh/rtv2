@@ -301,13 +301,14 @@ static float GGX_G(const float3 v, const float3 m, const float3 n, const float a
 {
 	float chi = dot(v,m) / dot(v,n) > 0.0f ? 1.0f : 0.0f;
 
-	//constants from B. Walter et al., Microfacet Models for Refraction.
-	//goal is to cheaply approximate: 2 / (1 + erf(a) + (1 / a * sqrt(pi)) * e ^ -a^2)
+	float theta = acos(dot(v,m));
 
-	float num = 3.535f * a + 2.181 * a * a;
-	float denom = 1 + 2.276 * a + 2.577 * a * a;
+	float denom = native_tan(theta);
+	denom *= denom * a * a;
 
-	return chi * num / denom;
+	denom = sqrt(1.0f + denom);
+
+	return chi * 2.0f / (1.0f + denom);
 }
 
 static float GGX_F(const float3 i, const float3 m, const float n1, const float n2)
