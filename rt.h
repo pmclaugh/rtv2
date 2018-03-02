@@ -260,7 +260,7 @@ typedef struct	s_key
 	_Bool		darr;
 	_Bool		uarr;
 	_Bool		space;
-	_Bool		ctrl;
+	_Bool		shift;
 }				t_key;
 
 typedef struct	s_camera

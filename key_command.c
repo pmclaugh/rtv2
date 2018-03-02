@@ -26,7 +26,7 @@ int		key_press(int key, t_env *env)
 			if (key == KEY_SPACE)
 				env->key.space = 1;
 			if (key == KEY_SHIFT)
-				env->key.ctrl = 1;
+				env->key.shift = 1;
 		}
 		if (ARR_KEYS)
 		{
@@ -60,7 +60,7 @@ int		key_release(int key, t_env *env)
 			if (key == KEY_SPACE)
 				env->key.space = 0;
 			if (key == KEY_SHIFT)
-				env->key.ctrl = 0;
+				env->key.shift = 0;
 		}
 		if (ARR_KEYS)
 		{
@@ -79,7 +79,7 @@ int		key_release(int key, t_env *env)
 
 int		forever_loop(t_env *env)
 {
-	if (env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.ctrl || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
+	if (env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.shift || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
 	{
 		if (env->key.w || env->key.a || env->key.s || env->key.d)
 		{
@@ -121,29 +121,29 @@ int		forever_loop(t_env *env)
 		}
 		if (env->key.space)
 			env->cam.pos.y += MOVE_SPEED;
-		if (env->key.ctrl)
+		if (env->key.shift)
 			env->cam.pos.y -= MOVE_SPEED;
 		if (env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
 		{
 			if (env->key.larr)
 			{
-				env->cam.dir = vec_rotate_xz(env->cam.dir, -M_PI / 30);
+				env->cam.dir = vec_rotate_xz(env->cam.dir, -TURN_SPEED);
 				env->cam.angle_x -= TURN_SPEED;
 			}
 			if (env->key.rarr)
 			{
-				env->cam.dir = vec_rotate_xz(env->cam.dir, M_PI / 30);
+				env->cam.dir = vec_rotate_xz(env->cam.dir, TURN_SPEED);
 				env->cam.angle_x += TURN_SPEED;
 			}
 			if (env->key.uarr && env->cam.dir.y < 1)
 			{
 				env->cam.dir.y += .1;
-				unit_vec(env->cam.dir);
+				env->cam.dir = unit_vec(env->cam.dir);
 			}
 			if (env->key.darr && env->cam.dir.y > -1)
 			{
 				env->cam.dir.y -= .1;
-				unit_vec(env->cam.dir);
+				env->cam.dir = unit_vec(env->cam.dir);
 			}
 			while (env->cam.angle_x < 0)
 				env->cam.angle_x += 2 * M_PI;
