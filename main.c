@@ -111,8 +111,8 @@ Scene *scene_from_ply(char *filename)
 
 	Scene *scene = calloc(1, sizeof(Scene));
 	scene->materials = calloc(1, sizeof(Material));
-	scene->materials->Kd = (cl_float3){0.2f, 0.2f, 0.7f};
-	scene->materials->Ka = (cl_float3){0.4f, 0.4f, 0.4f};
+	scene->materials->Kd = (cl_float3){0.2f, 0.2f, 0.6f};
+	scene->materials->Ka = (cl_float3){0.8f, 0.8f, 0.8f};
 	scene->mat_count = 1;
 	scene->bins = sbvh(ply, &box_count, &ref_count);
 	study_tree(scene->bins, 10000);
@@ -127,7 +127,7 @@ int main(int ac, char **av)
 {
 	srand(time(NULL));
 
-	Scene *bunny = scene_from_ply("objects/ply/bunny.ply");
+	Scene *bunny = scene_from_ply("objects/ply/dragon.ply");
 
 	//return 0;
 	// Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
@@ -171,12 +171,14 @@ int main(int ac, char **av)
 	//cam.center = (cl_float3){-3000.0, 2200.0, 0.0}; //outside
 
 
-	cam.center = (cl_float3){-1.1, 0.1, 0.0};
-	cam.normal = (cl_float3){1.0, 0.0, 0.0};
+	// cam.center = (cl_float3){-1.1, 0.1, 0.0}; //bunn
+	cam.center = (cl_float3){0.0, 0.12, -0.35}; //trogdor
+
+	cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
 	cam.normal = unit_vec(cam.normal);
-	cam.width = (float)XDIM / (float)YDIM;
-	cam.height = 1.0;
+	cam.width = 0.1f * (float)XDIM / (float)YDIM;
+	cam.height = 0.1f;
 	init_camera(&cam, XDIM, YDIM);
 	//printf("%lu\n", sizeof(gpu_bin));
 
