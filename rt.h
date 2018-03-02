@@ -257,6 +257,7 @@ void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);
 
 void init_camera(t_camera *camera, int xres, int yres);
 
+Scene *import_file(void);
 Scene *scene_from_obj(char *rel_path, char *filename);
 Scene *scene_from_ply(char *rel_path, char *filename);
 
