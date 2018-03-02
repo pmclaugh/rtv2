@@ -281,34 +281,31 @@ __kernel void fetch(	__global Ray *rays,
 
 /////Bounce stuff
 
-static float GGX_D(const float3 m, const float3 n, const float a)
+static float GGX_D(const float a, const float cost)
 {
 	float a2 = a * a;
-	float mdn = dot(m,n);
-	float chi = mdn > 0 ? 1 : 0;
-	float tant = native_tan(acos(mdn));
-	tant *= tant;
-	tant += a2;
-	tant *= tant; //(a2 + tan^2(mdn))^2
+	float chi = cost > 0.0f ? 1.0f : 0.0f;
+	float num = a2 * chi;
 
-	float num = chi * a2;
-	float denom = PI * mdn * mdn * mdn * mdn * tant;
+	float theta = acos(cost);
+	float cos4 = cost * cost * cost * cost;
+	float tsq = a2 + tan(theta) * tan(theta);
+	tsq *= tsq;
+	float denom = PI * cos4 * tsq;
 
-	return denom == 0.0f ? 0 : num / denom;
+	return num == 0.0f ? 0.0f : num / denom;
 }
 
 static float GGX_G(const float3 v, const float3 m, const float3 n, const float a)
 {
 	float chi = dot(v,m) / dot(v,n) > 0.0f ? 1.0f : 0.0f;
+	if (chi == 0.0f)
+		return 0.0f;
 
-	float theta = acos(dot(v,m));
+	float theta = acos(dot(v, n));
+	float radicand = 1.0f + a * a * tan(theta) * tan(theta);
 
-	float denom = native_tan(theta);
-	denom *= denom * a * a;
-
-	denom = sqrt(1.0f + denom);
-
-	return chi * 2.0f / (1.0f + denom);
+	return 2.0f / (1.0f + sqrt(radicand));
 }
 
 static float GGX_F(const float3 i, const float3 m, const float n1, const float n2)
@@ -332,10 +329,10 @@ static float GGX_eval(const float3 i, const float3 o, const float3 m, const floa
 	// == F * G * D / 4 |i dot n| |o dot n|
 	float denom = 4.0f * fabs(dot(i, n)) * fabs(dot(o, n));
 
-	float f = GGX_F(i, m, n1, n2);
+	float f = GGX_F(i, m, n1, n2); //fresnel has been weird, skipping for now
 	float g1 = GGX_G(i, m, n, a);
 	float g2 = GGX_G(o, m, n, a);
-	float d = GGX_D(m, n, a);
+	float d = GGX_D(a, dot(m,n));
 
 	//printf("gi %f go %f d %f / denom %f, eval %f\n", g1, g2, d, denom, g1 * g2 * d / denom);
 
@@ -391,10 +388,8 @@ __kernel void bounce( 	__global Ray *rays,
 	float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
 	float3 i = ray.direction * -1.0f;
 
-	float eval = GGX_eval(ray.direction, o, m, n, a, n1, n2);
+	float eval = GGX_eval(i, o, m, n, a, n1, n2);
 	float weight = GGX_weight(i, o, m, n, a);
-	weight = weight == 0.0f ? 1.0f : weight;
-	//printf("eval %f, weight %f\n", eval, weight);
 
 	ray.mask *= ray.diff * eval / weight;
 
