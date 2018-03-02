@@ -165,7 +165,7 @@ static inline void intersect_triangle(Ray ray, __global float3 *V, int test_i, i
 	float3 h = cross(ray.direction, e2);
 	float a = dot(h, e1);
 
-	if (fabs(a) < 0)
+	if (a <= 0)
 		return;
 	float f = 1.0f / a;
 	float3 s = ray.origin - v0;
@@ -285,9 +285,11 @@ static float GGX_D(const float a, const float cost)
 {
 	float a2 = a * a;
 	float chi = cost > 0.0f ? 1.0f : 0.0f;
+	if (chi == 0.0f)
+		return 0.0f;
 	float num = a2 * chi;
 
-	float theta = acos(cost);
+	float theta = fmax(acos(cost), 0.001f);
 	float cos4 = cost * cost * cost * cost;
 	float tsq = a2 + tan(theta) * tan(theta);
 	tsq *= tsq;
@@ -302,7 +304,7 @@ static float GGX_G(const float3 v, const float3 m, const float3 n, const float a
 	if (chi == 0.0f)
 		return 0.0f;
 
-	float theta = acos(dot(v, n));
+	float theta = fmax(acos(dot(v, n)), 0.001f);
 	float radicand = 1.0f + a * a * tan(theta) * tan(theta);
 
 	return 2.0f / (1.0f + sqrt(radicand));
@@ -310,8 +312,12 @@ static float GGX_G(const float3 v, const float3 m, const float3 n, const float a
 
 static float GGX_F(const float3 i, const float3 m, const float n1, const float n2)
 {
-	float c = fabs(dot(i, m));
-	float g = sqrt(n1 / n2 - 1 + c * c);
+	float c = dot(i, m);
+	//printf("c is %f\n", c);
+	float radicand = n2 / n1 - 1 + c * c;
+	if (radicand < 0.0f)
+		return 1.0f;
+	float g = sqrt(radicand);
 
 	float gminc = g - c;
 	float gplusc = g + c;
@@ -330,13 +336,25 @@ static float GGX_eval(const float3 i, const float3 o, const float3 m, const floa
 	float denom = 4.0f * fabs(dot(i, n)) * fabs(dot(o, n));
 
 	float f = GGX_F(i, m, n1, n2); //fresnel has been weird, skipping for now
+	//printf("f is %f\n", f);
 	float g1 = GGX_G(i, m, n, a);
 	float g2 = GGX_G(o, m, n, a);
 	float d = GGX_D(a, dot(m,n));
 
+	if (g1 != g1)
+		printf("g1 nan\n");
+	if (g2 != g2)
+		printf("g2 nan\n");
+	if (d != d)
+		printf("d nan, inputs were %f %f\n", a, dot(m, n));
+
+	float eval = f * g1 * g2 * d / denom;
+	if (eval != eval)
+		printf("eval nan\n");
+
 	//printf("gi %f go %f d %f / denom %f, eval %f\n", g1, g2, d, denom, g1 * g2 * d / denom);
 
-	return g1 * g2 * d / denom; //
+	return eval; //
 }
 
 static float3 GGX_NDF(float3 n, uint *seed0, uint *seed1, float a)
@@ -344,8 +362,8 @@ static float3 GGX_NDF(float3 n, uint *seed0, uint *seed1, float a)
 	//return a direction m with relative probability GGX_D(m)|m dot n|
 	float r1 = get_random(seed0, seed1);
 	float r2 = get_random(seed0, seed1);
-	float theta = atan(a * sqrt(r1) * rsqrt(1 - r1));
-	float phi = 2.0f * PI * r2;
+	float phi = atan(a * sqrt(r1) * rsqrt(1 - r1));
+	float theta = 2.0f * PI * r2;
 	
 	//local orthonormal system
 	float3 axis = fabs(n.x) > fabs(n.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -362,9 +380,13 @@ static float3 GGX_NDF(float3 n, uint *seed0, uint *seed1, float a)
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
 {
 	float num = fabs(dot(i,m)) * GGX_G(i, m, n, a) * GGX_G(o, m, n, a);
-	float denom = fabs(dot(i, n)) * fabs(dot(m, n));
+	float denom = fabs(dot(i, n)) * fabs(fmax(dot(m, n), 0.001f));
 
-	return num / denom;
+	float weight = num / denom;
+	if (weight != weight)
+		printf("weight nan\n");
+
+	return fmax(num / denom, 0.001f);
 }
 
 __kernel void bounce( 	__global Ray *rays,
@@ -379,9 +401,9 @@ __kernel void bounce( 	__global Ray *rays,
 	uint seed1 = seeds[2 * gid + 1];
 
 	//let's just hardcode these for now
-	float a = 0.5f;
+	float a = 0.1f;
 	float n1 = 1.0f;
-	float n2 = 1.0f;
+	float n2 = 3.0f;
 
 	float3 n = ray.N;
 	float3 m = GGX_NDF(n, &seed0, &seed1, a); //sampling microfacet normal
@@ -390,6 +412,8 @@ __kernel void bounce( 	__global Ray *rays,
 
 	float eval = GGX_eval(i, o, m, n, a, n1, n2);
 	float weight = GGX_weight(i, o, m, n, a);
+
+//	printf("eval %f weight %f\n", eval, weight);
 
 	ray.mask *= ray.diff * eval / weight;
 
