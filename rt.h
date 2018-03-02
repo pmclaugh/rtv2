@@ -56,9 +56,9 @@
 #define KEY_DARR	125
 #define KEY_UARR	126
 #define KEY_SPACE	49
-#define KEY_CTRL	256
+#define KEY_SHIFT	257
 
-#define MOVE_KEYS	(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_CTRL)
+#define MOVE_KEYS	(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
 #define ARR_KEYS	(key >= KEY_LARR  && key <= KEY_UARR)
 
 #define MOVING 
@@ -333,6 +333,7 @@ t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b);
 cl_float3	vec_rotate_xy(const cl_float3 a, const float angle);
 cl_float3	vec_rotate_yz(const cl_float3 a, const float angle);
 cl_float3	vec_rotate_xz(const cl_float3 a, const float angle);
+cl_float3	vec_rotate_xyz(const cl_float3 a, const float angle_x, const float angle_y);
 cl_float3 vec_rev(cl_float3 v);
 
 

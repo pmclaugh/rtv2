@@ -52,11 +52,23 @@ void		set_camera(t_camera *cam)
 	cam->focus = vec_add(cam->pos, vec_scale(cam->dir, cam->dist));
 
 	//now i need unit vectors on the plane
-	t_3x3 camera_matrix = rotation_matrix(UNIT_Z, cam->dir);
 	cl_float3 camera_x, camera_y;
-	camera_x = mat_vec_mult(camera_matrix, UNIT_X);
-	camera_y = mat_vec_mult(camera_matrix, UNIT_Y);
-
+	if (fabs(cam->dir.x) < 0.00001) //prevent camera reference from evaluating NAN
+	{
+		camera_x = (cam->dir.z > 0) ? UNIT_X : vec_scale(UNIT_X, -1);
+		camera_y = UNIT_Y;
+	}
+	else
+	{
+		t_3x3 rot_matrix = rotation_matrix(UNIT_Z, (cl_float3){cam->dir.x, 0, cam->dir.z});
+		camera_x = mat_vec_mult(rot_matrix, UNIT_X);
+		camera_y = mat_vec_mult(rot_matrix, UNIT_Y);
+		if (camera_y.y < 0) //when vertical plane reference points down
+			camera_y.y *= -1;
+	}
+	// print_vec(camera_x);
+	// print_vec(camera_y);
+	
 	//pixel deltas
 	cam->d_x = vec_scale(camera_x, cam->width / (float)XDIM);
 	cam->d_y = vec_scale(camera_y, cam->height / (float)YDIM);

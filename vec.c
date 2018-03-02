@@ -75,7 +75,7 @@ t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b)
 {
 	//returns a matrix that will rotate vector a to be parallel with vector b.
 
-	const float angle = acos(dot(a,b) / (vec_mag(a) * vec_mag(b)));
+	const float angle = acos(dot(a,b));
 	const cl_float3 axis = unit_vec(cross(a, b));
 	t_3x3 rotation;
 	rotation.row1 = (cl_float3){	cos(angle) + axis.x * axis.x * (1 - cos(angle)),

@@ -167,6 +167,7 @@ void	greyscale(t_env *env)
 			float cost = dot(ray.N, env->cam.dir);
 			if (cost < 0)
 				cost *= -1.0f;
+			cost = ((cost - .5) / 2) + .5;
 			env->pixels[x + (y * XDIM)] = (cl_double3){cost, cost, cost};
 		}
 	}
