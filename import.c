@@ -31,8 +31,13 @@ Scene	*import_file(void)
 	Scene *S;
 	if (strstr(file, ".ply"))
 		S = scene_from_ply(dir_path, file);
-	else
+	else if (strstr(file, ".obj"))
 		S =  scene_from_obj(dir_path, file);
+	else
+	{
+		printf("not a valid file, must be file.ply or file.obj\n");
+		exit(0);
+	}
 	free(file_path);
 	free(line);
 	return S;
