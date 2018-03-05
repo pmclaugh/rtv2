@@ -287,7 +287,7 @@ static float GGX_D(const float a, const float cost)
 	float chi = cost > 0.0f ? 1.0f : 0.0f;
 	float num = a2 * chi;
 
-	float theta = acos(cost);
+	float theta = fmax(acos(cost), 0.001f);
 	float cos4 = cost * cost * cost * cost;
 	float tsq = a2 + tan(theta) * tan(theta);
 	tsq *= tsq;

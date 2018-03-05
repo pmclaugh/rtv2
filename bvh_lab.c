@@ -114,23 +114,6 @@ void check_tris(Traversal *ray, AABB *box)
 		intersect_triangle(ray, member->f->verts[0], member->f->verts[1], member->f->verts[2]);
 }
 
-static void push(AABB **stack, AABB *box)
-{
-	box->next = *stack;
-	*stack = box;
-}
-
-static AABB *pop(AABB **stack)
-{
-	AABB *popped = NULL;
-	if (*stack)
-	{
-		popped = *stack;
-		*stack = popped->next;
-	}
-	return popped;
-}
-
 void traverse(AABB *tree, Traversal *ray)
 {
 	tree->next = NULL;
