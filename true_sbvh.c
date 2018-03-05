@@ -5,14 +5,14 @@
 
 #define SPLIT_TEST_NUM 32
 
-#define LEAF_THRESHOLD 8
+#define LEAF_THRESHOLD 16
 #define BOOST_DEPTH 11
 
-#define ALPHA 0.001f
+#define ALPHA 0.01f
 
-#define SPATIAL_ENABLE 1
+#define SPATIAL_ENABLE 0
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 enum axis{
 	X_AXIS,

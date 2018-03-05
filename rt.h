@@ -243,7 +243,7 @@ typedef struct s_gpu_scene
 	cl_uint seed_count;
 }				gpu_scene;
 
-
+Face *stl_import(char *stl_file);
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
 void study_tree(AABB *tree, int ray_count);

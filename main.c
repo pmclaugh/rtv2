@@ -123,13 +123,33 @@ Scene *scene_from_ply(char *filename)
 	return scene;
 }
 
+Scene *scene_from_stl(char *filename)
+{
+	Face *ply = stl_import(filename);
+	int box_count, ref_count;
+
+	Scene *scene = calloc(1, sizeof(Scene));
+	scene->materials = calloc(1, sizeof(Material));
+	scene->materials->Kd = (cl_float3){0.2f, 0.2f, 0.7f};
+	scene->materials->Ka = (cl_float3){0.4f, 0.4f, 0.4f};
+	scene->mat_count = 1;
+	scene->bins = sbvh(ply, &box_count, &ref_count);
+	study_tree(scene->bins, 10000);
+	scene->face_count = ref_count;
+	scene->bin_count = box_count;
+	flatten_faces(scene);
+
+	return scene;
+}
+
 int main(int ac, char **av)
 {
 	srand(time(NULL));
-
-	Scene *bunny = scene_from_ply("objects/ply/dragon.ply");
-
-	//return 0;
+	scene_from_stl("iona.stl");
+	
+	return 0;
+	Scene *bunny = scene_from_ply("objects/ply/bunny.ply");
+	return 0;
 	//Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 
 	// LL is best for this bvh. don't want to rearrange import for now, will do later
