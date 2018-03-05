@@ -258,7 +258,8 @@ static void fetch_all_tex(__global Material *mats, const int m_ind, __global uch
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
 	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : BLACK;
-	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : (float3)(0.6f, 0.6f, 0.6f);
+	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height,
+	mat.d_width, tex) : (float3)(0.3f, 0.8f, 0.8f);
 }
 
 static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, const float3 dir, const int ind, const float u, const float v, float3 *N_out, float3 *txcrd_out)
