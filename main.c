@@ -6,8 +6,8 @@
 # define quit_key 12
 #endif
 
-#define XDIM 512
-#define YDIM 512
+#define XDIM 1024
+#define YDIM 1024
 #define SPP_PER_DEVICE 200
 
 typedef struct s_param
