@@ -437,11 +437,11 @@ __kernel void traverse(	__global Ray *rays,
 				Box l = boxes[lind];
                 Box r = boxes[lind + 1]; //b.rind == b.lind + 1
 
-                cl_float3 lmin = l.min;
-                cl_float3 rmin = r.min;
-                cl_float3 diff = rmin - lmin;
+                float3 lmin = (float3)(l.minx, l.miny, l.minz);
+                float3 rmin = (float3)(r.minx, r.miny, r.minz);
+                float3 diff = rmin - lmin;
                 //diff is 2 zeros and one positive value (in axis of split)
-                int pos = (int)ceil(fmax(dot(diff, ray.direction), 0.0f)); //I think this doesnt branch.
+                int pos = dot(diff, ray.direction) > 0.0f ? 1 : 0; //I think this doesnt branch.
 
                 stack[s_i++] = lind + 1 * pos;
                 stack[s_i++] = lind + 1 * pos;
