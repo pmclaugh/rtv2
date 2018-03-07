@@ -144,11 +144,12 @@ static inline int intersect_box(Ray ray, Box b, float t, float *t_out)
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
 
-	if (tmin <= 0.0f && tmax <= 0.0f)
-		return (0);
 	if (tmin > t)
 		return (0);
-	*t_out = fmax(0.0f, tmin);
+	if (tmin <= 0.0f && tmax <= 0.0f)
+		return (0);
+	if (t_out)
+		*t_out = fmax(0.0f, tmin);
 	return (1);
 }
 
@@ -420,7 +421,6 @@ __kernel void traverse(	__global Ray *rays,
 	int s_i = 1;
 	while (s_i)
 	{
-		//pop
 		Box b = boxes[stack[--s_i]];
 
 		//check
@@ -438,17 +438,20 @@ __kernel void traverse(	__global Ray *rays,
 			else
 			{
 				Box l = boxes[b.lind];
-				Box r = boxes[b.rind];
-				float t_l = FLT_MAX;
-				float t_r = FLT_MAX;
-				int lhit = intersect_box(ray, l, t, &t_l);
-				int rhit = intersect_box(ray, r, t, &t_r);
-				if (lhit && t_l < t_r)
-					stack[s_i++] = b.lind;
-				if (rhit)
-					stack[s_i++] = b.rind;
-				if (lhit && t_l >= t_r)
-					stack[s_i++] = b.lind;
+                Box r = boxes[b.lind + 1]; //b.rind == b.lind + 1
+                float t_l = FLT_MAX;
+                float t_r = FLT_MAX;
+                int lhit = intersect_box(ray, l, t, &t_l);
+                int rhit = intersect_box(ray, r, t, &t_r);
+                if (lhit && t_l >= t_r)
+                    stack[s_i++] = b.lind;
+                if (rhit)
+                    stack[s_i++] = b.rind;
+                if (lhit && t_l < t_r)
+                    stack[s_i++] = b.lind;
+
+				// stack[s_i++] = b.lind;
+				// stack[s_i++] = b.rind;
 			}
 		}
 	}

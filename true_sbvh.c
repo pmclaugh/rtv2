@@ -5,7 +5,7 @@
 
 #define SPLIT_TEST_NUM 32
 
-#define LEAF_THRESHOLD 16
+#define LEAF_THRESHOLD 2
 #define BOOST_DEPTH 11
 
 #define ALPHA 0.01f
