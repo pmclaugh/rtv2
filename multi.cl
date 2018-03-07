@@ -433,18 +433,18 @@ __kernel void traverse(	__global Ray *rays,
 			}
 			else
 			{
-				int lind = b.lind;
-				Box l = boxes[lind];
-                Box r = boxes[lind + 1]; //b.rind == b.lind + 1
-
-                float3 lmin = (float3)(l.minx, l.miny, l.minz);
-                float3 rmin = (float3)(r.minx, r.miny, r.minz);
-                float3 diff = rmin - lmin;
-                //diff is 2 zeros and one positive value (in axis of split)
-                int pos = dot(diff, ray.direction) > 0.0f ? 1 : 0; //I think this doesnt branch.
-
-                stack[s_i++] = lind + 1 * pos;
-                stack[s_i++] = lind + 1 * pos;
+				Box l = boxes[b.lind];
+                Box r = boxes[b.lind + 1]; //b.rind == b.lind + 1
+                float t_l = FLT_MAX;
+                float t_r = FLT_MAX;
+                int lhit = intersect_box(ray, l, t, &t_l);
+                int rhit = intersect_box(ray, r, t, &t_r);
+                if (lhit && t_l >= t_r)
+                    stack[s_i++] = b.lind;
+                if (rhit)
+                    stack[s_i++] = b.rind;
+                if (lhit && t_l < t_r)
+                    stack[s_i++] = b.lind;
 
 				// stack[s_i++] = b.lind;
 				// stack[s_i++] = b.rind;
