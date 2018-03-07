@@ -417,7 +417,14 @@ __kernel void traverse(	__global Ray *rays,
 	int s_i = 1;
 	while (s_i)
 	{
-		Box b = boxes[stack[--s_i]];
+		int ind = stack[--s_i];
+		Box b;
+
+		if (ind > 2048)
+			b = boxes[ind];
+		else
+			b = boost[ind];
+		
 		int hit = intersect_box(ray, b, t, 0);
 		//check
 		if (hit)
