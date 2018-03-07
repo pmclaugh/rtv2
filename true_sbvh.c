@@ -3,7 +3,7 @@
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 
-#define SPLIT_TEST_NUM 256
+#define SPLIT_TEST_NUM 64
 
 #define LEAF_THRESHOLD 2
 #define BOOST_DEPTH 11
