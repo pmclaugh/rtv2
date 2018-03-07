@@ -298,7 +298,7 @@ static float GGX_D(const float a, const float cost)
 	return num == 0.0f ? 0.0f : num / denom;
 }
 
-static float GGX_G(const float3 v, const float3 m, const float3 n, const float a)
+static float GGX_G1(const float3 v, const float3 m, const float3 n, const float a)
 {
 	float chi = dot(v,m) / dot(v,n) > 0.0f ? 1.0f : 0.0f;
 	if (chi == 0.0f)
@@ -310,6 +310,22 @@ static float GGX_G(const float3 v, const float3 m, const float3 n, const float a
 	float ret = 2.0f / (1.0f + sqrt(radicand));
 
 	return ret;
+}
+
+static float GGX_G(const float3 i, const float3 o, const float3 m, const float3 n, const float a)
+{
+	if (dot(i,m) * dot(i,n) <= 0.0f || dot(o,m) * dot(o,n) <= 0.0f)
+		return 0.0f;
+	float g1 = GGX_G1(i, m, n, a);
+	float g2 = GGX_G1(o, m, n, a);
+	if (g1 != g1)
+		printf("g1 nan\n");
+	if (g1 == 0.0f)
+		return 0.0f;
+	if (g2 != g2)
+		printf("g2 nan\n");
+	if (g2 == 0.0f)
+		return 0.0f;
 }
 
 static float GGX_F(const float3 i, const float3 m, const float n1, const float n2)
@@ -339,21 +355,16 @@ static float GGX_eval(const float3 i, const float3 o, const float3 m, const floa
 
 	float f = GGX_F(i, m, n1, n2);
 	//printf("f is %f\n", f);
-	float g1 = GGX_G(i, m, n, a);
-	float g2 = GGX_G(o, m, n, a);
+	float g = GGX_G(i, o, m, n, a);
 	float d = GGX_D(a, dot(m,n));
 
 	if (f != f)
 		printf("f nan\n");
 	if (f == 0.0f)
 		return 0.0f;
-	if (g1 != g1)
+	if (g != g)
 		printf("g1 nan\n");
-	if (g1 == 0.0f)
-		return 0.0f;
-	if (g2 != g2)
-		printf("g2 nan\n");
-	if (g2 == 0.0f)
+	if (g == 0.0f)
 		return 0.0f;
 	if (d != d)
 		printf("d nan, inputs were %f %f\n", a, dot(m, n));
@@ -394,9 +405,10 @@ static float3 GGX_NDF(float3 i, float3 n, uint *seed0, uint *seed1, float a)
 
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
 {
-	float num = fabs(dot(i,m)) * GGX_G(i, m, n, a) * GGX_G(o, m, n, a);
-	float denom = fabs(dot(i, n)) * fabs(fmax(dot(m, n), 0.001f));
-
+	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a);
+	if (num == 0.0f)
+		return 1.0f; //safe because G term in numerator of Fs will also be zero
+	float denom = dot(i, n) * dot(m, n);
 	float weight = num / denom;
 	if (weight != weight)
 		printf("weight nan\n");
@@ -467,9 +479,6 @@ __kernel void bounce( 	__global Ray *rays,
 
 		float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
 		float3 i = ray.direction * -1.0f;
-		if (dot(o,n) < 0.0f)
-			printf("shouldn't happen\n");
-
 		new_dir = o;
 
 		float eval = GGX_eval(i, o, m, n, a, n1, n2);
