@@ -153,7 +153,7 @@ static inline int intersect_box(Ray ray, Box b, float t, float *t_out)
 	return (1);
 }
 
-static inline void intersect_triangle(Ray ray, __global float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
+static inline void intersect_triangle(Ray ray, __constant float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
 {
 	float this_t, this_u, this_v;
 	float3 v0 = V[test_i];
@@ -191,7 +191,7 @@ static float3 fetch_tex(	float3 txcrd,
 							int offset,
 							int height,
 							int width,
-							__global uchar *tex)
+							__constant uchar *tex)
 {
 	int x = floor((float)width * txcrd.x);
 	int y = floor((float)height * txcrd.y);
@@ -204,7 +204,7 @@ static float3 fetch_tex(	float3 txcrd,
 	return out;
 }
 
-static void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *tex, float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
+static void fetch_all_tex(__constant Material *mats, int m_ind, __constant uchar *tex, float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
 {
 	Material mat = mats[m_ind];
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
@@ -213,7 +213,7 @@ static void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *te
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 }
 
-static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
+static void fetch_NT(__constant float3 *V, __constant float3 *N, __constant float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
 {
 	float3 v0 = V[ind];
 	float3 v1 = V[ind + 1];
@@ -237,7 +237,7 @@ static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T,
 	*txcrd_out = txcrd;	
 }
 
-static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float3 sample_N, float3 bump)
+static float3 bump_map(__constant float3 *TN, __constant float3 *BTN, int ind, float3 sample_N, float3 bump)
 {
 	float3 tangent = TN[ind];
 	float3 bitangent = BTN[ind];
@@ -246,14 +246,14 @@ static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float
 }
 
 __kernel void fetch(	__global Ray *rays,
-						__global float3 *V,
-						__global float3 *T,
-						__global float3 *N,
-						__global float3 *TN,
-						__global float3 *BTN,
-						__global Material *mats,
-						__global int *M,
-						__global uchar *tex)
+						__constant float3 *V,
+						__constant float3 *T,
+						__constant float3 *N,
+						__constant float3 *TN,
+						__constant float3 *BTN,
+						__constant Material *mats,
+						__constant int *M,
+						__constant uchar *tex)
 {
 	//pull ray and populate its sample_N, diff, spec, trans
 	int gid = get_global_id(0);
@@ -401,8 +401,8 @@ __kernel void collect(	__global Ray *rays,
 }
 
 __kernel void traverse(	__global Ray *rays,
-						__global Box *boxes,
-						__global float3 *V,
+						__constant Box *boxes,
+						__constant float3 *V,
 						__constant Box *boost,
 						const int boost_count)
 {
