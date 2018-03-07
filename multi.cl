@@ -153,7 +153,7 @@ static inline int intersect_box(Ray ray, Box b, float t, float *t_out)
 	return (1);
 }
 
-static inline void intersect_triangle(Ray ray, __constant float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
+static inline void intersect_triangle(Ray ray, __global float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
 {
 	float this_t, this_u, this_v;
 	float3 v0 = V[test_i];
@@ -211,7 +211,7 @@ static void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *te
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 }
 
-static void fetch_NT(__constant float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
+static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
 {
 	float3 v0 = V[ind];
 	float3 v1 = V[ind + 1];
@@ -244,7 +244,7 @@ static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float
 }
 
 __kernel void fetch(	__global Ray *rays,
-						__constant float3 *V,
+						__global float3 *V,
 						__global float3 *T,
 						__global float3 *N,
 						__global float3 *TN,
@@ -397,8 +397,8 @@ __kernel void collect(	__global Ray *rays,
 }
 
 __kernel void traverse(	__global Ray *rays,
-						__constant Box *boxes,
-						__constant float3 *V,
+						__global Box *boxes,
+						__global float3 *V,
 						__constant Box *boost,
 						const int boost_count)
 {
@@ -418,9 +418,9 @@ __kernel void traverse(	__global Ray *rays,
 	while (s_i)
 	{
 		Box b = boxes[stack[--s_i]];
-
+		int hit = intersect_box(ray, b, t, 0);
 		//check
-		if (intersect_box(ray, b, t, 0))
+		if (hit)
 		{
 			if (b.rind <= 0)
 			{
