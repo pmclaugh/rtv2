@@ -264,10 +264,8 @@ __kernel void fetch(	__global Ray *rays,
 
 	float3 txcrd;
 	fetch_NT(V, N, T, ray.direction, ray.hit_ind, ray.u, ray.v, &ray.N, &txcrd);
-
-	fetch_all_tex(mats, M[ray.hit_ind / 3], tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
-
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
+	fetch_all_tex(mats, M[ray.hit_ind / 3], tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
 	ray.status = BOUNCE;
 
 	if (ray.trans.x < 1.0)
@@ -426,7 +424,7 @@ __kernel void traverse(	__global Ray *rays,
 		//check
 		if (intersect_box(ray, b, t, 0))
 		{
-			if (b.rind < 0)
+			if (b.rind <= 0)
 			{
 				//note: leaf-queue system is almost 2x faster but unstable
 				//find safe way to re-implement
