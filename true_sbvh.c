@@ -1005,8 +1005,6 @@ gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count)
 	while (queue_head)
 	{
 		queue_head->flat_ind = bin_ind++;
-		if (depth(queue_head) == BOOST_DEPTH || (!queue_head->left && depth(queue_head) < BOOST_DEPTH))
-			boost_ind++;
 
 		if (queue_head->left)
 		{
@@ -1018,11 +1016,6 @@ gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count)
 
 		queue_head = queue_head->next;
 	}
-
-	printf("bin_ind got to %d, should equal %d\n", bin_ind, scene->bin_count);
-
-	gpu_bin *boost_arr = calloc(boost_ind, sizeof(gpu_bin));
-	boost_ind = 0;
 
 	//second pass to actually populate the gpu_bins
 	queue_head = scene->bins;
@@ -1031,12 +1024,6 @@ gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count)
 	while (queue_head)
 	{
 		bins[queue_head->flat_ind] = bin_from_box(queue_head);
-		if (depth(queue_head) == BOOST_DEPTH || (!queue_head->left && depth(queue_head) < BOOST_DEPTH))
-		{
-			boost_arr[boost_ind] = bin_from_box(queue_head);
-			boost_arr[boost_ind].lind = queue_head->flat_ind;
-			boost_ind++;
-		}
 		if (queue_head->left)
 		{
 			queue_head->left->next = queue_head->right;
@@ -1048,11 +1035,8 @@ gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count)
 		queue_head = queue_head->next;
 	}
 
-	// for (int i = 0; i < scene->bin_count; i++)
-	// 	printf("%d, L %d R %d\n", i, bins[i].lind, bins[i].rind);
-	printf("boost is %d nodes, %d bytes\n", boost_ind, boost_ind * 32);
-	*boost = boost_arr;
-	*boost_count = boost_ind;
+	*boost = bins;
+	*boost_count = 2048 > scene->bin_count ? scene->bin_count : 2048;
 
 	return bins;
 }
