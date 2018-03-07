@@ -127,7 +127,7 @@ static inline int intersect_box(Ray ray, Box b, float t, float *t_out)
 	float tymax = fmax(ty0, ty1);
 
 
-	if ((tmin >= tymax) || (tymin >= tmax))
+	if ((tmin > tymax) || (tymin > tmax))
 		return (0);
 
 	tmin = fmax(tymin, tmin);
@@ -138,13 +138,13 @@ static inline int intersect_box(Ray ray, Box b, float t, float *t_out)
 	float tzmin = fmin(tz0, tz1);
 	float tzmax = fmax(tz0, tz1);
 
-	if ((tmin >= tzmax) || (tzmin >= tmax))
+	if ((tmin > tzmax) || (tzmin > tmax))
 		return (0);
 
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
 
-	if (tmin > t)
+	if (tmin >= t)
 		return (0);
 	if (tmin <= 0.0f && tmax <= 0.0f)
 		return (0);
@@ -166,8 +166,6 @@ static inline void intersect_triangle(Ray ray, __constant float3 *V, int test_i,
 	float3 h = cross(ray.direction, e2);
 	float a = dot(h, e1);
 
-	if (fabs(a) < 0)
-		return;
 	float f = 1.0f / a;
 	float3 s = ray.origin - v0;
 	this_u = f * dot(s, h);
