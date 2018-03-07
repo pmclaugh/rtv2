@@ -24,8 +24,8 @@
 #define UNIT_Y (cl_float3){0, 1, 0}
 #define UNIT_Z (cl_float3){0, 0, 1}
 
-#define XDIM 300
-#define YDIM 300
+#define XDIM 400
+#define YDIM 400
 
 #define ERROR 1e-4
 
@@ -57,6 +57,7 @@
 #define KEY_UARR	126
 #define KEY_SPACE	49
 #define KEY_SHIFT	257
+#define KEY_TAB		48
 
 #define MOVE_KEYS	(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
 #define ARR_KEYS	(key >= KEY_LARR  && key <= KEY_UARR)
@@ -284,8 +285,7 @@ typedef struct s_env
 	void *mlx;
 	void *win;
 	void *img;
-	int x;
-	int y;
+	int	mode;
 
 	Scene *scene;
 	t_camera cam;
@@ -350,7 +350,7 @@ t_camera	init_camera(void);
 t_env		*init_env(Scene *S);
 
 //interactive.c
-void	greyscale(t_env *env);
+void	interactive(t_env *env);
 
 //key_command.c
 int		exit_hook(int key, t_env *env);

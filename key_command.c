@@ -11,6 +11,12 @@ int		key_press(int key, t_env *env)
 {
 	if (key == KEY_ESC)
 		exit_hook(0, env);
+	if (key == KEY_TAB)
+	{
+		env->mode++;
+		if (env->mode > 3)
+			env->mode = 1;
+	}
 	if (MOVE_KEYS || ARR_KEYS)
 	{
 		if (MOVE_KEYS)
@@ -88,19 +94,19 @@ int		forever_loop(t_env *env)
 
 			if (env->key.w || env->key.s)
 			{
-				move_x = cos(env->cam.angle_x) * MOVE_SPEED;
-				move_z = sin(env->cam.angle_x) * MOVE_SPEED;
+				// move_x = cos(env->cam.angle_x) * MOVE_SPEED;
+				// move_z = sin(env->cam.angle_x) * MOVE_SPEED;
 				if (env->key.w)
 				{
-					// env->cam.pos = vec_add(env->cam.pos, vec_scale(env->cam.dir, MOVE_SPEED));
-					env->cam.pos.x += move_x;
-					env->cam.pos.z -= move_z;
+					env->cam.pos = vec_add(env->cam.pos, vec_scale(env->cam.dir, MOVE_SPEED));
+					// env->cam.pos.x += move_x;
+					// env->cam.pos.z -= move_z;
 				}
 				if (env->key.s)
 				{
-					// env->cam.pos = vec_add(env->cam.pos, vec_scale(env->cam.dir, -MOVE_SPEED));
-					env->cam.pos.x -= move_x;
-					env->cam.pos.z += move_z;
+					env->cam.pos = vec_add(env->cam.pos, vec_scale(env->cam.dir, -MOVE_SPEED));
+					// env->cam.pos.x -= move_x;
+					// env->cam.pos.z += move_z;
 				}
 			}
 			if (env->key.a || env->key.d)
@@ -156,7 +162,7 @@ int		forever_loop(t_env *env)
 		}
 		set_camera(&env->cam);
 	}
-	greyscale(env);
+	interactive(env);
 	draw_pixels(env->img, XDIM, YDIM, env->pixels);
 	mlx_put_image_to_window(env->mlx, env->win, env->img, 0, 0);
 	return 0;

@@ -112,11 +112,12 @@ t_env		*init_env(Scene *S)
 {
 	t_env	*env = malloc(sizeof(t_env));
 	env->cam = init_camera();
-	env->pixels = malloc(sizeof(cl_double3) * (XDIM * YDIM));
+	env->pixels = malloc(sizeof(cl_double3) * ((XDIM) * (YDIM)));
 	env->scene = S;
 	env->mlx = mlx_init();
 	env->win = mlx_new_window(env->mlx, XDIM, YDIM, "PATH_TRACER");
 	env->img = mlx_new_image(env->mlx, XDIM, YDIM);
+	env->mode = 1;
 	env->key.w = 0;
 	env->key.a = 0;
 	env->key.s = 0;

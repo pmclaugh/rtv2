@@ -7,14 +7,8 @@ typedef struct	s_ray
 	cl_float3	inv_dir;
 	float		t;
 	cl_float3	N;
+	cl_double3	color;
 }				t_ray;
-
-typedef struct s_triangle
-{
-	cl_float3 v0;
-	cl_float3 v1;
-	cl_float3 v2;
-}				Triangle;
 
 /////////////////////////////////////////////////////////////////////////
 
@@ -119,7 +113,59 @@ static AABB *stack_pop(AABB **stack)
 	return popped;
 }
 
-void trace(AABB *tree, t_ray *ray)
+void	trace_bvh_heatmap(AABB *tree, t_ray *ray)
+{
+	tree->next = NULL;
+	AABB *stack = tree;
+
+	ray->color = (cl_double3){0, 0, 1};
+	while(stack)
+	{
+		AABB *box = stack_pop(&stack);
+		if (intersect_box(ray, box))
+		{
+			if (ray->color.z > 0)
+			{
+				ray->color.y += .02;
+				ray->color.z -= .02;
+			}
+			else if (ray->color.x < 1)
+				ray->color.x += .02;
+			else
+				ray->color.y -= .02;
+			if (box->left) //boxes have either 0 or 2 children
+			{
+				stack_push(&stack, box->left);
+				stack_push(&stack, box->right);
+			}
+		}
+	}
+}
+
+void	trace_bvh(AABB *tree, t_ray *ray)
+{
+	tree->next = NULL;
+	AABB *stack = tree;
+
+	ray->color = (cl_double3){1, 1, 1};
+	while(stack)
+	{
+		AABB *box = stack_pop(&stack);
+		if (intersect_box(ray, box))
+		{
+			ray->color.x *= .99;
+			ray->color.y *= .99;
+			ray->color.z *= .99;
+			if (box->left) //boxes have either 0 or 2 children
+			{
+				stack_push(&stack, box->left);
+				stack_push(&stack, box->right);
+			}
+		}
+	}
+}
+
+void	trace_scene(AABB *tree, t_ray *ray)
 {
 	tree->next = NULL;
 	AABB *stack = tree;
@@ -138,6 +184,12 @@ void trace(AABB *tree, t_ray *ray)
 				check_triangles(ray, box);
 		}
 	}
+	cl_float3	light = unit_vec((cl_float3){.5, 1, -.25});
+	float		cost = dot(ray->N, light);
+	if (cost < 0)
+		cost *= -1.0f;
+	cost = ((cost - .5) / 2) + .5; //make greyscale contrast less extreme
+	ray->color = (cl_double3){cost, cost, cost};
 }
 
 //////////////////////////////////////////////////////////////
@@ -155,20 +207,25 @@ t_ray	generate_ray(t_camera cam, float x, float y)
 	return ray;
 }
 
-void	greyscale(t_env *env)
+void	interactive(t_env *env)
 {
-	for (int y = 0; y < YDIM; y++)
+	for (int y = 0; y < YDIM; y += 2)
 	{
-		for (int x = 0; x < XDIM; x++)
+		for (int x = 0; x < XDIM; x += 2)
 		{
 			//find world co-ordinates from camera and pixel plane (generate ray)
 			t_ray ray = generate_ray(env->cam, x, y);
-			trace(env->scene->bins, &ray);
-			float cost = dot(ray.N, env->cam.dir);
-			if (cost < 0)
-				cost *= -1.0f;
-			cost = ((cost - .5) / 2) + .5; //make greyscale contrast less extreme
-			env->pixels[x + (y * XDIM)] = (cl_double3){cost, cost, cost};
+			if (env->mode == 1)
+				trace_scene(env->scene->bins, &ray);
+			if (env->mode == 2)
+				trace_bvh(env->scene->bins, &ray);
+			if (env->mode == 3)
+				trace_bvh_heatmap(env->scene->bins, &ray);
+			//upscaling the resolution by 2x
+			env->pixels[x + (y * XDIM)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
+			env->pixels[(x + 1) + (y * XDIM)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
+			env->pixels[x + ((y + 1) * XDIM)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
+			env->pixels[(x + 1) + ((y + 1) * XDIM)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
 		}
 	}
 }
