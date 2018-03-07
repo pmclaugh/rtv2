@@ -114,7 +114,7 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 }
 
 //intersect_box
-static inline int intersect_box(Ray ray, Box b, float t)
+static inline int intersect_box(Ray ray, Box b, float t, float *t_out)
 {
 	float tx0 = (b.minx - ray.origin.x) * ray.inv_dir.x;
 	float tx1 = (b.maxx - ray.origin.x) * ray.inv_dir.x;
@@ -144,11 +144,11 @@ static inline int intersect_box(Ray ray, Box b, float t)
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
 
-	if (tmin > t)
-		return (0);
-
 	if (tmin <= 0.0f && tmax <= 0.0f)
 		return (0);
+	if (tmin > t)
+		return (0);
+	*t_out = fmax(0.0f, tmin);
 	return (1);
 }
 
@@ -424,7 +424,7 @@ __kernel void traverse(	__global Ray *rays,
 		Box b = boxes[stack[--s_i]];
 
 		//check
-		if (intersect_box(ray, b, t))
+		if (intersect_box(ray, b, t, 0))
 		{
 			if (b.rind < 0)
 			{
@@ -437,8 +437,18 @@ __kernel void traverse(	__global Ray *rays,
 			}
 			else
 			{
-				stack[s_i++] = b.lind;
-				stack[s_i++] = b.rind;
+				Box l = boxes[b.lind];
+				Box r = boxes[b.rind];
+				float t_l = FLT_MAX;
+				float t_r = FLT_MAX;
+				int lhit = intersect_box(ray, l, t, &t_l);
+				int rhit = intersect_box(ray, r, t, &t_r);
+				if (lhit && t_l < t_r)
+					stack[s_i++] = b.lind;
+				if (rhit)
+					stack[s_i++] = b.rind;
+				if (lhit && t_l >= t_r)
+					stack[s_i++] = b.lind;
 			}
 		}
 	}

@@ -10,9 +10,9 @@
 
 #define ALPHA 0.01f
 
-#define SPATIAL_ENABLE 0
+#define SPATIAL_ENABLE 1
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 enum axis{
 	X_AXIS,

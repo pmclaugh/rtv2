@@ -145,11 +145,11 @@ Scene *scene_from_stl(char *filename)
 int main(int ac, char **av)
 {
 	srand(time(NULL));
-	scene_from_stl("iona.stl");
+	// scene_from_stl("iona.stl");
 	
-	return 0;
+	// return 0;
 	Scene *bunny = scene_from_ply("objects/ply/bunny.ply");
-	return 0;
+	//return 0;
 	//Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 
 	// LL is best for this bvh. don't want to rearrange import for now, will do later
