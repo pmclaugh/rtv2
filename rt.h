@@ -25,6 +25,9 @@
 #define UNIT_Y (cl_float3){0, 1, 0}
 #define UNIT_Z (cl_float3){0, 0, 1}
 
+#define XDIM 400
+#define YDIM 400
+
 #define ERROR 1e-4
 
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
@@ -35,7 +38,6 @@
 
 #define ORIGIN (cl_float3){0.0f, 0.0f, 0.0f}
 
-
 #define GPU_MAT_DIFFUSE 1
 #define GPU_MAT_SPECULAR 2
 #define GPU_MAT_REFRACTIVE 3
@@ -44,6 +46,28 @@
 #define GPU_SPHERE 1
 #define GPU_TRIANGLE 3
 #define GPU_QUAD 4
+
+#define KEY_ESC		53
+#define KEY_W		13
+#define KEY_A		0
+#define KEY_S		1
+#define KEY_D		2
+#define KEY_LARR	123
+#define KEY_RARR	124
+#define KEY_DARR	125
+#define KEY_UARR	126
+#define KEY_SPACE	49
+#define KEY_SHIFT	257
+#define KEY_TAB		48
+#define KEY_F		3
+
+#define MOVE_KEYS	(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
+#define ARR_KEYS	(key >= KEY_LARR  && key <= KEY_UARR)
+
+#define MOVING 
+
+#define MOVE_SPEED	10
+#define TURN_SPEED	M_PI / 30
 
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
@@ -54,19 +78,6 @@ typedef struct s_3x3
 	cl_float3 row2;
 	cl_float3 row3;
 }				t_3x3;
-
-typedef struct s_camera
-{
-	cl_float3 center;
-	cl_float3 normal;
-	float width;
-	float height;
-
-	cl_float3 focus;
-	cl_float3 origin;
-	cl_float3 d_x;
-	cl_float3 d_y;
-}				t_camera;
 
 typedef struct s_map
 {
@@ -241,7 +252,50 @@ typedef struct s_gpu_scene
 	cl_uint seed_count;
 }				gpu_scene;
 
+typedef struct	s_key
+{
+	_Bool		w;
+	_Bool		a;
+	_Bool		s;
+	_Bool		d;
+	_Bool		larr;
+	_Bool		rarr;
+	_Bool		darr;
+	_Bool		uarr;
+	_Bool		space;
+	_Bool		shift;
+}				t_key;
 
+typedef struct	s_camera
+{
+	cl_float3	pos;
+	cl_float3	dir;
+	float		width;
+	float		height;
+	float		dist;
+	float		angle_x;
+	float		angle_y;
+
+	cl_float3	focus;
+	cl_float3	origin;
+	cl_float3	d_x;
+	cl_float3	d_y;
+}				t_camera;
+
+typedef struct s_env
+{
+	void *mlx;
+	void *win;
+	void *img;
+	int	mode;
+	_Bool	show_fps;
+
+	Scene *scene;
+	t_camera cam;
+	cl_double3 *pixels;
+	t_key	key;
+	int samplecount;
+}				t_env;
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
 void study_tree(AABB *tree, int ray_count);
@@ -255,8 +309,6 @@ Face *object_flatten(Face *faces, int *face_count);
 
 ////Old stuff
 void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);
-
-void init_camera(t_camera *camera, int xres, int yres);
 
 Scene *import_file(t_camera *cam, unsigned int *samples);
 Scene *scene_from_obj(char *rel_path, char *filename);
@@ -283,6 +335,10 @@ cl_float3 vec_scale(const cl_float3 vec, const float scalar);
 cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
 cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec);
 t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b);
+cl_float3	vec_rotate_xy(const cl_float3 a, const float angle);
+cl_float3	vec_rotate_yz(const cl_float3 a, const float angle);
+cl_float3	vec_rotate_xz(const cl_float3 a, const float angle);
+cl_float3	vec_rotate_xyz(const cl_float3 a, const float angle_x, const float angle_y);
 cl_float3 vec_rev(cl_float3 v);
 void vec_rot(const cl_float3 rotate, cl_float3 *V);
 
@@ -295,3 +351,16 @@ void print_3x3(const t_3x3 mat);
 void print_clf3(cl_float3 v);
 float max3(float a, float b, float c);
 float min3(float a, float b, float c);
+
+//main.c
+void		set_camera(t_camera *cam);
+t_env		*init_env(Scene *S);
+
+//interactive.c
+void	interactive(t_env *env);
+
+//key_command.c
+int		exit_hook(int key, t_env *env);
+int		key_press(int key, t_env *env);
+int		key_release(int key, t_env *env);
+int		forever_loop(t_env *env);

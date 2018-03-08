@@ -90,7 +90,7 @@ t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b)
 {
 	//returns a matrix that will rotate vector a to be parallel with vector b.
 
-	const float angle = acos(dot(a,b) / (vec_mag(a) * vec_mag(b)));
+	const float angle = acos(dot(a,b));
 	const cl_float3 axis = unit_vec(cross(a, b));
 	t_3x3 rotation;
 	rotation.row1 = (cl_float3){	cos(angle) + axis.x * axis.x * (1 - cos(angle)),
@@ -105,6 +105,33 @@ t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b)
 								axis.z * axis.y * (1 - cos(angle)) + axis.x * sin(angle),
 								cos(angle) + axis.z * axis.z * (1 - cos(angle))};
 	return rotation;
+}
+
+cl_float3	vec_rotate_xy(const cl_float3 a, const float angle)
+{
+	cl_float3	res;
+	res.x = (a.x * cos(angle)) + (a.y * -sin(angle));
+	res.y = (a.x * sin(angle)) + (a.y * cos(angle));
+	res.z = a.z;
+	return res;
+}
+
+cl_float3	vec_rotate_yz(const cl_float3 a, const float angle)
+{
+	cl_float3	res;
+	res.x = a.x;
+	res.y = (a.y * cos(angle)) + (a.z * -sin(angle));
+	res.z = (a.y * sin(angle)) + (a.z * cos(angle));
+	return res;
+}
+
+cl_float3	vec_rotate_xz(const cl_float3 a, const float angle)
+{
+	cl_float3	res;
+	res.x = (a.x * cos(angle)) + (a.z * sin(angle));
+	res.y = a.y;
+	res.z = (a.x * -sin(angle)) + (a.z * cos(angle));
+	return res;
 }
 
 cl_float3 vec_rev(const cl_float3 v)
