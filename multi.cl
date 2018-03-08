@@ -276,7 +276,62 @@ __kernel void fetch(	__global Ray *rays,
 	rays[gid] = ray;
 }
 
-/////Bounce stuff
+/////GGX stuff
+
+static float GGX_eval(const float3 i, const float3 o, const float3 m, const float3 n, const float a, const float n1, const float n2)
+{
+	// == F * G * D / 4 |i dot n| |o dot n|
+	float denom = 4.0f * fmax(fabs(dot(i, n)), 0.00001f) * fmax(fabs(dot(o, n)), 0.00001f);
+
+	float f = GGX_F(i, m, n1, n2);
+	//printf("f is %f\n", f);
+	float g = GGX_G(i, o, m, n, a);
+	float d = GGX_D(a, dot(m,n));
+
+	if (f != f)
+		printf("f nan\n");
+	if (f == 0.0f)
+		return 0.0f;
+	if (g != g)
+		printf("g1 nan\n");
+	if (g == 0.0f)
+		return 0.0f;
+	if (d != d)
+		printf("d nan, inputs were %f %f\n", a, dot(m, n));
+	if (d == 0.0f)
+		return 0.0f;
+
+	float eval = f * g * d / denom;
+	if (eval != eval)
+		printf("eval nan, f %f g %f d %f denom %f\n", f, g, d, denom);
+
+	//printf("f %f g %f d %f / denom %f, eval %f\n", f, g, d, denom, f * g * d / denom);
+
+	return eval; //
+}
+
+static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
+{
+	//return a direction m with relative probability GGX_D(m)|m dot n|
+	float r1 = get_random(seed0, seed1);
+	float r2 = get_random(seed0, seed1);
+	float theta = atan(a * sqrt(r1) * rsqrt(1 - r1));
+	float phi = 2.0f * PI * r2;
+	
+	//local orthonormal system
+	float3 axis = fabs(n.x) > fabs(n.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+	float3 hem_x = cross(axis, n);
+	float3 hem_y = cross(n, hem_x);
+
+	float3 x = hem_x * native_sin(theta) * native_cos(phi);
+	float3 y = hem_y * native_sin(theta) * native_sin(phi);
+	float3 z = n * native_cos(theta);
+
+	float3 m = normalize(x + y + z);
+	if (dot(i,m) < 0.0f)
+			m = normalize(z - x - y);
+	return m;
+}
 
 static float GGX_D(const float a, const float cost)
 {
@@ -348,61 +403,6 @@ static float GGX_F(const float3 i, const float3 m, const float n1, const float n
 	return 0.5f * (gminc * gminc) / (gplusc * gplusc) * (1.0f + top / bot);
 }
 
-static float GGX_eval(const float3 i, const float3 o, const float3 m, const float3 n, const float a, const float n1, const float n2)
-{
-	// == F * G * D / 4 |i dot n| |o dot n|
-	float denom = 4.0f * fmax(fabs(dot(i, n)), 0.001f) * fmax(fabs(dot(o, n)), 0.001f);
-
-	float f = GGX_F(i, m, n1, n2);
-	//printf("f is %f\n", f);
-	float g = GGX_G(i, o, m, n, a);
-	float d = GGX_D(a, dot(m,n));
-
-	if (f != f)
-		printf("f nan\n");
-	if (f == 0.0f)
-		return 0.0f;
-	if (g != g)
-		printf("g1 nan\n");
-	if (g == 0.0f)
-		return 0.0f;
-	if (d != d)
-		printf("d nan, inputs were %f %f\n", a, dot(m, n));
-	if (d == 0.0f)
-		return 0.0f;
-
-	float eval = f * g * d / denom;
-	if (eval != eval)
-		printf("eval nan, f %f g %f d %f denom %f\n", f, g, d, denom);
-
-	//printf("f %f g %f d %f / denom %f, eval %f\n", f, g, d, denom, f * g * d / denom);
-
-	return eval; //
-}
-
-static float3 GGX_NDF(float3 i, float3 n, uint *seed0, uint *seed1, float a)
-{
-	//return a direction m with relative probability GGX_D(m)|m dot n|
-	float r1 = get_random(seed0, seed1);
-	float r2 = get_random(seed0, seed1);
-	float theta = atan(a * sqrt(r1) * rsqrt(1 - r1));
-	float phi = 2.0f * PI * r2;
-	
-	//local orthonormal system
-	float3 axis = fabs(n.x) > fabs(n.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-	float3 hem_x = cross(axis, n);
-	float3 hem_y = cross(n, hem_x);
-
-	float3 x = hem_x * native_sin(theta) * native_cos(phi);
-	float3 y = hem_y * native_sin(theta) * native_sin(phi);
-	float3 z = n * native_cos(theta);
-
-	float3 m = normalize(x + y + z);
-	if (dot(i,m) < 0.0f)
-			m = normalize(z - x - y);
-	return m;
-}
-
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
 {
 	float num = dot(i,m) * GGX_G(i, o, m, n, a);
@@ -456,15 +456,18 @@ __kernel void bounce( 	__global Ray *rays,
 	// 	ray.mask *= spec_importance > 0 ? ray.spec / spec_importance : 0;
 	// }
 
-	float spec_importance = ray.spec.x + ray.spec.y + ray.spec.z;
-	float diff_importance = ray.diff.x + ray.diff.y + ray.diff.z;
-	float total = spec_importance + diff_importance;
-	spec_importance /= total;
-	diff_importance /= total;
+	// float spec_importance = ray.spec.x + ray.spec.y + ray.spec.z;
+	// float diff_importance = ray.diff.x + ray.diff.y + ray.diff.z;
+	// float total = spec_importance + diff_importance;
+	// spec_importance /= total;
+	// diff_importance /= total;
 
-	float3 new_dir;
-	float r1 = get_random(&seed0, &seed1);
-	float r2 = get_random(&seed0, &seed1);
+	// float3 new_dir;
+	// float r1 = get_random(&seed0, &seed1);
+	// float r2 = get_random(&seed0, &seed1);
+
+	float spec_importance = ray.spec.x;
+	float diff_importance = 1 - spec_importance;
 
 	if(1 || get_random(&seed0, &seed1) < spec_importance)
 	{
@@ -475,7 +478,7 @@ __kernel void bounce( 	__global Ray *rays,
 
 		float3 n = ray.N;
 		float3 i = ray.direction * -1.0f;
-		float3 m = GGX_NDF(i, n, &seed0, &seed1, a); //sampling microfacet normal
+		float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
 		float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
 		
 		new_dir = o;
