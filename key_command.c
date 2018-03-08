@@ -9,15 +9,18 @@ int		exit_hook(int key, t_env *env)
 
 int		key_press(int key, t_env *env)
 {
+	// printf("%d\n", key);
 	if (key == KEY_ESC)
 		exit_hook(0, env);
-	if (key == KEY_TAB)
+	else if (key == KEY_TAB)
 	{
 		env->mode++;
-		if (env->mode > 3)
+		if (env->mode > 4)
 			env->mode = 1;
 	}
-	if (MOVE_KEYS || ARR_KEYS)
+	else if (key == KEY_F)
+		env->show_fps = (!env->show_fps) ? 1 : 0;
+	else if (MOVE_KEYS || ARR_KEYS)
 	{
 		if (MOVE_KEYS)
 		{
@@ -85,6 +88,7 @@ int		key_release(int key, t_env *env)
 
 int		forever_loop(t_env *env)
 {
+	clock_t	frame_start = clock();
 	if (env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.shift || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
 	{
 		if (env->key.w || env->key.a || env->key.s || env->key.d)
@@ -165,5 +169,12 @@ int		forever_loop(t_env *env)
 	interactive(env);
 	draw_pixels(env->img, XDIM, YDIM, env->pixels);
 	mlx_put_image_to_window(env->mlx, env->win, env->img, 0, 0);
+	if (env->show_fps)
+	{
+		float frames = 1.0f / (((float)clock() - (float)frame_start) / (float)CLOCKS_PER_SEC);
+		char *fps = NULL;
+		asprintf(&fps, "%lf", frames);
+		mlx_string_put(env->mlx, env->win, 0, 0, 0x00ff00, fps);
+	}
 	return 0;
 }

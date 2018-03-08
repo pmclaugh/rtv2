@@ -90,15 +90,15 @@ t_camera	init_camera(void)
 	t_camera	cam;
 	//cam.pos = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
 	//cam.pos = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
-	cam.pos = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
+	cam.pos = (cl_float3){800.0, 450.0, 0.0}; //standard high perspective on curtain
 	//cam.pos = (cl_float3){-800.0, 600.0, 350.0}; upstairs left
 	//cam.pos = (cl_float3){800.0, 100.0, 350.0}; //down left
 	//cam.pos = (cl_float3){900.0, 150.0, -35.0}; //lion
 	//cam.pos = (cl_float3){-250.0, 100.0, 0.0};
-	cam.dir = unit_vec((cl_float3){1.0, 0.0, 0.0});
+	cam.dir = unit_vec((cl_float3){-1.0, 0.0, 0.0});
 	cam.width = 1.0;
 	cam.height = 1.0;
-	cam.angle_x = 0;
+	cam.angle_x = atan2(cam.dir.z, cam.dir.x);
 	cam.angle_y = 0;
 	//determine a focus point in front of the view-plane
 	//such that the edge-focus-edge vertex has angle H_FOV
@@ -118,6 +118,7 @@ t_env		*init_env(Scene *S)
 	env->win = mlx_new_window(env->mlx, XDIM, YDIM, "PATH_TRACER");
 	env->img = mlx_new_image(env->mlx, XDIM, YDIM);
 	env->mode = 1;
+	env->show_fps = 0;
 	env->key.w = 0;
 	env->key.a = 0;
 	env->key.s = 0;

@@ -58,6 +58,7 @@
 #define KEY_SPACE	49
 #define KEY_SHIFT	257
 #define KEY_TAB		48
+#define KEY_F		3
 
 #define MOVE_KEYS	(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
 #define ARR_KEYS	(key >= KEY_LARR  && key <= KEY_UARR)
@@ -286,6 +287,7 @@ typedef struct s_env
 	void *win;
 	void *img;
 	int	mode;
+	_Bool	show_fps;
 
 	Scene *scene;
 	t_camera cam;
