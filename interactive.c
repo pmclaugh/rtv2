@@ -1,7 +1,8 @@
 #include "rt.h"
 
-#define EPS 0.00005
-#define MIN_LINE_WIDTH 200
+#define EPS 0.000025
+#define MIN_LINE_WIDTH 1000
+#define HEATMAP_RATIO .02f
 
 typedef struct	s_ray
 {
@@ -134,13 +135,13 @@ void	trace_bvh_heatmap(AABB *tree, t_ray *ray)
 		{
 			if (ray->color.z > 0.0)
 			{
-				ray->color.y += .02f;
-				ray->color.z -= .02f;
+				ray->color.y += HEATMAP_RATIO;
+				ray->color.z -= HEATMAP_RATIO;
 			}
 			else if (ray->color.x < 1.0f)
-				ray->color.x += .02f;
+				ray->color.x += HEATMAP_RATIO;
 			else
-				ray->color.y -= .02f;
+				ray->color.y -= HEATMAP_RATIO;
 			if (box->left) //boxes have either 0 or 2 children
 			{
 				stack_push(&stack, box->left);
