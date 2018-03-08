@@ -847,7 +847,6 @@ void partition(AABB *box)
 
 AABB *sbvh(Face *faces, int *box_count, int *refs)
 {
-
 	Split *test = calloc(1, sizeof(Split));
 
 	//put all faces in AABBs

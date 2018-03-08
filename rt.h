@@ -9,6 +9,7 @@
 #include <float.h>
 #include <time.h>
 #include <pthread.h>
+#include "qdbmp/qdbmp.h"
 
 #ifdef __APPLE__
 # include <OpenCL/cl.h>
@@ -303,15 +304,17 @@ gpu_bin *flatten_bvh(Scene *scene);
 float area(AABB *box);
 
 
-Face *ply_import(char *ply_file);
+Face *ply_import(char *ply_file, int *face_count);
 Face *object_flatten(Face *faces, int *face_count);
 
 ////Old stuff
 void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);
 
+Scene *import_file(t_camera *cam, unsigned int *samples);
 Scene *scene_from_obj(char *rel_path, char *filename);
+Scene *scene_from_ply(char *rel_path, char *filename);
 
-cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim);
+cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples);
 
 void old_bvh(Scene *S);
 Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
@@ -337,9 +340,12 @@ cl_float3	vec_rotate_yz(const cl_float3 a, const float angle);
 cl_float3	vec_rotate_xz(const cl_float3 a, const float angle);
 cl_float3	vec_rotate_xyz(const cl_float3 a, const float angle_x, const float angle_y);
 cl_float3 vec_rev(cl_float3 v);
+void vec_rot(const cl_float3 rotate, cl_float3 *V);
 
 
 //utility functions
+char *strtrim(char const *s);
+cl_float3 get_vec(const char *line);
 void print_vec(const cl_float3 vec);
 void print_3x3(const t_3x3 mat);
 void print_clf3(cl_float3 v);
@@ -348,7 +354,6 @@ float min3(float a, float b, float c);
 
 //main.c
 void		set_camera(t_camera *cam);
-t_camera	init_camera(void);
 t_env		*init_env(Scene *S);
 
 //interactive.c

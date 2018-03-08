@@ -2,6 +2,21 @@
 
 //various vector functions
 
+cl_float3 get_vec(const char *line)
+{
+	cl_float3 vec = (cl_float3){0, 0, 0};
+
+	char *ptr = strchr(line, '=') + 1;
+	vec.x = strtof(ptr, &ptr);
+	if (*ptr == ',')
+		++ptr;
+	vec.y = strtof(ptr, &ptr);
+	if (*ptr == ',')
+		++ptr;
+	vec.z = strtof(ptr, &ptr);
+	return vec;
+}
+
 void print_vec(const cl_float3 vec)
 {
 	printf("%f %f %f\n", vec.x, vec.y, vec.z);
@@ -122,4 +137,26 @@ cl_float3	vec_rotate_xz(const cl_float3 a, const float angle)
 cl_float3 vec_rev(const cl_float3 v)
 {
 	return (cl_float3){v.x * -1.0, v.y * -1.0, v.z * -1.0};
+}
+
+void vec_rot(const cl_float3 rotate, cl_float3 *V)
+{
+	float	angle;
+	float	tmp[2];
+
+	angle = (M_PI * rotate.x) / 180.0;
+	tmp[0] = V->z * cos(angle) + V->y * sin(angle);
+	tmp[1] = V->y * cos(angle) - V->z * sin(angle);
+	V->z = round(tmp[0]);
+	V->y = round(tmp[1]);
+	angle = (M_PI * rotate.y) / 180.0;
+	tmp[0] = V->x * cos(angle) + V->z * sin(angle);
+	tmp[1] = V->z * cos(angle) - V->x * sin(angle);
+	V->x = round(tmp[0]);
+	V->z = round(tmp[1]);
+	angle = (M_PI * rotate.z) / 180.0;
+	tmp[0] = V->x * cos(angle) + V->y * sin(angle);
+	tmp[1] = V->y * cos(angle) - V->x * sin(angle);
+	V->x = round(tmp[0]);
+	V->y = round(tmp[1]);
 }

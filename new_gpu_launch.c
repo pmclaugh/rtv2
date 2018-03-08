@@ -1,8 +1,6 @@
 #include "rt.h"
 #include <fcntl.h>
 
-#define SAMPLES_PER_DEVICE 50
-
 char *load_cl_file(char *file)
 {
 	int fd = open(file, O_RDONLY);
@@ -209,7 +207,7 @@ gpu_context *prep_gpu(void)
     return gpu;
 }
 
-cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution)
+cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, unsigned int samples)
 {
 	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
 	for (int i = 0; i < numDevices; i++)
@@ -231,7 +229,7 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution)
 	double Lw = 0.0;
 	for (int j = 0;j < resolution; j++)
 	{
-		double scale = 1.0 / (double)(SAMPLES_PER_DEVICE * numDevices);
+		double scale = 1.0 / (double)(samples * numDevices);
 		output_sum[j].x *= scale;
 		output_sum[j].y *= scale;
 		output_sum[j].z *= scale;
@@ -264,7 +262,7 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution)
 	return output_sum;
 }
 
-cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution)
+cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution, unsigned int samples)
 {
 	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
 	for (int i = 0; i < numDevices; i++)
@@ -282,7 +280,7 @@ cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution)
 
 	for (int j = 0;j < resolution; j++)
 	{
-		double scale = 1.0 / (double)(SAMPLES_PER_DEVICE * numDevices);
+		double scale = 1.0 / (double)(samples * numDevices);
 		output_sum[j].x *= scale;
 		output_sum[j].y *= scale;
 		output_sum[j].z *= scale;
@@ -295,7 +293,7 @@ cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution)
 	return output_sum;
 }
 
-cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
+cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples)
 {
 	static gpu_context *CL;
 	if (!CL)
@@ -348,7 +346,6 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 
 	size_t resolution = xdim * ydim;
 	size_t groupsize = 256;
-	size_t samples = SAMPLES_PER_DEVICE;
 	size_t width = xdim;
 
 	 printf("per-device alloc and copy\n");
@@ -449,5 +446,5 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim)
 	clReleaseKernel(render);
 
 	//printf("going to composite\n");
-	return composite(outputs, d, resolution);
+	return composite(outputs, d, resolution, samples);
 }

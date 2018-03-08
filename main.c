@@ -7,42 +7,6 @@
 
 //THIS DOESNT WORK RIGHT, JUST FOR TESTING
 #define H_FOV M_PI_2 * 60.0 / 90.0
-// t_camera	init_camera(int xres, int yres)
-// {
-// 	t_camera cam;
-// 	//cam.pos = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
-// 	//cam.pos = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
-// 	cam.pos = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
-// 	//cam.pos = (cl_float3){-800.0, 600.0, 350.0}; upstairs left
-// 	//cam.pos = (cl_float3){800.0, 100.0, 350.0}; //down left
-// 	//cam.pos = (cl_float3){900.0, 150.0, -35.0}; //lion
-// 	//cam.pos = (cl_float3){-250.0, 100.0, 0.0};
-// 	cam.dir = (cl_float3){1.0, 0.0, 0.0};
-// 	cam.width = 1.0;
-// 	cam.height = 1.0;
-// 	//determine a focus point in front of the view-plane
-// 	//such that the edge-focus-edge vertex has angle H_FOV
-
-// 	cam.dir = unit_vec(cam.dir);
-
-// 	float d = (cam.width / 2.0) / tan(H_FOV / 2.0);
-// 	cam.focus = vec_add(cam.pos, vec_scale(cam.dir, d));
-
-// 	//now i need unit vectors on the plane
-// 	t_3x3 camera_matrix = rotation_matrix(UNIT_Z, cam.dir);
-// 	cl_float3 camera_x, camera_y;
-// 	camera_x = mat_vec_mult(camera_matrix, UNIT_X);
-// 	camera_y = mat_vec_mult(camera_matrix, UNIT_Y);
-
-// 	//pixel deltas
-// 	cam.d_x = vec_scale(camera_x, cam.width / (float)xres);
-// 	cam.d_y = vec_scale(camera_y, cam.height / (float)yres);
-
-// 	//start at bottom corner (the plane's "origin")
-// 	cam.origin = vec_sub(cam.pos, vec_scale(camera_x, cam.width / 2.0));
-// 	cam.origin = vec_sub(cam.origin, vec_scale(camera_y, cam.height / 2.0));
-// 	return cam;
-// }
 
 void		set_camera(t_camera *cam)
 {
@@ -141,9 +105,24 @@ t_env		*init_env(Scene *S)
 int 		main(int ac, char **av)
 {
 	srand(time(NULL));
-
-	//Load scene
-	Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
+	t_camera cam;
+	cam.pos = (cl_float3){-800, 450, 0};
+	cam.dir = (cl_float3){1, 0, 0};
+  //cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
+	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
+	//cam.center = (cl_float3){0, 650, 0}; //standard high perspective on curtain
+	//cam.center = (cl_float3){-800.0, 600.0, 350.0}; upstairs left
+	//cam.center = (cl_float3){800.0, 100.0, 350.0}; //down left
+	//cam.center = (cl_float3){900.0, 150.0, -35.0}; //lion
+	//cam.center = (cl_float3){-250.0, 100.0, 0.0};
+  //	cam.normal = (cl_float3){1.0, 0.0, 0.0};
+	cam.width = 1.0;
+	cam.height = 1.0;
+	cam.dist = (cam.width / 2.0) / tan(H_FOV / 2.0);
+	unsigned int samples = 50;
+	Scene *sponza = import_file(&cam, &samples);
+  cam.angle_x = atan2(cam.dir.z, cam.dir.x);
+	cam.angle_y = 0;
 
 	//LL is best for this bvh. don't want to rearrange import for now, will do later
 	Face *face_list = NULL;
@@ -169,8 +148,23 @@ int 		main(int ac, char **av)
 	printf("about to flatten\n");
 	flatten_faces(sponza);
 	printf("starting render\n");
+
+// 	cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM, samples);
+
+// 	void *mlx = mlx_init();
+// 	void *win = mlx_new_window(mlx, XDIM, YDIM, "pathtracer");
+// 	void *img = mlx_new_image(mlx, XDIM, YDIM);
+// 	draw_pixels(img, XDIM, YDIM, pixels);
+// 	mlx_put_image_to_window(mlx, win, img, 0, 0);
+
+// // 	t_param *param = calloc(1, sizeof(t_param));
+// 	*param = (t_param){mlx, win, img, XDIM, YDIM, sponza, cam, NULL, 0};
 	
-	//Render
+// 	mlx_key_hook(win, key_hook, param);
+// 	mlx_loop(mlx);
+
+	printf("all done\n");
+  //Render
 	t_env		*env = init_env(sponza);
 	return 0;
 }
