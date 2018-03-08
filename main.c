@@ -6,8 +6,9 @@
 # define quit_key 12
 #endif
 
-#define XDIM 1024
-#define YDIM 1024
+
+#define XDIM 512
+#define YDIM 512
 #define SPP_PER_DEVICE 200
 
 typedef struct s_param
@@ -123,12 +124,31 @@ Scene *scene_from_ply(char *filename)
 	return scene;
 }
 
+Scene *scene_from_stl(char *filename)
+{
+	Face *ply = stl_import(filename);
+	int box_count, ref_count;
+
+	Scene *scene = calloc(1, sizeof(Scene));
+	scene->materials = calloc(1, sizeof(Material));
+	scene->materials->Kd = (cl_float3){0.2f, 0.2f, 0.7f};
+	scene->materials->Ka = (cl_float3){0.4f, 0.4f, 0.4f};
+	scene->mat_count = 1;
+	scene->bins = sbvh(ply, &box_count, &ref_count);
+	study_tree(scene->bins, 10000);
+	scene->face_count = ref_count;
+	scene->bin_count = box_count;
+	flatten_faces(scene);
+	return scene;
+}
+
 int main(int ac, char **av)
 {
 	srand(time(NULL));
-
-	Scene *bunny = scene_from_ply("objects/ply/dragon.ply");
-
+	// scene_from_stl("iona.stl");
+	
+	// return 0;
+	Scene *scene = scene_from_ply("objects/ply/bunny.ply");
 	//return 0;
 	// Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 
@@ -170,7 +190,6 @@ int main(int ac, char **av)
 	//cam.center = (cl_float3){-250.0, 100.0, 0.0};
 	//cam.center = (cl_float3){-3000.0, 2200.0, 0.0}; //outside
 
-
 	// cam.center = (cl_float3){-1.1, 0.1, 0.0}; //bunn
 	cam.center = (cl_float3){0.0, 0.12, -0.35}; //trogdor
 
@@ -179,10 +198,11 @@ int main(int ac, char **av)
 	cam.normal = unit_vec(cam.normal);
 	cam.width = 0.1f * (float)XDIM / (float)YDIM;
 	cam.height = 0.1f;
+
 	init_camera(&cam, XDIM, YDIM);
 	//printf("%lu\n", sizeof(gpu_bin));
 
-	cl_double3 *pixels = gpu_render(bunny, cam, XDIM, YDIM, SPP_PER_DEVICE);
+	cl_double3 *pixels = gpu_render(scene, cam, XDIM, YDIM, SPP_PER_DEVICE);
 
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, XDIM, YDIM, "RTV1");
@@ -192,7 +212,7 @@ int main(int ac, char **av)
 	mlx_put_image_to_window(mlx, win, img, 0, 0);
 
 	t_param *param = calloc(1, sizeof(t_param));
-	*param = (t_param){mlx, win, img, XDIM, YDIM, bunny, cam, NULL, 0};
+	*param = (t_param){mlx, win, img, XDIM, YDIM, scene, cam, NULL, 0};
 	
 	mlx_key_hook(win, key_hook, param);
 	mlx_loop(mlx);

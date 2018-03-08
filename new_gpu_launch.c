@@ -417,10 +417,11 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 	//ACTUAL LAUNCH TIME
 	cl_event begin, finish;
 	cl_ulong start, end;
-	cl_event collectE, traverseE, fetchE, bounceE;
+	
 	for (int i = 0; i < d; i++)
 		for (int j = 0; j < samples; j++)
 		{
+			cl_event collectE, traverseE, fetchE, bounceE;
 			clEnqueueNDRangeKernel(CL->commands[i], collect[i], 1, 0, &worksize, &localsize, j == 0 ? 0 : 1, j == 0 ? NULL : &bounceE, &collectE);
 			clEnqueueNDRangeKernel(CL->commands[i], traverse[i], 1, 0, &worksize, &localsize, 1, &collectE, &traverseE);
 			clEnqueueNDRangeKernel(CL->commands[i], fetch[i], 1, 0, &worksize, &localsize, 1, &traverseE, &fetchE);

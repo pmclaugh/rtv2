@@ -114,7 +114,7 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 }
 
 //intersect_box
-static inline int intersect_box(Ray ray, Box b, float t)
+static inline int intersect_box(Ray ray, Box b, float t, float *t_out)
 {
 	float tx0 = (b.minx - ray.origin.x) * ray.inv_dir.x;
 	float tx1 = (b.maxx - ray.origin.x) * ray.inv_dir.x;
@@ -127,7 +127,7 @@ static inline int intersect_box(Ray ray, Box b, float t)
 	float tymax = fmax(ty0, ty1);
 
 
-	if ((tmin >= tymax) || (tymin >= tmax))
+	if ((tmin > tymax) || (tymin > tmax))
 		return (0);
 
 	tmin = fmax(tymin, tmin);
@@ -138,17 +138,18 @@ static inline int intersect_box(Ray ray, Box b, float t)
 	float tzmin = fmin(tz0, tz1);
 	float tzmax = fmax(tz0, tz1);
 
-	if ((tmin >= tzmax) || (tzmin >= tmax))
+	if ((tmin > tzmax) || (tzmin > tmax))
 		return (0);
 
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
 
-	if (tmin > t)
+	if (tmin >= t)
 		return (0);
-
 	if (tmin <= 0.0f && tmax <= 0.0f)
 		return (0);
+	if (t_out)
+		*t_out = fmax(0.0f, tmin);
 	return (1);
 }
 
@@ -165,8 +166,6 @@ static inline void intersect_triangle(Ray ray, __global float3 *V, int test_i, i
 	float3 h = cross(ray.direction, e2);
 	float a = dot(h, e1);
 
-	if (fabs(a) == 0.0f)
-		return;
 	float f = 1.0f / a;
 	float3 s = ray.origin - v0;
 	this_u = f * dot(s, h);
@@ -263,10 +262,8 @@ __kernel void fetch(	__global Ray *rays,
 
 	float3 txcrd;
 	fetch_NT(V, N, T, ray.direction, ray.hit_ind, ray.u, ray.v, &ray.N, &txcrd);
-
-	fetch_all_tex(mats, M[ray.hit_ind / 3], tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
-
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
+	fetch_all_tex(mats, M[ray.hit_ind / 3], tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
 	ray.status = BOUNCE;
 
 	if (ray.trans.x < 1.0)
@@ -589,14 +586,19 @@ __kernel void traverse(	__global Ray *rays,
 	int stack[32];
 	stack[0] = 0;
 	int s_i = 1;
-
+  
 	while (s_i)
 	{
-		//pop
-		Box b = boxes[stack[--s_i]];
+		int b_i = stack[--s_i];
+		Box b;
+
+		if (b_i < 2048)
+			b = boost[b_i];
+		else
+			b = boxes[b_i];
 
 		//check
-		if (intersect_box(ray, b, t))
+		if (intersect_box(ray, b, t, 0))
 		{
 			if (b.rind < 0)
 			{
@@ -607,8 +609,28 @@ __kernel void traverse(	__global Ray *rays,
 			}
 			else
 			{
-				stack[s_i++] = b.lind;
-				stack[s_i++] = b.rind;
+				Box l, r;
+				int lind = b.lind;
+				if (b.lind < 2048)
+				{
+					l = boost[lind];
+					r = boost[lind + 1];
+				}
+				else
+				{
+					l = boxes[lind];
+					r = boxes[lind + 1];
+				}
+                float t_l = FLT_MAX;
+                float t_r = FLT_MAX;
+                int lhit = intersect_box(ray, l, t, &t_l);
+                int rhit = intersect_box(ray, r, t, &t_r);
+                if (lhit && t_l >= t_r)
+                    stack[s_i++] = lind;
+                if (rhit)
+                    stack[s_i++] = lind + 1;
+                if (lhit && t_l < t_r)
+                    stack[s_i++] = lind;
 			}
 		}
 	}

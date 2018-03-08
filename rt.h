@@ -299,6 +299,8 @@ int y_sort(const void *arg1, const void *arg2);
 int z_sort(const void *arg1, const void *arg2);
 float SA_overlap(Split *split);
 
+Face *stl_import(char *stl_file);
+
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
 void study_tree(AABB *tree, int ray_count);
