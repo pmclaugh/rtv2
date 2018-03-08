@@ -47,6 +47,12 @@
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
 
+enum axis{
+	X_AXIS,
+	Y_AXIS,
+	Z_AXIS
+};
+
 typedef struct s_3x3
 {
 	cl_float3 row1;
@@ -243,7 +249,58 @@ typedef struct s_gpu_scene
 	cl_uint seed_count;
 }				gpu_scene;
 
+typedef struct s_split
+{
+	AABB *left;
+	AABB *left_flex;
+	AABB *right;
+	AABB *right_flex;
+	int left_count;
+	int right_count;
+	int both_count;
+
+	enum axis ax;
+	float ratio;
+}				Split;
+
+//bvh_util.c
+#define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
+#define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
+#define SPLIT_TEST_NUM 30
+#define LEAF_THRESHOLD 8
+#define BOOST_DEPTH 11
+#define ALPHA 0.001f
+#define SPLIT_SPOT ((float)i + 1.0f) / (SPLIT_TEST_NUM + 1.0f) 
+
+cl_float3 center(const AABB *box);
+void push(AABB **stack, AABB *box);
+AABB *pop(AABB **stack);
+AABB *empty_box();
+AABB *box_from_points(cl_float3 *points, int pt_count);
+AABB *box_from_face(Face *face);
+void flex_box(AABB *box, AABB *added);
+AABB *box_from_boxes(AABB *boxes);
+AABB *dupe_box(AABB* box);
+int point_in_box(cl_float3 point, AABB *box);
+int box_in_box(AABB *box, AABB *in);
+int all_in(AABB *box, AABB *in);
+void print_box(AABB *box);
+void print_face(Face *f);
+int edge_clip(cl_float3 A, cl_float3 B, AABB *clipping, cl_float3 *points, int *pt_count, int *res_a, int *res_b);
+void clip_box(AABB *box, AABB *bound);
+Split *new_split(AABB *box, enum axis a, float ratio);
+void free_split(Split *split);
+void print_split(Split *split);
+float SA(AABB *box);
+float SAH(Split *split, AABB *parent);
+Split *pick_best(Split **splits, AABB *parent);
+int x_sort(const void *arg1, const void *arg2);
+int y_sort(const void *arg1, const void *arg2);
+int z_sort(const void *arg1, const void *arg2);
+float SA_overlap(Split *split);
+
 Face *stl_import(char *stl_file);
+
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
 void study_tree(AABB *tree, int ray_count);
