@@ -299,22 +299,23 @@ static float GGX_D(float a, float cost)
 
 static float GGX_G1(float3 v, float3 m, float3 n, float a)
 {
-	float chi = dot(v,m) / dot(v,n) > 0.0f ? 1.0f : 0.0f;
+	float chi = dot(v,m) / fmax(dot(v,n), 0.00001f) > 0.0f ? 1.0f : 0.0f;
 	if (chi == 0.0f)
 		return 0.0f;
 
-	float theta = acos(dot(v, m));
+	float theta = acos(fmin(dot(v, m), 0.99999f));
 	float radicand = 1.0f + a * a * tan(theta) * tan(theta);
 
 	float ret = 2.0f / (1.0f + sqrt(radicand));
+
+	if (ret != ret)
+		printf("ret %f, dot(v, m) %f theta %f radicand %f\n", ret, dot(v, m), theta, radicand);
 
 	return ret;
 }
 
 static float GGX_G(float3 i, float3 o, float3 m, float3 n, float a)
 {
-	if (dot(i,m) * dot(i,n) <= 0.0f || dot(o,m) * dot(o,n) <= 0.0f)
-		return 0.0f;
 	float g1 = GGX_G1(i, m, n, a);
 	float g2 = GGX_G1(o, m, n, a);
 	if (g1 != g1)
@@ -341,11 +342,16 @@ static float GGX_F(float3 i, float3 m, float n1, float n2)
 
 static float GGX_eval(float3 i, float3 o, float3 m, float3 n, float a, float n1, float n2)
 {
+	//G is zero under these conditions, fail early to avoid nans
+	if (dot(i, m) * dot(i, n) < 0.0f)
+		return 0.0f;
+	if (dot(o, m) * dot(o,n) < 0.0f)
+		return 0.0f;
+
 	// == F * G * D / 4 |i dot n| |o dot n|
 	float denom = 4.0f * fmax(fabs(dot(i, n)), 0.00001f) * fmax(fabs(dot(o, n)), 0.00001f);
 
-	float f = GGX_F(i, m, n1, n2);
-	//f = 1.0f
+	float f = GGX_F(i, n, n1, n2);
 	//printf("f is %f\n", f);
 	float g = GGX_G(i, o, m, n, a);
 	float d = GGX_D(a, dot(m,n));
@@ -363,7 +369,7 @@ static float GGX_eval(float3 i, float3 o, float3 m, float3 n, float a, float n1,
 	if (d == 0.0f)
 		return 0.0f;
 
-	float eval = f * g * d / denom;
+	float eval = g * d / denom;
 	if (eval != eval)
 		printf("eval nan, f %f g %f d %f denom %f\n", f, g, d, denom);
 
@@ -390,16 +396,12 @@ static float3 GGX_NDF(float3 i, float3 n, uint *seed0, uint *seed1, float a)
 	float3 z = n * native_cos(theta);
 
 	float3 m = normalize(x + y + z);
-	if (dot(i,m) < 0.0f)
-			m = normalize(z - x - y);
 	return m;
 }
 
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
 {
 	float num = dot(i,m) * GGX_G(i, o, m, n, a);
-	if (num == 0.0f)
-		return 1.0f; //safe because G term in numerator of Fs will also be zero
 	float denom = dot(i, n) * dot(m, n);
 	float weight = num / denom;
 	// printf("weight %f\n", weight);
@@ -427,15 +429,15 @@ __kernel void bounce( 	__global Ray *rays,
 	// spec_importance /= total;
 	// diff_importance /= total;
 
-	float spec_importance = ray.spec.x;
+	float spec_importance = 1.0f;
 	float diff_importance = 1.0f - spec_importance;
 
 	if(1 || get_random(&seed0, &seed1) < spec_importance)
 	{
 		//let's just hardcode these for now
-		float a = 0.8f;
+		float a = 1.0f;
 		float n1 = 1.0f;
-		float n2 = 2.0f;
+		float n2 = 1.0f;
 
 		float3 n = ray.N;
 		float3 i = ray.direction * -1.0f;
@@ -447,7 +449,7 @@ __kernel void bounce( 	__global Ray *rays,
 		float eval = GGX_eval(i, o, m, n, a, n1, n2);
 		float weight = GGX_weight(i, o, m, n, a);
 
-		ray.mask *= spec_importance > 0 ? (ray.spec * eval * weight) / (spec_importance) : 0;
+		ray.mask *= eval > 0.0f ? (ray.spec * eval) / (spec_importance * weight) : 0.0f;
 	}
 	// if(get_random(&seed0, &seed1) < spec_importance)
 	// {
