@@ -148,7 +148,7 @@ int main(int ac, char **av)
 	// scene_from_stl("iona.stl");
 	
 	// return 0;
-	Scene *scene = scene_from_ply("objects/ply/bunny.ply");
+	Scene *scene = scene_from_ply("objects/ply/dragon.ply");
 	//return 0;
 	// Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 
