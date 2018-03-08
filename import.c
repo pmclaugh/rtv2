@@ -78,14 +78,14 @@ Scene	*import_file(t_camera *cam, unsigned int *samples)
 		if (strncmp(line, "import=", 7) == 0 && i < 4)
 			sscanf(line, "import=%s", file_path[i++]);
 		if (strncmp(line, "camera.position=", 16) == 0)
-			cam->center = get_vec(line);
+			cam->pos = get_vec(line);
 		if (strncmp(line, "camera.normal=", 14) == 0)
-			cam->normal = unit_vec(get_vec(line));
+			cam->dir = unit_vec(get_vec(line));
 		if (strncmp(line, "samples=", 8) == 0)
 			*samples = (unsigned int)strtoul(strchr(line, '=') + 1, NULL, 10);
 	}
-	printf("cam->center= %.0f %.0f %.0f\n", cam->center.x, cam->center.y, cam->center.z);
-	printf("cam->normal= %.3f %.3f %.3f\n", cam->normal.x, cam->normal.y, cam->normal.z);
+	printf("cam->pos= %.0f %.0f %.0f\n", cam->pos.x, cam->pos.y, cam->pos.z);
+	printf("cam->dir= %.3f %.3f %.3f\n", cam->dir.x, cam->dir.y, cam->dir.z);
 	printf("samples= %u\n", *samples);
 	free(line);
 	fclose(fp);

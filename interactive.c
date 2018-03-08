@@ -1,7 +1,7 @@
 #include "rt.h"
 
 #define EPS 0.000025
-#define MIN_LINE_WIDTH 1000
+#define MIN_EDGE_WIDTH 1000
 #define HEATMAP_RATIO .02f
 
 typedef struct	s_ray
@@ -9,10 +9,10 @@ typedef struct	s_ray
 	cl_float3	origin;
 	cl_float3	direction;
 	cl_float3	inv_dir;
-	float		t;
 	cl_float3	N;
 	cl_double3	color;
-	_Bool		edge;
+	float		t;
+	_Bool		poly_edge;
 }				t_ray;
 
 /////////////////////////////////////////////////////////////////////////
@@ -84,7 +84,8 @@ float	intersect_triangle(t_ray *ray, const cl_float3 v0, const cl_float3 v1, con
 	if (v < 0.0 || u + v > 1.0)
 		return -1;
 	t = f * dot(e2, q);
-	if (u < (t + MIN_LINE_WIDTH) * EPS || v < (t + MIN_LINE_WIDTH) * EPS || 1 - u - v < (t + MIN_LINE_WIDTH) * EPS)
+	float	edge_width = (t + MIN_EDGE_WIDTH) * EPS;
+	if (u < edge_width || v < edge_width || 1 - u - v < edge_width)
 		*edge = 1;
 	return t;
 }
@@ -98,7 +99,7 @@ void check_triangles(t_ray *ray, AABB *box)
 		t = intersect_triangle(ray, member->f->verts[0], member->f->verts[1], member->f->verts[2], &edge);
 		if (t > 0 && t < ray->t)
 		{
-			ray->edge = edge;
+			ray->poly_edge = edge;
 			ray->t = t;
 			ray->N = unit_vec(cross(vec_sub(member->f->verts[1], member->f->verts[0]), vec_sub(member->f->verts[2], member->f->verts[0])));
 		}
@@ -193,7 +194,7 @@ void	trace_scene(AABB *tree, t_ray *ray, int mode)
 				check_triangles(ray, box);
 		}
 	}
-	if (ray->edge && mode == 2)
+	if (ray->poly_edge && mode == 2)
 		ray->color = (cl_double3){.25, .25, .25};
 	else
 	{
@@ -218,7 +219,7 @@ t_ray	generate_ray(t_camera cam, float x, float y)
 	ray.inv_dir.y = 1.0f / ray.direction.y;
 	ray.inv_dir.z = 1.0f / ray.direction.z;
 	ray.t = FLT_MAX;
-	ray.edge = 0;
+	ray.poly_edge = 0;
 	return ray;
 }
 
