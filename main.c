@@ -7,8 +7,8 @@
 #endif
 
 
-#define XDIM 1024
-#define YDIM 1024
+#define XDIM 512
+#define YDIM 512
 #define SPP_PER_DEVICE 600
 
 typedef struct s_param
@@ -147,32 +147,32 @@ int main(int ac, char **av)
 	srand(time(NULL));
 	// scene_from_stl("iona.stl");
 	
-	// Scene *scene = scene_from_ply("objects/ply/dragon.ply");
+	Scene *scene = scene_from_ply("objects/ply/dragon.ply");
 
-	Scene *scene = scene_from_obj("objects/sponza/", "sponza.obj");
+	// Scene *scene = scene_from_obj("objects/sponza/", "sponza.obj");
 
-	// LL is best for this bvh. don't want to rearrange import for now, will do later
-	Face *face_list = NULL;
-	for (int i = 0; i < scene->face_count; i++)
-	{
-		Face *f = calloc(1, sizeof(Face));
-		memcpy(f, &scene->faces[i], sizeof(Face));
-		f->next = face_list;
-		face_list = f;
-	}
-	free(scene->faces);
+	// // LL is best for this bvh. don't want to rearrange import for now, will do later
+	// Face *face_list = NULL;
+	// for (int i = 0; i < scene->face_count; i++)
+	// {
+	// 	Face *f = calloc(1, sizeof(Face));
+	// 	memcpy(f, &scene->faces[i], sizeof(Face));
+	// 	f->next = face_list;
+	// 	face_list = f;
+	// }
+	// free(scene->faces);
 
-	int box_count, ref_count;
-	AABB *tree = sbvh(face_list, &box_count, &ref_count);
-	printf("finished with %d boxes\n", box_count);
-	study_tree(tree, 100000);
+	// int box_count, ref_count;
+	// AABB *tree = sbvh(face_list, &box_count, &ref_count);
+	// printf("finished with %d boxes\n", box_count);
+	// study_tree(tree, 100000);
 
 
-	scene->bins = tree;
-	scene->bin_count = box_count;
-	scene->face_count = ref_count;
-	printf("about to flatten\n");
-	flatten_faces(scene);
+	// scene->bins = tree;
+	// scene->bin_count = box_count;
+	// scene->face_count = ref_count;
+	// printf("about to flatten\n");
+	// flatten_faces(scene);
 
 	//return 0;
 
@@ -190,10 +190,10 @@ int main(int ac, char **av)
 	//cam.center = (cl_float3){-3000.0, 2200.0, 0.0}; //outside
 
 	// cam.center = (cl_float3){-0.3, 0.1, 0.0}; //bunn
-	cam.normal = (cl_float3){1.0, 0.0, 0.0};
+	// cam.normal = (cl_float3){1.0, 0.0, 0.0};
 
-	// cam.center = (cl_float3){0.0, 0.12, -0.35}; //trogdor
-	// cam.normal = (cl_float3){0.0, 0.0, 1.0};
+	cam.center = (cl_float3){0.0, 0.12, -0.25}; //trogdor
+	cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
 	cam.normal = unit_vec(cam.normal);
 	cam.width = 0.1f * (float)XDIM / (float)YDIM;

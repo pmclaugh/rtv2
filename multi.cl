@@ -303,7 +303,7 @@ static float GGX_G1(const float3 v, const float3 m, const float3 n, const float 
 	if (chi == 0.0f)
 		return 0.0f;
 
-	float theta = acos(dot(v, n));
+	float theta = acos(dot(v, m));
 	float radicand = 1.0f + a * a * tan(theta) * tan(theta);
 
 	float ret = 2.0f / (1.0f + sqrt(radicand));
@@ -466,10 +466,10 @@ __kernel void bounce( 	__global Ray *rays,
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
 
-	if(1 && get_random(&seed0, &seed1) < spec_importance)
+	if(1 || get_random(&seed0, &seed1) < spec_importance)
 	{
 		//let's just hardcode these for now
-		float a = 0.1f;
+		float a = 0.8f;
 		float n1 = 1.0f;
 		float n2 = 2.0f;
 
@@ -541,7 +541,7 @@ __kernel void collect(	__global Ray *rays,
 		if (ray.hit_ind == -1)
 		{
 			if (ray.bounce_count != 0)
-				output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 5.0f);
+				output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS;// * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 5.0f);
 			else
 				output[ray.pixel_id] += 0.1f * SUN_BRIGHTNESS;
 		}
