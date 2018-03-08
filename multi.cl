@@ -280,15 +280,17 @@ __kernel void fetch(	__global Ray *rays,
 
 static float GGX_D(const float a, const float cost)
 {
+	if (1.0f - cost < 0.001)
+		return 1.0f;
 	float a2 = a * a;
 	float chi = cost > 0.0f ? 1.0f : 0.0f;
 	if (chi == 0.0f)
 		return 0.0f;
-	float num = a2 * chi;
+	float num = a * chi;
 
 	float theta = acos(cost);
 	float cos4 = cost * cost * cost * cost;
-	float tsq = a2 + tan(theta) * tan(theta);
+	float tsq = a + tan(theta) * tan(theta);
 	tsq *= tsq;
 	float denom = PI * cos4 * tsq;
 
@@ -323,6 +325,7 @@ static float GGX_G(const float3 i, const float3 o, const float3 m, const float3 
 		printf("g2 nan\n");
 	if (g2 == 0.0f)
 		return 0.0f;
+	return g1 * g2;
 }
 
 static float GGX_F(const float3 i, const float3 m, const float n1, const float n2)
@@ -368,11 +371,11 @@ static float GGX_eval(const float3 i, const float3 o, const float3 m, const floa
 	if (d == 0.0f)
 		return 0.0f;
 
-	float eval = f * g1 * g2 * d / denom;
+	float eval = f * g * d / denom;
 	if (eval != eval)
-		printf("eval nan, f %f g1 %f g2 %d d %f denom %f\n", f, g1, g2, d, denom);
+		printf("eval nan, f %f g %f d %f denom %f\n", f, g, d, denom);
 
-	//printf("gi %f go %f d %f / denom %f, eval %f\n", g1, g2, d, denom, g1 * g2 * d / denom);
+	//printf("f %f g %f d %f / denom %f, eval %f\n", f, g, d, denom, f * g * d / denom);
 
 	return eval; //
 }
@@ -402,15 +405,14 @@ static float3 GGX_NDF(float3 i, float3 n, uint *seed0, uint *seed1, float a)
 
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
 {
-	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a);
+	float num = dot(i,m) * GGX_G(i, o, m, n, a);
 	if (num == 0.0f)
 		return 1.0f; //safe because G term in numerator of Fs will also be zero
 	float denom = dot(i, n) * dot(m, n);
 	float weight = num / denom;
-	if (weight != weight)
-		printf("weight nan\n");
+	// printf("weight %f\n", weight);
 
-	return fmax(num / denom, 0.001f);
+	return num / denom;
 }
 
 __kernel void bounce( 	__global Ray *rays,
@@ -464,18 +466,18 @@ __kernel void bounce( 	__global Ray *rays,
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
 
-	if(get_random(&seed0, &seed1) < spec_importance)
+	if(1 && get_random(&seed0, &seed1) < spec_importance)
 	{
 		//let's just hardcode these for now
-		float a = 0.01f;
+		float a = 0.1f;
 		float n1 = 1.0f;
-		float n2 = 1.0f;
+		float n2 = 2.0f;
 
 		float3 n = ray.N;
-		float3 m = GGX_NDF(i, n, &seed0, &seed1, a); //sampling microfacet normal
-
-		float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
 		float3 i = ray.direction * -1.0f;
+		float3 m = GGX_NDF(i, n, &seed0, &seed1, a); //sampling microfacet normal
+		float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
+		
 		new_dir = o;
 
 		float eval = GGX_eval(i, o, m, n, a, n1, n2);

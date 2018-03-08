@@ -266,10 +266,10 @@ typedef struct s_split
 //bvh_util.c
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
-#define SPLIT_TEST_NUM 30
-#define LEAF_THRESHOLD 8
+#define SPLIT_TEST_NUM 10
+#define LEAF_THRESHOLD 16
 #define BOOST_DEPTH 11
-#define ALPHA 0.001f
+#define ALPHA 0.01f
 #define SPLIT_SPOT ((float)i + 1.0f) / (SPLIT_TEST_NUM + 1.0f) 
 
 cl_float3 center(const AABB *box);

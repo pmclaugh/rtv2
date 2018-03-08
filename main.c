@@ -9,7 +9,7 @@
 
 #define XDIM 512
 #define YDIM 512
-#define SPP_PER_DEVICE 200
+#define SPP_PER_DEVICE 2000
 
 typedef struct s_param
 {
@@ -148,7 +148,7 @@ int main(int ac, char **av)
 	// scene_from_stl("iona.stl");
 	
 	// return 0;
-	Scene *scene = scene_from_ply("objects/ply/dragon.ply");
+	Scene *scene = scene_from_ply("objects/ply/bunny.ply");
 	//return 0;
 	// Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
 
@@ -190,10 +190,11 @@ int main(int ac, char **av)
 	//cam.center = (cl_float3){-250.0, 100.0, 0.0};
 	//cam.center = (cl_float3){-3000.0, 2200.0, 0.0}; //outside
 
-	// cam.center = (cl_float3){-1.1, 0.1, 0.0}; //bunn
-	cam.center = (cl_float3){0.0, 0.12, -0.35}; //trogdor
+	cam.center = (cl_float3){-0.3, 0.1, 0.0}; //bunn
+	cam.normal = (cl_float3){1.0, 0.0, 0.0};
 
-	cam.normal = (cl_float3){0.0, 0.0, 1.0};
+	// cam.center = (cl_float3){0.0, 0.12, -0.35}; //trogdor
+	// cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
 	cam.normal = unit_vec(cam.normal);
 	cam.width = 0.1f * (float)XDIM / (float)YDIM;
