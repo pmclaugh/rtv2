@@ -7,9 +7,9 @@
 #endif
 
 
-#define XDIM 512
-#define YDIM 512
-#define SPP_PER_DEVICE 2000
+#define XDIM 1024
+#define YDIM 1024
+#define SPP_PER_DEVICE 600
 
 typedef struct s_param
 {
@@ -147,41 +147,40 @@ int main(int ac, char **av)
 	srand(time(NULL));
 	// scene_from_stl("iona.stl");
 	
-	// return 0;
-	Scene *scene = scene_from_ply("objects/ply/bunny.ply");
-	//return 0;
-	// Scene *sponza = scene_from_obj("objects/sponza/", "sponza.obj");
+	// Scene *scene = scene_from_ply("objects/ply/dragon.ply");
 
-	// // LL is best for this bvh. don't want to rearrange import for now, will do later
-	// Face *face_list = NULL;
-	// for (int i = 0; i < sponza->face_count; i++)
-	// {
-	// 	Face *f = calloc(1, sizeof(Face));
-	// 	memcpy(f, &sponza->faces[i], sizeof(Face));
-	// 	f->next = face_list;
-	// 	face_list = f;
-	// }
-	// free(sponza->faces);
+	Scene *scene = scene_from_obj("objects/sponza/", "sponza.obj");
 
-	// int box_count, ref_count;
-	// AABB *tree = sbvh(face_list, &box_count, &ref_count);
-	// printf("finished with %d boxes\n", box_count);
-	// study_tree(tree, 100000);
+	// LL is best for this bvh. don't want to rearrange import for now, will do later
+	Face *face_list = NULL;
+	for (int i = 0; i < scene->face_count; i++)
+	{
+		Face *f = calloc(1, sizeof(Face));
+		memcpy(f, &scene->faces[i], sizeof(Face));
+		f->next = face_list;
+		face_list = f;
+	}
+	free(scene->faces);
+
+	int box_count, ref_count;
+	AABB *tree = sbvh(face_list, &box_count, &ref_count);
+	printf("finished with %d boxes\n", box_count);
+	study_tree(tree, 100000);
 
 
-	// sponza->bins = tree;
-	// sponza->bin_count = box_count;
-	// sponza->face_count = ref_count;
-	// printf("about to flatten\n");
-	// flatten_faces(sponza);
+	scene->bins = tree;
+	scene->bin_count = box_count;
+	scene->face_count = ref_count;
+	printf("about to flatten\n");
+	flatten_faces(scene);
 
 	//return 0;
 
 	t_camera cam;
-	//cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
+	cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
 	//cam.center = (cl_float3){-320.0, 60.0, -220.0}; // vase view (1,0,0)
 	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
-	//cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
+	// cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
 	//cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
 	//cam.center = (cl_float3){-800.0, 600.0, 350.0}; //upstairs left
 	//cam.center = (cl_float3){0.0, 30.0, 400.0}; //down left
@@ -190,7 +189,7 @@ int main(int ac, char **av)
 	//cam.center = (cl_float3){-250.0, 100.0, 0.0};
 	//cam.center = (cl_float3){-3000.0, 2200.0, 0.0}; //outside
 
-	cam.center = (cl_float3){-0.3, 0.1, 0.0}; //bunn
+	// cam.center = (cl_float3){-0.3, 0.1, 0.0}; //bunn
 	cam.normal = (cl_float3){1.0, 0.0, 0.0};
 
 	// cam.center = (cl_float3){0.0, 0.12, -0.35}; //trogdor
@@ -204,6 +203,22 @@ int main(int ac, char **av)
 	//printf("%lu\n", sizeof(gpu_bin));
 
 	cl_double3 *pixels = gpu_render(scene, cam, XDIM, YDIM, SPP_PER_DEVICE);
+
+	char *filename;
+	asprintf(&filename, "out.ppm");
+	FILE *f = fopen(filename, "w");
+	fprintf(f, "P3\n%d %d\n%d\n ",XDIM,YDIM,255);
+	for (int row=0; row<YDIM; row++)
+	{
+		for (int col=0;col<XDIM;col++) {
+			fprintf(f,"%d %d %d ", (int)(pixels[row * XDIM + (XDIM - col)].x * 255), (int)(pixels[row * XDIM + (XDIM - col)].y * 255), (int)(pixels[row * XDIM + (XDIM - col)].z * 255));
+		}
+		fprintf(f, "\n");
+	}
+	fprintf(f, "\n");
+	free(filename);
+	fclose(f);
+
 
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, XDIM, YDIM, "RTV1");
