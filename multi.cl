@@ -266,7 +266,7 @@ __kernel void fetch(	__global Ray *rays,
 	fetch_all_tex(mats, M[ray.hit_ind / 3], tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
 	ray.status = BOUNCE;
 
-	if (ray.trans.x < 1.0)
+	if (ray.trans.x < 1.0f)
 	{
 		ray.origin = ray.origin + ray.direction * (ray.t + NORMAL_SHIFT);
 		ray.bounce_count--;
@@ -278,7 +278,7 @@ __kernel void fetch(	__global Ray *rays,
 
 /////Bounce stuff
 
-static float GGX_D(const float a, const float cost)
+static float GGX_D(float a, float cost)
 {
 	if (1.0f - cost < 0.001)
 		return 1.0f;
@@ -297,7 +297,7 @@ static float GGX_D(const float a, const float cost)
 	return num == 0.0f ? 0.0f : num / denom;
 }
 
-static float GGX_G1(const float3 v, const float3 m, const float3 n, const float a)
+static float GGX_G1(float3 v, float3 m, float3 n, float a)
 {
 	float chi = dot(v,m) / dot(v,n) > 0.0f ? 1.0f : 0.0f;
 	if (chi == 0.0f)
@@ -311,7 +311,7 @@ static float GGX_G1(const float3 v, const float3 m, const float3 n, const float 
 	return ret;
 }
 
-static float GGX_G(const float3 i, const float3 o, const float3 m, const float3 n, const float a)
+static float GGX_G(float3 i, float3 o, float3 m, float3 n, float a)
 {
 	if (dot(i,m) * dot(i,n) <= 0.0f || dot(o,m) * dot(o,n) <= 0.0f)
 		return 0.0f;
@@ -328,32 +328,24 @@ static float GGX_G(const float3 i, const float3 o, const float3 m, const float3 
 	return g1 * g2;
 }
 
-static float GGX_F(const float3 i, const float3 m, const float n1, const float n2)
+static float GGX_F(float3 i, float3 m, float n1, float n2)
 {
-	float c = dot(i, m);
-	//printf("c is %f\n", c);
-	float radicand = n2 / n1 - 1 + c * c;
-	if (radicand <= 0.0001f)
-		return 1.0f;
-	float g = sqrt(radicand);
+	float num = n1 - n2;
+	float denom = n1 + n2;
+	float r0 = (num * num) / (denom * denom);
 
-	float gminc = g - c;
-	float gplusc = g + c;
+	float cos_term = pow(1.0f - dot(i, m), 5.0f);
 
-	float top = c * gplusc - 1;
-	top *= top;
-	float bot = c * gminc + 1;
-	bot *= bot;
-
-	return 0.5f * (gminc * gminc) / (gplusc * gplusc) * (1.0f + top / bot);
+	return r0 + (1.0f - r0) * cos_term;
 }
 
-static float GGX_eval(const float3 i, const float3 o, const float3 m, const float3 n, const float a, const float n1, const float n2)
+static float GGX_eval(float3 i, float3 o, float3 m, float3 n, float a, float n1, float n2)
 {
 	// == F * G * D / 4 |i dot n| |o dot n|
-	float denom = 4.0f * fmax(fabs(dot(i, n)), 0.001f) * fmax(fabs(dot(o, n)), 0.001f);
+	float denom = 4.0f * fmax(fabs(dot(i, n)), 0.00001f) * fmax(fabs(dot(o, n)), 0.00001f);
 
 	float f = GGX_F(i, m, n1, n2);
+	//f = 1.0f
 	//printf("f is %f\n", f);
 	float g = GGX_G(i, o, m, n, a);
 	float d = GGX_D(a, dot(m,n));
@@ -385,7 +377,7 @@ static float3 GGX_NDF(float3 i, float3 n, uint *seed0, uint *seed1, float a)
 	//return a direction m with relative probability GGX_D(m)|m dot n|
 	float r1 = get_random(seed0, seed1);
 	float r2 = get_random(seed0, seed1);
-	float theta = atan(a * sqrt(r1) * rsqrt(1 - r1));
+	float theta = atan(a * sqrt(r1) * rsqrt(1.0f - r1));
 	float phi = 2.0f * PI * r2;
 	
 	//local orthonormal system
@@ -423,48 +415,20 @@ __kernel void bounce( 	__global Ray *rays,
 	if (ray.status != BOUNCE)
 		return;
 
+	float3 new_dir;
 	uint seed0 = seeds[2 * gid];
 	uint seed1 = seeds[2 * gid + 1];
-
-	// spec_importance = ray.spec.x;
-	// diff_importance = 1 - spec_importance;
-
-	// float3 new_dir;
-	// float r1 = get_random(&seed0, &seed1);
-	// float r2 = get_random(&seed0, &seed1);
-
-	
-
-	// if(get_random(&seed0, &seed1) < spec_importance)
-	// {
-	// 	float3 spec_dir = normalize(ray.direction - 2.0f * dot(ray.direction, ray.N) * ray.N);
-
-	// 	//local orthonormal system
-	// 	float3 axis = fabs(spec_dir.x) > fabs(spec_dir.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-	// 	float3 hem_x = cross(axis, spec_dir);
-	// 	float3 hem_y = cross(spec_dir, hem_x);
-
-	// 	float phi = 2.0f * PI * r1;
-	// 	float theta = acos(native_powr((1.0f - r2), 1.0f / (50.0f)));
-
-	// 	float3 x = hem_x * native_sin(theta) * native_cos(phi);
-	// 	float3 y = hem_y * native_sin(theta) * native_sin(phi);
-	// 	float3 z = spec_dir * native_cos(theta);
-	// 	new_dir = normalize(x + y + z);
-	// 	if (dot(new_dir, ray.N) < 0.0f) // pick mirror of sample (same importance)
-	// 		new_dir = normalize(z - x - y);
-	// 	ray.mask *= spec_importance > 0 ? ray.spec / spec_importance : 0;
-	// }
-
-	float spec_importance = ray.spec.x + ray.spec.y + ray.spec.z;
-	float diff_importance = ray.diff.x + ray.diff.y + ray.diff.z;
-	float total = spec_importance + diff_importance;
-	spec_importance /= total;
-	diff_importance /= total;
-
-	float3 new_dir;
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
+
+	// float spec_importance = ray.spec.x + ray.spec.y + ray.spec.z;
+	// float diff_importance = ray.diff.x + ray.diff.y + ray.diff.z;
+	// float total = spec_importance + diff_importance;
+	// spec_importance /= total;
+	// diff_importance /= total;
+
+	float spec_importance = ray.spec.x;
+	float diff_importance = 1.0f - spec_importance;
 
 	if(1 || get_random(&seed0, &seed1) < spec_importance)
 	{
@@ -485,6 +449,26 @@ __kernel void bounce( 	__global Ray *rays,
 
 		ray.mask *= spec_importance > 0 ? (ray.spec * eval * weight) / (spec_importance) : 0;
 	}
+	// if(get_random(&seed0, &seed1) < spec_importance)
+	// {
+	// 	float3 spec_dir = normalize(ray.direction - 2.0f * dot(ray.direction, ray.N) * ray.N);
+
+	// 	//local orthonormal system
+	// 	float3 axis = fabs(spec_dir.x) > fabs(spec_dir.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+	// 	float3 hem_x = cross(axis, spec_dir);
+	// 	float3 hem_y = cross(spec_dir, hem_x);
+
+	// 	float phi = 2.0f * PI * r1;
+	// 	float theta = acos(native_powr((1.0f - r2), 1.0f / (50.0f)));
+
+	// 	float3 x = hem_x * native_sin(theta) * native_cos(phi);
+	// 	float3 y = hem_y * native_sin(theta) * native_sin(phi);
+	// 	float3 z = spec_dir * native_cos(theta);
+	// 	new_dir = normalize(x + y + z);
+	// 	if (dot(new_dir, ray.N) < 0.0f) // pick mirror of sample (same importance)
+	// 		new_dir = normalize(z - x - y);
+	// 	ray.mask *= spec_importance > 0 ? ray.spec / spec_importance : 0;
+	// }
 	else
 	{
 		//Diffuse reflection (default)
