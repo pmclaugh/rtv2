@@ -67,7 +67,11 @@ int main(int ac, char **av)
 {
 	srand(time(NULL));
 
-	Scene *sponza = import_file();
+	t_camera cam;
+	cam.center = (cl_float3){-800, 450, 0};
+	cam.normal = (cl_float3){1, 0, 0};
+	unsigned int samples = 50;
+	Scene *sponza = import_file(&cam, &samples);
 
 	//LL is best for this bvh. don't want to rearrange import for now, will do later
 	Face *face_list = NULL;
@@ -91,22 +95,21 @@ int main(int ac, char **av)
 	printf("about to flatten\n");
 	flatten_faces(sponza);
 	
-	t_camera cam;
 	//cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
 	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
-	cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
+	//cam.center = (cl_float3){0, 650, 0}; //standard high perspective on curtain
 	//cam.center = (cl_float3){-800.0, 600.0, 350.0}; upstairs left
 	//cam.center = (cl_float3){800.0, 100.0, 350.0}; //down left
 	//cam.center = (cl_float3){900.0, 150.0, -35.0}; //lion
 	//cam.center = (cl_float3){-250.0, 100.0, 0.0};
-	cam.normal = (cl_float3){1.0, 0.0, 0.0};
+//	cam.normal = (cl_float3){1.0, 0.0, 0.0};
 	cam.width = 1.0;
 	cam.height = 1.0;
 	init_camera(&cam, XDIM, YDIM);
 
 	printf("about to gpu launch, press any key\n");
 	getchar();
-	cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM);
+	cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM, samples);
 
 	void *mlx = mlx_init();
 	void *win = mlx_new_window(mlx, XDIM, YDIM, "pathtracer");

@@ -9,6 +9,7 @@
 #include <float.h>
 #include <time.h>
 #include <pthread.h>
+#include "qdbmp/qdbmp.h"
 
 #ifdef __APPLE__
 # include <OpenCL/cl.h>
@@ -257,11 +258,11 @@ void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);
 
 void init_camera(t_camera *camera, int xres, int yres);
 
-Scene *import_file(void);
+Scene *import_file(t_camera *cam, unsigned int *samples);
 Scene *scene_from_obj(char *rel_path, char *filename);
 Scene *scene_from_ply(char *rel_path, char *filename);
 
-cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim);
+cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples);
 
 void old_bvh(Scene *S);
 Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
@@ -283,9 +284,12 @@ cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
 cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec);
 t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b);
 cl_float3 vec_rev(cl_float3 v);
+void vec_rot(const cl_float3 rotate, cl_float3 *V);
 
 
 //utility functions
+char *strtrim(char const *s);
+cl_float3 get_vec(const char *line);
 void print_vec(const cl_float3 vec);
 void print_3x3(const t_3x3 mat);
 void print_clf3(cl_float3 v);

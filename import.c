@@ -51,7 +51,7 @@ static Scene	*combine_scenes(Scene **S, int num_files)
 	return all;
 }
 
-Scene	*import_file(void)
+Scene	*import_file(t_camera *cam, unsigned int *samples)
 {
 	FILE *fp = fopen("./config.ini", "r");
 
@@ -77,7 +77,16 @@ Scene	*import_file(void)
 	{
 		if (strncmp(line, "import=", 7) == 0 && i < 4)
 			sscanf(line, "import=%s", file_path[i++]);
+		if (strncmp(line, "camera.position=", 16) == 0)
+			cam->center = get_vec(line);
+		if (strncmp(line, "camera.normal=", 14) == 0)
+			cam->normal = unit_vec(get_vec(line));
+		if (strncmp(line, "samples=", 8) == 0)
+			*samples = (unsigned int)strtoul(strchr(line, '=') + 1, NULL, 10);
 	}
+	printf("cam->center= %.0f %.0f %.0f\n", cam->center.x, cam->center.y, cam->center.z);
+	printf("cam->normal= %.3f %.3f %.3f\n", cam->normal.x, cam->normal.y, cam->normal.z);
+	printf("samples= %u\n", *samples);
 	free(line);
 	fclose(fp);
 

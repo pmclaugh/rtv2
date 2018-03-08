@@ -57,11 +57,14 @@ Scene	*scene_from_ply(char *rel_path, char *filename)
 	return S;
 }
 
-static Face *read_binary_file(FILE *fp, int f_total, int v_total, int file_endian)
+static Face *read_binary_file(FILE *fp, int f_total, int v_total, cl_float3 translate, cl_float3 rotate, float scalar, int file_endian)
 {
 	Face *list = NULL;
 	list = calloc(f_total, sizeof(Face));
 	cl_float3 *V = calloc(v_total, sizeof(cl_float3));
+	cl_float3 min = (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX};
+	cl_float3 max = (cl_float3){FLT_MIN, FLT_MIN, FLT_MIN};
+	cl_float3 center;
 
 	//check machine architecture, big endian or little endian?
 	unsigned int x = 1;//00001 || 10000
@@ -79,13 +82,13 @@ static Face *read_binary_file(FILE *fp, int f_total, int v_total, int file_endia
 			fread(u.bytes, 1, 4, fp);
 			if (endian != file_endian)
 			{
+				//reorganize bytes to fit machine endian architecture
 				tmp = u.bytes[0];
 				u.bytes[0] = u.bytes[3];
 				u.bytes[3] = tmp;
 				tmp = u.bytes[1];
 				u.bytes[1] = u.bytes[2];
 				u.bytes[2] = tmp;
-				//reorganize bytes to fit machine endian architecture
 			}
 			if (xyz == 0)
 				V[i].x = (float)u.f_val;
@@ -94,6 +97,26 @@ static Face *read_binary_file(FILE *fp, int f_total, int v_total, int file_endia
 			else
 				V[i].z = (float)u.f_val;
 		}
+		if (V[i].x < min.x)
+			min.x = V[i].x;
+		if (V[i].y < min.y)
+			min.y = V[i].y;
+		if (V[i].z < min.z)
+			min.z = V[i].z;
+		if (V[i].x > max.x)
+			max.x = V[i].x;
+		if (V[i].y > max.y)
+			max.y = V[i].y;
+		if (V[i].z > max.z)
+			max.z = V[i].z;
+	}
+	center = vec_add(vec_scale(vec_sub(max, min), 0.5), min);
+	for (int i = 0; i < v_total; i++)
+	{
+		V[i] = vec_sub(V[i], center);
+		V[i] = vec_scale(V[i], scalar);
+		vec_rot(rotate, &V[i]);
+		V[i] = vec_add(V[i], translate);
 	}
 
 	//now faces
@@ -110,13 +133,13 @@ static Face *read_binary_file(FILE *fp, int f_total, int v_total, int file_endia
 			fread(u.bytes, 1, 4, fp);
 			if (endian != file_endian)
 			{
+				//reorganize bytes to fit machine endian architecture
 				tmp = u.bytes[0];
 				u.bytes[0] = u.bytes[3];
 				u.bytes[3] = tmp;
 				tmp = u.bytes[1];
 				u.bytes[1] = u.bytes[2];
 				u.bytes[2] = tmp;
-				//reorganize bytes to fit machine endian architecture
 			}
 			if (xyz == 0)
 				a = (int)u.i_val;
@@ -149,17 +172,40 @@ static Face *read_binary_file(FILE *fp, int f_total, int v_total, int file_endia
 	return list;
 }
 
-static Face *read_ascii_file(FILE *fp, int f_total, int v_total)
+static Face *read_ascii_file(FILE *fp, int f_total, int v_total, cl_float3 translate, cl_float3 rotate, float scalar)
 {
 	Face *list = NULL;
 	list = calloc(f_total, sizeof(Face));
 	cl_float3 *V = calloc(v_total, sizeof(cl_float3));
 	char *line = malloc(512);
+	cl_float3 min = (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX};
+	cl_float3 max = (cl_float3){FLT_MIN, FLT_MIN, FLT_MIN};
+	cl_float3 center;
 
 	for (int i = 0; i < v_total; i++)
 	{
 		fgets(line, 512, fp);
 		sscanf(line, "%f %f %f", &V[i].x, &V[i].y, &V[i].z);
+		if (V[i].x < min.x)
+			min.x = V[i].x;
+		if (V[i].y < min.y)
+			min.y = V[i].y;
+		if (V[i].z < min.z)
+			min.z = V[i].z;
+		if (V[i].x > max.x)
+			max.x = V[i].x;
+		if (V[i].y > max.y)
+			max.y = V[i].y;
+		if (V[i].z > max.z)
+			max.z = V[i].z;
+	}
+	center = vec_add(vec_scale(vec_sub(max, min), 0.5), min);
+	for (int i = 0; i < v_total; i++)
+	{
+		V[i] = vec_sub(V[i], center);
+		V[i] = vec_scale(V[i], scalar);
+		vec_rot(rotate, &V[i]);
+		V[i] = vec_add(V[i], translate);
 	}
 
 	//now faces
@@ -206,6 +252,9 @@ Face *ply_import(char *ply_file, int *face_count)
 	int v_total;
 	int f_total;
 	int	file_type = 2;
+	float scalar = 1;
+	cl_float3 rotate = (cl_float3){0, 0, 0};
+	cl_float3 translate = (cl_float3){0, 0, 0};
 
 	while(fgets(line, 512, fp))
 	{
@@ -218,6 +267,12 @@ Face *ply_import(char *ply_file, int *face_count)
 			else if (strstr(line, "little"))
 				file_type = 0;
 		}
+		else if (strncmp(line, "scale", 5) == 0)
+			sscanf(line, "scale %f", &scalar);
+		else if (strncmp(line, "translate", 9) == 0)
+			sscanf(line, "translate %f %f %f", &translate.x, &translate.y, &translate.z);
+		else if (strncmp(line, "rotate", 6) == 0)
+			sscanf(line, "rotate %f %f %f", &rotate.x, &rotate.y, &rotate.z);
 		else if (strncmp(line, "element vertex", 14) == 0)
 			sscanf(line, "element vertex %d\n", &v_total);
 		else if (strncmp(line, "element face", 12) == 0)
@@ -230,7 +285,7 @@ Face *ply_import(char *ply_file, int *face_count)
 	printf("%s: %d vertices, %d faces\n", ply_file, v_total, f_total);
 
 	if (file_type == 2)
-		return read_ascii_file(fp, f_total, v_total);
+		return read_ascii_file(fp, f_total, v_total, translate, rotate, scalar);
 	else
-		return read_binary_file(fp, f_total, v_total, file_type);
+		return read_binary_file(fp, f_total, v_total, translate, rotate, scalar, file_type);
 }
