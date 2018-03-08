@@ -284,17 +284,17 @@ typedef struct	s_camera
 
 typedef struct s_env
 {
-	void *mlx;
-	void *win;
-	void *img;
-	int	mode;
-	_Bool	show_fps;
+	t_camera	cam;
+	Scene		*scene;
+	cl_double3	*pixels;
+	t_key		key;
 
-	Scene *scene;
-	t_camera cam;
-	cl_double3 *pixels;
-	t_key	key;
-	int samplecount;
+	void		*mlx;
+	void		*win;
+	void		*img;
+	int			mode;
+	_Bool		show_fps;
+	int			spp;
 }				t_env;
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
@@ -310,7 +310,7 @@ Face *object_flatten(Face *faces, int *face_count);
 ////Old stuff
 void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);
 
-Scene *import_file(t_camera *cam, unsigned int *samples);
+void load_config(t_env *env);
 Scene *scene_from_obj(char *rel_path, char *filename);
 Scene *scene_from_ply(char *rel_path, char *filename);
 
@@ -354,7 +354,7 @@ float min3(float a, float b, float c);
 
 //main.c
 void		set_camera(t_camera *cam);
-t_env		*init_env(Scene *S);
+t_env		*init_env(void);
 
 //interactive.c
 void	interactive(t_env *env);

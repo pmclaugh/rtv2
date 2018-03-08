@@ -10,35 +10,21 @@
 
 void		set_camera(t_camera *cam)
 {
-	// printf("angle_x = %f\tangle_y = %f\n", cam->angle_x, cam->angle_y);
-	// printf("CAM_DIR: ");
-	// print_vec(cam->dir);
-
 	cam->focus = vec_add(cam->pos, vec_scale(cam->dir, cam->dist));
 
-	//now i need unit vectors on the plane
-	t_3x3 rot_matrix;
 	cl_float3 camera_x, camera_y;
-	if (fabs(cam->dir.x) < .00001) //horizontal rotation
+	//horizontal reference
+	if (fabs(cam->dir.x) < .00001)
 		camera_x = (cam->dir.z > 0) ? UNIT_X : vec_scale(UNIT_X, -1);
 	else
-	{
-		// rot_matrix = rotation_matrix(UNIT_Z, (cl_float3){cam->dir.x, 0, cam->dir.z});
-		// camera_x = mat_vec_mult(rot_matrix, UNIT_X);
 		camera_x = unit_vec(cross((cl_float3){cam->dir.x, 0, cam->dir.z}, (cl_float3){0, -1, 0}));
-	}
-	if (fabs(cam->dir.y) < .00001) //vertical rotation
+	//vertical reference
+	if (fabs(cam->dir.y) < .00001)
 		camera_y = UNIT_Y;
 	else
-	{
-		// rot_matrix = rotation_matrix((cl_float3){cam->dir.x, 0, cam->dir.z}, cam->dir);
-		// camera_y = mat_vec_mult(rot_matrix, UNIT_Y);
 		camera_y = unit_vec(cross(cam->dir, camera_x));
-	}
 	// if (camera_y.y < 0) //when vertical plane reference points down
 	// 	camera_y.y *= -1;
-	// print_vec(camera_x);
-	// print_vec(camera_y);
 	
 	//pixel deltas
 	cam->d_x = vec_scale(camera_x, cam->width / (float)XDIM);
@@ -68,19 +54,17 @@ t_camera	init_camera(void)
 	//such that the edge-focus-edge vertex has angle H_FOV
 
 	cam.dist = (cam.width / 2.0) / tan(H_FOV / 2.0);
-	set_camera(&cam);
 	return cam;
 }
 
-t_env		*init_env(Scene *S)
+t_env		*init_env(void)
 {
 	t_env	*env = malloc(sizeof(t_env));
 	env->cam = init_camera();
+	//load camera settings from config file and import scene
+	load_config(env);
+	set_camera(&env->cam);
 	env->pixels = malloc(sizeof(cl_double3) * ((XDIM) * (YDIM)));
-	env->scene = S;
-	env->mlx = mlx_init();
-	env->win = mlx_new_window(env->mlx, XDIM, YDIM, "PATH_TRACER");
-	env->img = mlx_new_image(env->mlx, XDIM, YDIM);
 	env->mode = 1;
 	env->show_fps = 0;
 	env->key.w = 0;
@@ -93,47 +77,26 @@ t_env		*init_env(Scene *S)
 	env->key.rarr = 0;
 	env->key.space = 0;
 	env->key.shift = 0;
-	mlx_hook(env->win, 2, 0, key_press, env);
-	mlx_hook(env->win, 3, 0, key_release, env);
-	// mlx_hook(env->win, 6, 0, mouse_pos, env);
-	mlx_hook(env->win, 17, 0, exit_hook, env);
-	mlx_loop_hook(env->mlx, forever_loop, env);
-	mlx_loop(env->mlx);
 	return env;
 }
 
 int 		main(int ac, char **av)
 {
 	srand(time(NULL));
-	t_camera cam;
-	cam.pos = (cl_float3){-800, 450, 0};
-	cam.dir = (cl_float3){1, 0, 0};
-  //cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
-	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
-	//cam.center = (cl_float3){0, 650, 0}; //standard high perspective on curtain
-	//cam.center = (cl_float3){-800.0, 600.0, 350.0}; upstairs left
-	//cam.center = (cl_float3){800.0, 100.0, 350.0}; //down left
-	//cam.center = (cl_float3){900.0, 150.0, -35.0}; //lion
-	//cam.center = (cl_float3){-250.0, 100.0, 0.0};
-  //	cam.normal = (cl_float3){1.0, 0.0, 0.0};
-	cam.width = 1.0;
-	cam.height = 1.0;
-	cam.dist = (cam.width / 2.0) / tan(H_FOV / 2.0);
-	unsigned int samples = 50;
-	Scene *sponza = import_file(&cam, &samples);
-  cam.angle_x = atan2(cam.dir.z, cam.dir.x);
-	cam.angle_y = 0;
+
+	//Initialize environment with scene and intial configurations
+	t_env	*env = init_env();
 
 	//LL is best for this bvh. don't want to rearrange import for now, will do later
 	Face *face_list = NULL;
-	for (int i = 0; i < sponza->face_count; i++)
+	for (int i = 0; i < env->scene->face_count; i++)
 	{
 		Face *f = calloc(1, sizeof(Face));
-		memcpy(f, &sponza->faces[i], sizeof(Face));
+		memcpy(f, &env->scene->faces[i], sizeof(Face));
 		f->next = face_list;
 		face_list = f;
 	}
-	free(sponza->faces);
+	free(env->scene->faces);
 
 	//Build BVH
 	int box_count, ref_count;
@@ -142,12 +105,11 @@ int 		main(int ac, char **av)
 	study_tree(tree, 100000);
 
 	//Flatten BVH
-	sponza->bins = tree;
-	sponza->bin_count = box_count;
-	sponza->face_count = ref_count;
-	printf("about to flatten\n");
-	flatten_faces(sponza);
-	printf("starting render\n");
+	env->scene->bins = tree;
+	env->scene->bin_count = box_count;
+	env->scene->face_count = ref_count;
+	printf("flattening bvh\n");
+	flatten_faces(env->scene);
 
 // 	cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM, samples);
 
@@ -163,8 +125,19 @@ int 		main(int ac, char **av)
 // 	mlx_key_hook(win, key_hook, param);
 // 	mlx_loop(mlx);
 
-	printf("all done\n");
-  //Render
-	t_env		*env = init_env(sponza);
+	printf("RENDER\n");
+
+  	// Enter interactive loop
+  	env->mlx = mlx_init();
+	env->win = mlx_new_window(env->mlx, XDIM, YDIM, "PATH_TRACER");
+	env->img = mlx_new_image(env->mlx, XDIM, YDIM);
+
+	mlx_hook(env->win, 2, 0, key_press, env);
+	mlx_hook(env->win, 3, 0, key_release, env);
+	// mlx_hook(env->win, 6, 0, mouse_pos, env);
+	mlx_hook(env->win, 17, 0, exit_hook, env);
+	mlx_loop_hook(env->mlx, forever_loop, env);
+	mlx_loop(env->mlx);
+	
 	return 0;
 }

@@ -51,7 +51,7 @@ static Scene	*combine_scenes(Scene **S, int num_files)
 	return all;
 }
 
-Scene	*import_file(t_camera *cam, unsigned int *samples)
+void	load_config(t_env *env)
 {
 	FILE *fp = fopen("./config.ini", "r");
 
@@ -78,15 +78,16 @@ Scene	*import_file(t_camera *cam, unsigned int *samples)
 		if (strncmp(line, "import=", 7) == 0 && i < 4)
 			sscanf(line, "import=%s", file_path[i++]);
 		if (strncmp(line, "camera.position=", 16) == 0)
-			cam->pos = get_vec(line);
+			env->cam.pos = get_vec(line);
 		if (strncmp(line, "camera.normal=", 14) == 0)
-			cam->dir = unit_vec(get_vec(line));
+			env->cam.dir = unit_vec(get_vec(line));
 		if (strncmp(line, "samples=", 8) == 0)
-			*samples = (unsigned int)strtoul(strchr(line, '=') + 1, NULL, 10);
+			env->spp = (unsigned int)strtoul(strchr(line, '=') + 1, NULL, 10);
 	}
-	printf("cam->pos= %.0f %.0f %.0f\n", cam->pos.x, cam->pos.y, cam->pos.z);
-	printf("cam->dir= %.3f %.3f %.3f\n", cam->dir.x, cam->dir.y, cam->dir.z);
-	printf("samples= %u\n", *samples);
+	env->cam.angle_x = atan2(env->cam.dir.z, env->cam.dir.x);
+	printf("cam.pos= %.0f %.0f %.0f\n", env->cam.pos.x, env->cam.pos.y, env->cam.pos.z);
+	printf("cam.dir= %.3f %.3f %.3f\n", env->cam.dir.x, env->cam.dir.y, env->cam.dir.z);
+	printf("spp= %u\n", env->spp);
 	free(line);
 	fclose(fp);
 
@@ -117,5 +118,5 @@ Scene	*import_file(t_camera *cam, unsigned int *samples)
 	free(file_path);
 	free(dir_path);
 	free(S);
-	return all;
+	env->scene = all;
 }
