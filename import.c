@@ -51,6 +51,22 @@ static Scene	*combine_scenes(Scene **S, int num_files)
 	return all;
 }
 
+static void file_edits(char **line, FILE *fp, File_edits *edit_info)
+{
+	edit_info->scale = 1.0f;
+	while (fgets(*line, 512, fp))
+	{
+		if (strstr(*line, "scale"))
+			edit_info->scale = strtof(strchr(*line, '=') + 1, NULL);
+		else if (strstr(*line, "translate"))
+			edit_info->translate = get_vec(*line);
+		else if (strstr(*line, "rotate"))
+			edit_info->rotate = get_vec(*line);
+		else
+			break ;
+	}
+}
+
 void	load_config(t_env *env)
 {
 	FILE *fp = fopen("./config.ini", "r");
@@ -65,6 +81,7 @@ void	load_config(t_env *env)
 	char **file_path = calloc(4, sizeof(char*));
 	char **dir_path = calloc(4, sizeof(char*));
 	char **file = calloc(4, sizeof(char*));
+	File_edits *edit_info = calloc(4, sizeof(File_edits));
 	
 	int i = 0;
 	for (; i < 4; i++)
@@ -75,8 +92,11 @@ void	load_config(t_env *env)
 	i = 0;
 	while (fgets(line, 512, fp))
 	{
-		if (strncmp(line, "import=", 7) == 0 && i < 4)
-			sscanf(line, "import=%s", file_path[i++]);
+		while (strncmp(line, "import=", 7) == 0 && i < 4)
+		{
+			sscanf(line, "import=%s", file_path[i]);
+			file_edits(&line, fp, &edit_info[i++]);
+		}
 		if (strncmp(line, "camera.position=", 16) == 0)
 			env->cam.pos = get_vec(line);
 		if (strncmp(line, "camera.normal=", 14) == 0)
@@ -102,9 +122,9 @@ void	load_config(t_env *env)
 		strncpy(dir_path[j], file_path[j], file[j] - file_path[j]);
 
 		if (strstr(file[j], ".ply"))
-			S[j] = scene_from_ply(dir_path[j], file[j]);
+			S[j] = scene_from_ply(dir_path[j], file[j], edit_info[j]);
 		else if (strstr(file[j], ".obj"))
-			S[j] =  scene_from_obj(dir_path[j], file[j]);
+			S[j] =  scene_from_obj(dir_path[j], file[j], edit_info[j]);
 		else
 		{
 			printf("not a valid file, must be file.ply or file.obj\n");
@@ -118,5 +138,6 @@ void	load_config(t_env *env)
 	free(file_path);
 	free(dir_path);
 	free(S);
+	free(edit_info);
 	env->scene = all;
 }

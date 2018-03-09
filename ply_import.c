@@ -7,14 +7,14 @@ typedef union	s_union
 	int		i_val;
 }				t_union;
 
-Scene	*scene_from_ply(char *rel_path, char *filename)
+Scene	*scene_from_ply(char *rel_path, char *filename, File_edits edit_info)
 {
 	char *file = malloc(strlen(rel_path) + strlen(filename) + 1);
 
 	strcpy(file, rel_path);
 	strcat(file, filename);
 	Scene *S = calloc(1, sizeof(Scene));
-	S->faces = ply_import(file, &S->face_count);
+	S->faces = ply_import(file, edit_info, &S->face_count);
 	free(file);
 	S->materials = calloc(1, sizeof(Material));
 	S->mat_count = 1;
@@ -57,7 +57,7 @@ Scene	*scene_from_ply(char *rel_path, char *filename)
 	return S;
 }
 
-static Face *read_binary_file(FILE *fp, int f_total, int v_total, cl_float3 translate, cl_float3 rotate, float scalar, int file_endian)
+static Face *read_binary_file(FILE *fp, int f_total, int v_total, File_edits edit_info, int file_endian)
 {
 	Face *list = NULL;
 	list = calloc(f_total, sizeof(Face));
@@ -114,9 +114,9 @@ static Face *read_binary_file(FILE *fp, int f_total, int v_total, cl_float3 tran
 	for (int i = 0; i < v_total; i++)
 	{
 		V[i] = vec_sub(V[i], center);
-		V[i] = vec_scale(V[i], scalar);
-		vec_rot(rotate, &V[i]);
-		V[i] = vec_add(V[i], translate);
+		V[i] = vec_scale(V[i], edit_info.scale);
+		vec_rot(edit_info.rotate, &V[i]);
+		V[i] = vec_add(V[i], edit_info.translate);
 	}
 
 	//now faces
@@ -172,7 +172,7 @@ static Face *read_binary_file(FILE *fp, int f_total, int v_total, cl_float3 tran
 	return list;
 }
 
-static Face *read_ascii_file(FILE *fp, int f_total, int v_total, cl_float3 translate, cl_float3 rotate, float scalar)
+static Face *read_ascii_file(FILE *fp, int f_total, int v_total, File_edits edit_info)
 {
 	Face *list = NULL;
 	list = calloc(f_total, sizeof(Face));
@@ -203,9 +203,9 @@ static Face *read_ascii_file(FILE *fp, int f_total, int v_total, cl_float3 trans
 	for (int i = 0; i < v_total; i++)
 	{
 		V[i] = vec_sub(V[i], center);
-		V[i] = vec_scale(V[i], scalar);
-		vec_rot(rotate, &V[i]);
-		V[i] = vec_add(V[i], translate);
+		V[i] = vec_scale(V[i], edit_info.scale);
+		vec_rot(edit_info.rotate, &V[i]);
+		V[i] = vec_add(V[i], edit_info.translate);
 	}
 
 	//now faces
@@ -237,7 +237,7 @@ static Face *read_ascii_file(FILE *fp, int f_total, int v_total, cl_float3 trans
 	return list;
 }
 
-Face *ply_import(char *ply_file, int *face_count)
+Face *ply_import(char *ply_file, File_edits edit_info, int *face_count)
 {
 	//import functions should return linked lists of faces.
 	
@@ -252,9 +252,6 @@ Face *ply_import(char *ply_file, int *face_count)
 	int v_total;
 	int f_total;
 	int	file_type = 2;
-	float scalar = 1;
-	cl_float3 rotate = (cl_float3){0, 0, 0};
-	cl_float3 translate = (cl_float3){0, 0, 0};
 
 	while(fgets(line, 512, fp))
 	{
@@ -267,12 +264,6 @@ Face *ply_import(char *ply_file, int *face_count)
 			else if (strstr(line, "little"))
 				file_type = 0;
 		}
-		else if (strncmp(line, "scale", 5) == 0)
-			sscanf(line, "scale %f", &scalar);
-		else if (strncmp(line, "translate", 9) == 0)
-			sscanf(line, "translate %f %f %f", &translate.x, &translate.y, &translate.z);
-		else if (strncmp(line, "rotate", 6) == 0)
-			sscanf(line, "rotate %f %f %f", &rotate.x, &rotate.y, &rotate.z);
 		else if (strncmp(line, "element vertex", 14) == 0)
 			sscanf(line, "element vertex %d\n", &v_total);
 		else if (strncmp(line, "element face", 12) == 0)
@@ -285,7 +276,7 @@ Face *ply_import(char *ply_file, int *face_count)
 	printf("%s: %d vertices, %d faces\n", ply_file, v_total, f_total);
 
 	if (file_type == 2)
-		return read_ascii_file(fp, f_total, v_total, translate, rotate, scalar);
+		return read_ascii_file(fp, f_total, v_total, edit_info);
 	else
-		return read_binary_file(fp, f_total, v_total, translate, rotate, scalar, file_type);
+		return read_binary_file(fp, f_total, v_total, edit_info, file_type);
 }
