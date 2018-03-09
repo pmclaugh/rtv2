@@ -56,6 +56,8 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 	edit_info->scale = 1.0f;
 	while (fgets(*line, 512, fp))
 	{
+		if (*line[0] == '#')
+			continue ;
 		if (strstr(*line, "scale"))
 			edit_info->scale = strtof(strchr(*line, '=') + 1, NULL);
 		else if (strstr(*line, "translate"))
@@ -92,6 +94,8 @@ void	load_config(t_env *env)
 	i = 0;
 	while (fgets(line, 512, fp))
 	{
+		if (line[0] == '#')
+			continue ;
 		while (strncmp(line, "import=", 7) == 0 && i < 4)
 		{
 			sscanf(line, "import=%s", file_path[i]);
@@ -99,9 +103,9 @@ void	load_config(t_env *env)
 		}
 		if (strncmp(line, "camera.position=", 16) == 0)
 			env->cam.pos = get_vec(line);
-		if (strncmp(line, "camera.normal=", 14) == 0)
+		else if (strncmp(line, "camera.normal=", 14) == 0)
 			env->cam.dir = unit_vec(get_vec(line));
-		if (strncmp(line, "samples=", 8) == 0)
+		else if (strncmp(line, "samples=", 8) == 0)
 			env->spp = (unsigned int)strtoul(strchr(line, '=') + 1, NULL, 10);
 	}
 	env->cam.angle_x = atan2(env->cam.dir.z, env->cam.dir.x);
