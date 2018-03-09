@@ -207,7 +207,7 @@ static void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *te
 	Material mat = mats[m_ind];
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
-	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : mat.Ka;
+	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : BLACK;
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 }
 
@@ -368,7 +368,7 @@ static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
 	float num = dot(i,m) * GGX_G(i, o, m, n, a);
 	float denom = dot(i, n) * dot(m, n);
 	float weight = denom > 0.0f ? num / denom : 0.0f;
-	return ;
+	return weight;
 }
 
 __kernel void bounce( 	__global Ray *rays,
@@ -385,19 +385,19 @@ __kernel void bounce( 	__global Ray *rays,
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
 
-	// float spec_importance = ray.spec.x + ray.spec.y + ray.spec.z;
-	// float diff_importance = ray.diff.x + ray.diff.y + ray.diff.z;
-	// float total = spec_importance + diff_importance;
-	// spec_importance /= total;
-	// diff_importance /= total;
+	float spec_importance = ray.spec.x + ray.spec.y + ray.spec.z;
+	float diff_importance = ray.diff.x + ray.diff.y + ray.diff.z;
+	float total = spec_importance + diff_importance;
+	spec_importance /= total;
+	diff_importance /= total;
 
-	float spec_importance = 1.0f;
-	float diff_importance = 1.0f - spec_importance;
+	// float spec_importance = ray.spec.x;
+	// float diff_importance = 1.0f - spec_importance;
 
-	if(1 || get_random(&seed0, &seed1) < spec_importance)
+	if(spec_importance > 0.0f && get_random(&seed0, &seed1) <= spec_importance)
 	{
 		//let's just hardcode these for now
-		float a = 1.0f;
+		float a = 0.1f;
 		float n1 = 1.0f;
 		float n2 = 1.0f;
 
@@ -411,7 +411,7 @@ __kernel void bounce( 	__global Ray *rays,
 		float eval = GGX_eval(i, o, m, n, a, n1, n2);
 		float weight = GGX_weight(i, o, m, n, a);
 
-		ray.mask *= eval > 0.0f ? (ray.spec * weight) / (spec_importance) : 0.0f;
+		ray.mask *= (ray.spec * weight) / (spec_importance);
 	}
 	// if(get_random(&seed0, &seed1) < spec_importance)
 	// {
