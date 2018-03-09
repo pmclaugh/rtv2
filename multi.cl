@@ -280,52 +280,38 @@ __kernel void fetch(	__global Ray *rays,
 
 static float GGX_D(float a, float cost)
 {
-	if (1.0f - cost < 0.001)
-		return 1.0f;
 	float a2 = a * a;
-	float chi = cost > 0.0f ? 1.0f : 0.0f;
-	if (chi == 0.0f)
-		return 0.0f;
-	float num = a * chi;
 
 	float theta = acos(cost);
 	float cos4 = cost * cost * cost * cost;
-	float tsq = a + tan(theta) * tan(theta);
+	float tsq = a2 + tan(theta) * tan(theta);
 	tsq *= tsq;
 	float denom = PI * cos4 * tsq;
 
-	return num == 0.0f ? 0.0f : num / denom;
+	return a2 / denom;
 }
 
-static float GGX_G1(float3 v, float3 m, float3 n, float a)
+static float GGX_G1(float3 v, float3 n, float a)
 {
-	float chi = dot(v,m) / fmax(dot(v,n), 0.00001f) > 0.0f ? 1.0f : 0.0f;
-	if (chi == 0.0f)
-		return 0.0f;
-
-	float theta = acos(fmin(dot(v, m), 0.99999f));
+	float theta = acos(dot(v, n)); //still not sure if this should be n or m.
+	//I think it has to be n, because dot(i,m) == dot(o,m) and then they'd just say g1^2
+	if (theta != theta)
+		theta = 0.0f; //acos(1.0f) is nan for some reason.
 	float radicand = 1.0f + a * a * tan(theta) * tan(theta);
-
 	float ret = 2.0f / (1.0f + sqrt(radicand));
-
-	if (ret != ret)
-		printf("ret %f, dot(v, m) %f theta %f radicand %f\n", ret, dot(v, m), theta, radicand);
-
 	return ret;
 }
 
 static float GGX_G(float3 i, float3 o, float3 m, float3 n, float a)
 {
-	float g1 = GGX_G1(i, m, n, a);
-	float g2 = GGX_G1(o, m, n, a);
-	if (g1 != g1)
-		printf("g1 nan\n");
-	if (g1 == 0.0f)
+	//G is zero under these conditions, fail early to avoid nans
+	if (dot(i, m) * dot(i, n) <= 0.0f)
 		return 0.0f;
-	if (g2 != g2)
-		printf("g2 nan\n");
-	if (g2 == 0.0f)
+	if (dot(o, m) * dot(o,n) <= 0.0f)
 		return 0.0f;
+
+	float g1 = GGX_G1(i, n, a);
+	float g2 = GGX_G1(o, n, a);
 	return g1 * g2;
 }
 
@@ -334,48 +320,26 @@ static float GGX_F(float3 i, float3 m, float n1, float n2)
 	float num = n1 - n2;
 	float denom = n1 + n2;
 	float r0 = (num * num) / (denom * denom);
-
 	float cos_term = pow(1.0f - dot(i, m), 5.0f);
-
 	return r0 + (1.0f - r0) * cos_term;
 }
 
 static float GGX_eval(float3 i, float3 o, float3 m, float3 n, float a, float n1, float n2)
 {
-	//G is zero under these conditions, fail early to avoid nans
-	if (dot(i, m) * dot(i, n) < 0.0f)
-		return 0.0f;
-	if (dot(o, m) * dot(o,n) < 0.0f)
-		return 0.0f;
-
 	// == F * G * D / 4 |i dot n| |o dot n|
-	float denom = 4.0f * fmax(fabs(dot(i, n)), 0.00001f) * fmax(fabs(dot(o, n)), 0.00001f);
 
 	float f = GGX_F(i, n, n1, n2);
-	//printf("f is %f\n", f);
 	float g = GGX_G(i, o, m, n, a);
 	float d = GGX_D(a, dot(m,n));
+	//currently overriding f
+	f = 1.0f;
 
-	if (f != f)
-		printf("f nan\n");
-	if (f == 0.0f)
-		return 0.0f;
-	if (g != g)
-		printf("g1 nan\n");
-	if (g == 0.0f)
-		return 0.0f;
-	if (d != d)
-		printf("d nan, inputs were %f %f\n", a, dot(m, n));
-	if (d == 0.0f)
+	if (f * g * d <= 0.0f)
 		return 0.0f;
 
-	float eval = g * d / denom;
-	if (eval != eval)
-		printf("eval nan, f %f g %f d %f denom %f\n", f, g, d, denom);
-
-	//printf("f %f g %f d %f / denom %f, eval %f\n", f, g, d, denom, f * g * d / denom);
-
-	return eval; //
+	float denom = 4.0f * dot(i, n) * dot(o, n);
+	float eval = (f * g * d) / denom;
+	return eval;
 }
 
 static float3 GGX_NDF(float3 i, float3 n, uint *seed0, uint *seed1, float a)
@@ -403,10 +367,8 @@ static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
 {
 	float num = dot(i,m) * GGX_G(i, o, m, n, a);
 	float denom = dot(i, n) * dot(m, n);
-	float weight = num / denom;
-	// printf("weight %f\n", weight);
-
-	return num / denom;
+	float weight = denom > 0.0f ? num / denom : 0.0f;
+	return ;
 }
 
 __kernel void bounce( 	__global Ray *rays,
@@ -449,7 +411,7 @@ __kernel void bounce( 	__global Ray *rays,
 		float eval = GGX_eval(i, o, m, n, a, n1, n2);
 		float weight = GGX_weight(i, o, m, n, a);
 
-		ray.mask *= eval > 0.0f ? (ray.spec * eval) / (spec_importance * weight) : 0.0f;
+		ray.mask *= eval > 0.0f ? (ray.spec * weight) / (spec_importance) : 0.0f;
 	}
 	// if(get_random(&seed0, &seed1) < spec_importance)
 	// {
