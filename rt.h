@@ -25,8 +25,8 @@
 #define UNIT_Y (cl_float3){0, 1, 0}
 #define UNIT_Z (cl_float3){0, 0, 1}
 
-#define XDIM 400
-#define YDIM 400
+#define DIM_INTER	400
+#define DIM_PT		512
 
 #define ERROR 1e-4
 
@@ -46,25 +46,6 @@
 #define GPU_SPHERE 1
 #define GPU_TRIANGLE 3
 #define GPU_QUAD 4
-
-#define KEY_ESC		53
-#define KEY_W		13
-#define KEY_A		0
-#define KEY_S		1
-#define KEY_D		2
-#define KEY_LARR	123
-#define KEY_RARR	124
-#define KEY_DARR	125
-#define KEY_UARR	126
-#define KEY_SPACE	49
-#define KEY_SHIFT	257
-#define KEY_TAB		48
-#define KEY_F		3
-
-#define MOVE_KEYS	(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
-#define ARR_KEYS	(key >= KEY_LARR  && key <= KEY_UARR)
-
-#define MOVING 
 
 #define MOVE_SPEED	10
 #define TURN_SPEED	M_PI / 30
@@ -282,16 +263,26 @@ typedef struct	s_camera
 	cl_float3	d_y;
 }				t_camera;
 
+typedef struct	s_mlx_data
+{
+	void		*win;
+	void		*img;
+	char		*imgbuff;
+	int			bpp;
+	int			size_line;
+	int			endian;
+	cl_double3	*pixels;
+}				t_mlx_data;
+
 typedef struct s_env
 {
 	t_camera	cam;
 	Scene		*scene;
-	cl_double3	*pixels;
 	t_key		key;
 
 	void		*mlx;
-	void		*win;
-	void		*img;
+	t_mlx_data	*inter;
+	t_mlx_data	*pt;
 	int			mode;
 	_Bool		show_fps;
 	int			spp;
@@ -308,7 +299,7 @@ Face *ply_import(char *ply_file, int *face_count);
 Face *object_flatten(Face *faces, int *face_count);
 
 ////Old stuff
-void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);
+void draw_pixels(t_mlx_data *data, int xres, int yres);
 
 void load_config(t_env *env);
 Scene *scene_from_obj(char *rel_path, char *filename);
@@ -353,7 +344,8 @@ float max3(float a, float b, float c);
 float min3(float a, float b, float c);
 
 //main.c
-void		set_camera(t_camera *cam);
+void		set_camera(t_camera *cam, float win_dim);
+void		path_tracer(t_env *env);
 t_env		*init_env(void);
 
 //interactive.c

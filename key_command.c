@@ -1,17 +1,46 @@
 #include "rt.h"
 
+#define KEY_ESC		53
+#define KEY_W		13
+#define KEY_A		0
+#define KEY_S		1
+#define KEY_D		2
+#define KEY_LARR	123
+#define KEY_RARR	124
+#define KEY_DARR	125
+#define KEY_UARR	126
+#define KEY_SPACE	49
+#define KEY_SHIFT	257
+#define KEY_TAB		48
+#define KEY_F		3
+#define KEY_ENTER	36
+
+#define MOVE_KEYS	(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
+#define ARR_KEYS	(key >= KEY_LARR  && key <= KEY_UARR)
+
 int		exit_hook(int key, t_env *env)
 {
-	mlx_destroy_image(env->mlx, env->img);
-	mlx_destroy_window(env->mlx, env->win);
-	exit(0);
+	if (key == KEY_ESC)
+	{
+		mlx_destroy_image(env->mlx, env->inter->img);
+		mlx_destroy_window(env->mlx, env->inter->win);
+		if (env->pt->win)
+		{
+			mlx_destroy_image(env->mlx, env->pt->img);
+			mlx_destroy_window(env->mlx, env->pt->win);
+		}
+		exit(0);
+	}
+	return 0;
 }
 
 int		key_press(int key, t_env *env)
 {
 	// printf("%d\n", key);
 	if (key == KEY_ESC)
-		exit_hook(0, env);
+		exit_hook(key, env);
+	if (key == KEY_ENTER)
+		path_tracer(env);
 	else if (key == KEY_TAB)
 	{
 		env->mode++;
@@ -164,17 +193,17 @@ int		forever_loop(t_env *env)
 			while (env->cam.angle_y > 2 * M_PI)
 				env->cam.angle_y -= 2 * M_PI;
 		}
-		set_camera(&env->cam);
+		set_camera(&env->cam, (float)DIM_INTER);
 	}
 	interactive(env);
-	draw_pixels(env->img, XDIM, YDIM, env->pixels);
-	mlx_put_image_to_window(env->mlx, env->win, env->img, 0, 0);
+	draw_pixels(env->inter, DIM_INTER, DIM_INTER);
+	mlx_put_image_to_window(env->mlx, env->inter->win, env->inter->img, 0, 0);
 	if (env->show_fps)
 	{
 		float frames = 1.0f / (((float)clock() - (float)frame_start) / (float)CLOCKS_PER_SEC);
 		char *fps = NULL;
 		asprintf(&fps, "%lf", frames);
-		mlx_string_put(env->mlx, env->win, 0, 0, 0x00ff00, fps);
+		mlx_string_put(env->mlx, env->inter->win, 0, 0, 0x00ff00, fps);
 	}
 	return 0;
 }
