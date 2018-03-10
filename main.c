@@ -7,9 +7,9 @@
 #endif
 
 
-#define XDIM 2048
-#define YDIM 2048
-#define SPP_PER_DEVICE 1000
+#define XDIM 1024
+#define YDIM 1024
+#define SPP_PER_DEVICE 2000
 
 typedef struct s_param
 {
@@ -26,7 +26,7 @@ typedef struct s_param
 }				t_param;
 
 //THIS DOESNT WORK RIGHT, JUST FOR TESTING
-#define H_FOV M_PI_2 * 60.0 / 90.0
+#define H_FOV M_PI_2 * 70.0 / 90.0
 void init_camera(t_camera *camera, int xres, int yres)
 {
 	//printf("init camera %d %d\n", xres, yres);
@@ -177,15 +177,15 @@ int main(int ac, char **av)
 	//return 0;
 
 	t_camera cam;
-	cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
+	//cam.center = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
 	//cam.center = (cl_float3){-320.0, 60.0, -220.0}; // vase view (1,0,0)
 	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
-	// cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
 	//cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
-	//cam.center = (cl_float3){-800.0, 600.0, 350.0}; //upstairs left
-	//cam.center = (cl_float3){0.0, 30.0, 400.0}; //down left
-	//cam.center = (cl_float3){800.0, 150.0, -35.0}; //lion
-	//cam.center = (cl_float3){780.0, 650.0, -35.0}; //lion
+	// cam.center = (cl_float3){100.0, 450.0, 0.0}; //standard high perspective on curtain
+	cam.center = (cl_float3){-800.0, 600.0, 350.0}; //upstairs left
+	//cam.center = (cl_float3){-300.0, 30.0, 400.0}; //down left
+	//cam.center = (cl_float3){600.0, 150.0, -95.0}; //lion
+	// cam.center = (cl_float3){780.0, 650.0, -35.0}; //lion
 	//cam.center = (cl_float3){-250.0, 100.0, 0.0};
 	//cam.center = (cl_float3){-3000.0, 2200.0, 0.0}; //outside
 
