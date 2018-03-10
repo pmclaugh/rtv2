@@ -339,11 +339,9 @@ static float GGX_eval(float3 i, float3 o, float3 m, float3 n, float a, float n1,
 	return eval;
 }
 
-static float3 GGX_NDF(float3 i, float3 n, uint *seed0, uint *seed1, float a)
+static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 {
 	//return a direction m with relative probability GGX_D(m)|m dot n|
-	float r1 = get_random(seed0, seed1);
-	float r2 = get_random(seed0, seed1);
 	float theta = atan(a * sqrt(r1) * rsqrt(1.0f - r1));
 	float phi = 2.0f * PI * r2;
 	
@@ -388,48 +386,22 @@ __kernel void bounce( 	__global Ray *rays,
 	spec_importance /= total;
 	diff_importance /= total;
 
-	// float spec_importance = ray.spec.x;
-	// float diff_importance = 1.0f - spec_importance;
+	//let's just hardcode these for now
+	float a = 0.3f;
+	float n1 = 1.0f;
+	float n2 = 1.0f;
 
-	if(spec_importance > 0.0f && get_random(&seed0, &seed1) <= spec_importance)
+	float3 n = ray.N;
+	float3 i = ray.direction * -1.0f;
+	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
+
+	if(get_random(&seed0, &seed1) > GGX_F(i, m, n1, n2))
 	{
-		//let's just hardcode these for now
-		float a = 0.3f;
-		float n1 = 1.0f;
-		float n2 = 1.0f;
-
-		float3 n = ray.N;
-		float3 i = ray.direction * -1.0f;
-		float3 m = GGX_NDF(i, n, &seed0, &seed1, a); //sampling microfacet normal
 		float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
-		
 		new_dir = o;
-
-		//float eval = GGX_eval(i, o, m, n, a, n1, n2);
 		float weight = GGX_weight(i, o, m, n, a);
-
 		ray.mask *= (ray.spec * weight) / (spec_importance);
 	}
-	// if(get_random(&seed0, &seed1) < spec_importance)
-	// {
-	// 	float3 spec_dir = normalize(ray.direction - 2.0f * dot(ray.direction, ray.N) * ray.N);
-
-	// 	//local orthonormal system
-	// 	float3 axis = fabs(spec_dir.x) > fabs(spec_dir.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-	// 	float3 hem_x = cross(axis, spec_dir);
-	// 	float3 hem_y = cross(spec_dir, hem_x);
-
-	// 	float phi = 2.0f * PI * r1;
-	// 	float theta = acos(native_powr((1.0f - r2), 1.0f / (50.0f)));
-
-	// 	float3 x = hem_x * native_sin(theta) * native_cos(phi);
-	// 	float3 y = hem_y * native_sin(theta) * native_sin(phi);
-	// 	float3 z = spec_dir * native_cos(theta);
-	// 	new_dir = normalize(x + y + z);
-	// 	if (dot(new_dir, ray.N) < 0.0f) // pick mirror of sample (same importance)
-	// 		new_dir = normalize(z - x - y);
-	// 	ray.mask *= spec_importance > 0 ? ray.spec / spec_importance : 0;
-	// }
 	else
 	{
 		//Diffuse reflection (default)
