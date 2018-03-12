@@ -422,41 +422,10 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 		for (int j = 0; j < samples; j++)
 		{
 			cl_event collectE, traverseE, fetchE, bounceE;
-			clEnqueueNDRangeKernel(CL->commands[i], collect[i], 1, 0, &worksize, &localsize, j == 0 ? 0 : 1, j == 0 ? NULL : &bounceE, &collectE);
-			clEnqueueNDRangeKernel(CL->commands[i], traverse[i], 1, 0, &worksize, &localsize, 1, &collectE, &traverseE);
-			clEnqueueNDRangeKernel(CL->commands[i], fetch[i], 1, 0, &worksize, &localsize, 1, &traverseE, &fetchE);
-			clEnqueueNDRangeKernel(CL->commands[i], bounce[i], 1, 0, &worksize, &localsize, 1, &fetchE, &bounceE);
-			
-			if (j == 0)
-				begin = collectE;
-			if (j == samples - 1)
-				finish = bounceE;
-
-			//below here shouldn't go in the loop but it makes things convenient for now.
-
-			// clFinish(CL->commands[i]);
-			// printf("\n");
-
-			
-			// clGetEventProfilingInfo(collectE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-			// clGetEventProfilingInfo(collectE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-			// printf("collect took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
-			// //clReleaseEvent(collectE);
-
-			// clGetEventProfilingInfo(traverseE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-			// clGetEventProfilingInfo(traverseE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-			// printf("traverse took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
-			// //clReleaseEvent(traverseE);
-
-			// clGetEventProfilingInfo(fetchE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-			// clGetEventProfilingInfo(fetchE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-			// printf("fetch took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
-			// //clReleaseEvent(fetchE);
-
-			// clGetEventProfilingInfo(bounceE, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-			// clGetEventProfilingInfo(bounceE, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-			// printf("bounce took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
-			// //clReleaseEvent(bounceE);
+			clEnqueueNDRangeKernel(CL->commands[i], collect[i], 1, 0, &worksize, &localsize, 0, NULL, j == 0 ? &begin: NULL);
+			clEnqueueNDRangeKernel(CL->commands[i], traverse[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
+			clEnqueueNDRangeKernel(CL->commands[i], fetch[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
+			clEnqueueNDRangeKernel(CL->commands[i], bounce[i], 1, 0, &worksize, &localsize, 0, NULL, j == samples - 1 ? &finish : NULL);
 		}
 
 	for (int i = 0; i < d; i++)
