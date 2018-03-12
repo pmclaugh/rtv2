@@ -89,19 +89,9 @@ t_env		*init_env(void)
 
 void		path_tracer(t_env *env)
 {
-	if (!env->pt->win || !env->pt->img || !env->pt->imgbuff)
-	{
-		env->pt->win = mlx_new_window(env->mlx, DIM_PT, DIM_PT, "CLIVE - Path Tracer");
-		env->pt->img = mlx_new_image(env->mlx, DIM_PT, DIM_PT);
-		env->pt->imgbuff = mlx_get_data_addr(env->pt->img, &env->pt->bpp, &env->pt->size_line, &env->pt->endian);
-		env->pt->bpp /= 8;
-	}
 	set_camera(&env->cam, DIM_PT);
-	printf("1\n");
 	env->pt->pixels = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, env->spp);
-	printf("2\n");
 	draw_pixels(env->pt, DIM_PT, DIM_PT);
-	printf("3\n");
 	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
 	mlx_key_hook(env->pt->win, exit_hook, env);
 }
@@ -138,6 +128,12 @@ int 		main(int ac, char **av)
 
   	//Enter interactive loop
   	env->mlx = mlx_init();
+
+	env->pt->win = mlx_new_window(env->mlx, DIM_PT, DIM_PT, "CLIVE - Path Tracer");
+	env->pt->img = mlx_new_image(env->mlx, DIM_PT, DIM_PT);
+	env->pt->imgbuff = mlx_get_data_addr(env->pt->img, &env->pt->bpp, &env->pt->size_line, &env->pt->endian);
+	env->pt->bpp /= 8;
+
 	env->ia->win = mlx_new_window(env->mlx, DIM_IA, DIM_IA, "CLIVE - Interactive Mode");
 	env->ia->img = mlx_new_image(env->mlx, DIM_IA, DIM_IA);
 	env->ia->imgbuff = mlx_get_data_addr(env->ia->img, &env->ia->bpp, &env->ia->size_line, &env->ia->endian);
