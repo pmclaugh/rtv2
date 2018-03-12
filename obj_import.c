@@ -206,7 +206,7 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 
 }
 
-Scene *scene_from_obj(char *rel_path, char *filename)
+Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 {
 	//meta function to load whole scene from file (ie sponza.obj + sponza.mtl)
 

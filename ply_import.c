@@ -1,20 +1,26 @@
 #include "rt.h"
 
-typedef union	s_union
+typedef union	s_union32
 {
 	uint8_t	bytes[4];
 	float	f_val;
 	int		i_val;
-}				t_union;
+}				t_union32;
 
-Scene	*scene_from_ply(char *rel_path, char *filename)
+typedef union	s_union16
+{
+	uint8_t	bytes[2];
+	short	value;
+}				t_union16;
+
+Scene	*scene_from_ply(char *rel_path, char *filename, File_edits edit_info)
 {
 	char *file = malloc(strlen(rel_path) + strlen(filename) + 1);
 
 	strcpy(file, rel_path);
 	strcat(file, filename);
 	Scene *S = calloc(1, sizeof(Scene));
-	S->faces = ply_import(file, &S->face_count);
+	S->faces = ply_import(file, edit_info, &S->face_count);
 	free(file);
 	S->materials = calloc(1, sizeof(Material));
 	S->mat_count = 1;
@@ -57,7 +63,7 @@ Scene	*scene_from_ply(char *rel_path, char *filename)
 	return S;
 }
 
-static Face *read_binary_file(FILE *fp, int f_total, int v_total, cl_float3 translate, cl_float3 rotate, float scalar, int file_endian)
+static Face *read_binary_file(FILE *fp, int f_total, int v_total, File_edits edit_info, int file_endian)
 {
 	Face *list = NULL;
 	list = calloc(f_total, sizeof(Face));
@@ -72,7 +78,7 @@ static Face *read_binary_file(FILE *fp, int f_total, int v_total, cl_float3 tran
 	int	endian = ((int)*ptr == 1) ? 0 : 1;// Big endian == 1; Little endian == 0;
 	printf("this machine is %s endian\n", (endian) ? "big" : "little");
 
-	t_union	u;
+	t_union32	u;
 	uint8_t	tmp;
 	for (int i = 0; i < v_total; i++)
 	{
@@ -114,12 +120,63 @@ static Face *read_binary_file(FILE *fp, int f_total, int v_total, cl_float3 tran
 	for (int i = 0; i < v_total; i++)
 	{
 		V[i] = vec_sub(V[i], center);
-		V[i] = vec_scale(V[i], scalar);
-		vec_rot(rotate, &V[i]);
-		V[i] = vec_add(V[i], translate);
+		V[i] = vec_scale(V[i], edit_info.scale);
+		vec_rot(edit_info.rotate, &V[i]);
+		V[i] = vec_add(V[i], edit_info.translate);
 	}
 
-	//now faces
+/*	//now faces
+	uint8_t n;
+	t_union16 u16;
+
+	for (int i = 0; i < f_total; i++)
+	{
+		int a, b, c;
+		fread(&n, 1, 1, fp);
+		if (n != 3)
+			printf("this polygon has %hhu vertices\n", n);
+		else
+			printf("is triangle\n", n);
+		for (int xyz = 0; xyz < 3; xyz++)
+		{
+			bzero(u16.bytes, 2);
+			fread(u16.bytes, 1, 2, fp);
+			if (endian != file_endian)
+			{
+				//reorganize bytes to fit machine endian architecture
+				tmp = u16.bytes[0];
+				u16.bytes[0] = u16.bytes[1];
+				u16.bytes[1] = tmp;
+			}
+			if (xyz == 0)
+				a = (int)u16.value;
+			else if (xyz == 1)
+				b = (int)u16.value;
+			else
+				c = (int)u16.value;
+		}
+		if (a < 0 || a >= v_total || b < 0 || b >= v_total || c < 0 || c >= v_total)
+			printf("index is outside of array size\n");
+		Face face;
+		face.shape = 3;
+		face.mat_type = GPU_MAT_DIFFUSE;
+		face.mat_ind = 0; //some default material
+		face.verts[0] = V[a];
+		face.verts[1] = V[b];
+		face.verts[2] = V[c];
+
+		face.center = vec_scale(vec_add(vec_add(V[a], V[b]), V[c]), 1.0 / 3.0);
+
+		cl_float3 N = cross(vec_sub(V[b], V[a]), vec_sub(V[c], V[a]));
+		face.norms[0] = N;
+		face.norms[1] = N;
+		face.norms[2] = N;
+
+		face.next = NULL;
+		list[i] = face;
+	}
+	free(V);
+	return list;*/
 	uint8_t n;
 	for (int i = 0; i < f_total; i++)
 	{
@@ -172,7 +229,7 @@ static Face *read_binary_file(FILE *fp, int f_total, int v_total, cl_float3 tran
 	return list;
 }
 
-static Face *read_ascii_file(FILE *fp, int f_total, int v_total, cl_float3 translate, cl_float3 rotate, float scalar)
+static Face *read_ascii_file(FILE *fp, int f_total, int v_total, File_edits edit_info)
 {
 	Face *list = NULL;
 	list = calloc(f_total, sizeof(Face));
@@ -203,17 +260,17 @@ static Face *read_ascii_file(FILE *fp, int f_total, int v_total, cl_float3 trans
 	for (int i = 0; i < v_total; i++)
 	{
 		V[i] = vec_sub(V[i], center);
-		V[i] = vec_scale(V[i], scalar);
-		vec_rot(rotate, &V[i]);
-		V[i] = vec_add(V[i], translate);
+		V[i] = vec_scale(V[i], edit_info.scale);
+		vec_rot(edit_info.rotate, &V[i]);
+		V[i] = vec_add(V[i], edit_info.translate);
 	}
 
 	//now faces
 	for (int i = 0; i < f_total; i++)
 	{
-		int a, b, c, n;
+		int a, b, c, d, e, n;
 		fgets(line, 512, fp);
-		sscanf(line, "%d %d %d %d ", &n, &a, &b, &c);
+		sscanf(line, "%d %d %d %d %d %d", &n, &a, &b, &c, &d, &e);
 		Face face;
 		face.shape = 3;
 		face.mat_type = GPU_MAT_DIFFUSE;
@@ -222,7 +279,7 @@ static Face *read_ascii_file(FILE *fp, int f_total, int v_total, cl_float3 trans
 		face.verts[1] = V[b];
 		face.verts[2] = V[c];
 
-		face.center = vec_scale(vec_add(vec_add(V[a], V[b]), V[c]), 1.0 / 3.0);
+		face.center = vec_scale(vec_add(vec_add(V[a], V[b]), V[c]), 1.0 / (float)face.shape);
 
 		cl_float3 N = cross(vec_sub(V[b], V[a]), vec_sub(V[c], V[a]));
 		face.norms[0] = N;
@@ -231,18 +288,90 @@ static Face *read_ascii_file(FILE *fp, int f_total, int v_total, cl_float3 trans
 
 		face.next = NULL;
 		list[i] = face;
+
+		if (n == 4 || n == 5)
+		{
+			Face face;
+			face.shape = 3;
+			face.mat_type = GPU_MAT_DIFFUSE;
+			face.mat_ind = 0; //some default material
+			face.verts[0] = V[a];
+			face.verts[1] = V[c];
+			face.verts[2] = V[d];
+
+			face.center = vec_scale(vec_add(vec_add(V[a], V[c]), V[d]), 1.0 / (float)face.shape);
+
+			cl_float3 N = cross(vec_sub(V[c], V[a]), vec_sub(V[d], V[a]));
+			face.norms[0] = N;
+			face.norms[1] = N;
+			face.norms[2] = N;
+
+			face.next = NULL;
+			list[++i] = face;
+		}
+		if (n == 5)
+		{
+			Face face;
+			face.shape = 3;
+			face.mat_type = GPU_MAT_DIFFUSE;
+			face.mat_ind = 0; //some default material
+			face.verts[0] = V[a];
+			face.verts[1] = V[d];
+			face.verts[2] = V[e];
+
+			face.center = vec_scale(vec_add(vec_add(V[a], V[d]), V[e]), 1.0 / (float)face.shape);
+
+			cl_float3 N = cross(vec_sub(V[d], V[a]), vec_sub(V[e], V[a]));
+			face.norms[0] = N;
+			face.norms[1] = N;
+			face.norms[2] = N;
+
+			face.next = NULL;
+			list[++i] = face;
+		}
 	}
 	free(V);
 	free(line);
 	return list;
 }
 
-Face *ply_import(char *ply_file, int *face_count)
+static void check_ascii_face_count(File_info *file, int *face_count, int vert_total)
+{
+	char *line = calloc(512, sizeof(char));
+
+//	skip vertices while recording the size of this part of file
+	while (vert_total-- > 0)
+	{
+		fgets(line, 512, file->ptr);
+		file->verts_size += strlen(line);
+		//printf("%s\n", line);
+	}
+
+//	now evaluate faces in file to see if any polygons; if so, increase face_count
+	int	vertices;
+	while(fgets(line, 512, file->ptr))
+	{
+		file->faces_size += strlen(line);
+		vertices = atoi(line);
+		if (vertices == 4)
+			*face_count += 1;
+		else if (vertices == 5)
+			*face_count += 2;
+	}
+	free(line);
+	fseek(file->ptr, file->header_size, SEEK_SET);
+}
+
+Face *ply_import(char *ply_file, File_edits edit_info, int *face_count)
 {
 	//import functions should return linked lists of faces.
-	
-	FILE *fp = fopen(ply_file, "r");
-	if (fp == NULL)
+	File_info file;	
+	file.ptr = fopen(ply_file, "r");
+	strcpy(file.name, ply_file);
+	file.header_size = 0;
+	file.verts_size = 0;
+	file.faces_size = 0;
+	if (file.ptr == NULL)
 	{
 		printf("tried and failed to open file %s\n", ply_file);
 		exit(1);
@@ -252,12 +381,10 @@ Face *ply_import(char *ply_file, int *face_count)
 	int v_total;
 	int f_total;
 	int	file_type = 2;
-	float scalar = 1;
-	cl_float3 rotate = (cl_float3){0, 0, 0};
-	cl_float3 translate = (cl_float3){0, 0, 0};
 
-	while(fgets(line, 512, fp))
+	while(fgets(line, 512, file.ptr))
 	{
+		file.header_size += strlen(line);
 		if (strstr(line, "format"))
 		{
 			if (strstr(line, "ascii"))
@@ -267,12 +394,6 @@ Face *ply_import(char *ply_file, int *face_count)
 			else if (strstr(line, "little"))
 				file_type = 0;
 		}
-		else if (strncmp(line, "scale", 5) == 0)
-			sscanf(line, "scale %f", &scalar);
-		else if (strncmp(line, "translate", 9) == 0)
-			sscanf(line, "translate %f %f %f", &translate.x, &translate.y, &translate.z);
-		else if (strncmp(line, "rotate", 6) == 0)
-			sscanf(line, "rotate %f %f %f", &rotate.x, &rotate.y, &rotate.z);
 		else if (strncmp(line, "element vertex", 14) == 0)
 			sscanf(line, "element vertex %d\n", &v_total);
 		else if (strncmp(line, "element face", 12) == 0)
@@ -280,12 +401,17 @@ Face *ply_import(char *ply_file, int *face_count)
 		else if (strncmp(line, "end_header", 10) == 0)
 			break ;
 	}
+
+	if (file_type == 2)
+		check_ascii_face_count(&file, &f_total, v_total);
+	else
+		;//check_binary_face_count(&file, &f_total, v_total);
 	free(line);
 	*face_count = f_total;
 	printf("%s: %d vertices, %d faces\n", ply_file, v_total, f_total);
 
 	if (file_type == 2)
-		return read_ascii_file(fp, f_total, v_total, translate, rotate, scalar);
+		return read_ascii_file(file.ptr, f_total, v_total, edit_info);
 	else
-		return read_binary_file(fp, f_total, v_total, translate, rotate, scalar, file_type);
+		return read_binary_file(file.ptr, f_total, v_total, edit_info, file_type);
 }

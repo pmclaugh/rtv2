@@ -53,6 +53,15 @@
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
 
+typedef struct s_file_info
+{
+	FILE *ptr;
+	char name[512];
+	int header_size;
+	int	verts_size;
+	int	faces_size;
+}				File_info;
+
 typedef struct s_3x3
 {
 	cl_float3 row1;
@@ -233,6 +242,13 @@ typedef struct s_gpu_scene
 	cl_uint seed_count;
 }				gpu_scene;
 
+typedef struct s_file_edits
+{
+	float scale;
+	cl_float3 translate;
+	cl_float3 rotate;
+}				File_edits;
+
 typedef struct	s_key
 {
 	_Bool		w;
@@ -295,15 +311,15 @@ gpu_bin *flatten_bvh(Scene *scene);
 float area(AABB *box);
 
 
-Face *ply_import(char *ply_file, int *face_count);
+Face *ply_import(char *ply_file, File_edits edit_info, int *face_count);
 Face *object_flatten(Face *faces, int *face_count);
 
 ////Old stuff
 void draw_pixels(t_mlx_data *data, int xres, int yres);
 
 void load_config(t_env *env);
-Scene *scene_from_obj(char *rel_path, char *filename);
-Scene *scene_from_ply(char *rel_path, char *filename);
+Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info);
+Scene *scene_from_ply(char *rel_path, char *filename, File_edits edit_info);
 
 cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples);
 
