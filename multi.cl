@@ -10,7 +10,7 @@
 #define LUMA (float3)(0.2126f, 0.7152f, 0.0722f)
 
 #define SUN (float3)(0.0f, 10000.0f, 0.0f)
-#define SUN_BRIGHTNESS 60000.0f
+#define SUN_BRIGHTNESS 6000.0f
 #define SUN_RAD 1.0f;
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
@@ -207,8 +207,8 @@ static void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *te
 	Material mat = mats[m_ind];
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
-	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : (float3)(0.7f, 0.25f, 0.45f);
-	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : BLACK;
+	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : (float3)(0.1f, 0.1f, 0.1f);
+	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 }
 
 static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
@@ -293,7 +293,8 @@ static float GGX_D(float a, float cost)
 
 static float GGX_G1(float3 v, float3 n, float a)
 {
-	float theta = acos(dot(v, n));
+	float theta = acos(dot(v, n)); //still not sure if this should be n or m.
+	//I think it has to be n, because dot(i,m) == dot(o,m) and then they'd just say g1^2
 	if (theta != theta)
 		theta = 0.0f; //acos(1.0f) is nan for some reason.
 	float radicand = 1.0f + a * a * tan(theta) * tan(theta);
@@ -330,6 +331,8 @@ static float GGX_eval(float3 i, float3 o, float3 m, float3 n, float a, float n1,
 	float f = GGX_F(i, n, n1, n2);
 	float g = GGX_G(i, o, m, n, a);
 	float d = GGX_D(a, dot(m,n));
+	//currently overriding f
+	f = 1.0f;
 
 	if (f * g * d <= 0.0f)
 		return 0.0f;
@@ -360,7 +363,7 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
 {
-	float num = dot(i,m) * GGX_G(i, o, m, n, a); //put that limiter in here again it works
+	float num = dot(i,m) * GGX_G(i, o, m, n, a);
 	float denom = dot(i, n) * dot(m, n);
 	float weight = denom > 0.0f ? num / denom : 0.0f;
 	return weight;
@@ -386,22 +389,48 @@ __kernel void bounce( 	__global Ray *rays,
 	spec_importance /= total;
 	diff_importance /= total;
 
-	//let's just hardcode these for now
-	float a = 0.3f;
-	float n1 = 1.0f;
-	float n2 = 1.0f;
+	// float spec_importance = ray.spec.x;
+	// float diff_importance = 1.0f - spec_importance;
 
-	float3 n = ray.N;
-	float3 i = ray.direction * -1.0f;
-	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
-
-	if(get_random(&seed0, &seed1) > GGX_F(i, m, n1, n2))
+	if(spec_importance > 0.0f && get_random(&seed0, &seed1) <= spec_importance)
 	{
+		//let's just hardcode these for now
+		float a = 0.1f;
+		float n1 = 1.0f;
+		float n2 = 1.0f;
+
+		float3 n = ray.N;
+		float3 i = ray.direction * -1.0f;
+		float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
 		float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
+		
 		new_dir = o;
+
+		float eval = GGX_eval(i, o, m, n, a, n1, n2);
 		float weight = GGX_weight(i, o, m, n, a);
+
 		ray.mask *= (ray.spec * weight) / (spec_importance);
 	}
+	// if(get_random(&seed0, &seed1) < spec_importance)
+	// {
+	// 	float3 spec_dir = normalize(ray.direction - 2.0f * dot(ray.direction, ray.N) * ray.N);
+
+	// 	//local orthonormal system
+	// 	float3 axis = fabs(spec_dir.x) > fabs(spec_dir.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+	// 	float3 hem_x = cross(axis, spec_dir);
+	// 	float3 hem_y = cross(spec_dir, hem_x);
+
+	// 	float phi = 2.0f * PI * r1;
+	// 	float theta = acos(native_powr((1.0f - r2), 1.0f / (50.0f)));
+
+	// 	float3 x = hem_x * native_sin(theta) * native_cos(phi);
+	// 	float3 y = hem_y * native_sin(theta) * native_sin(phi);
+	// 	float3 z = spec_dir * native_cos(theta);
+	// 	new_dir = normalize(x + y + z);
+	// 	if (dot(new_dir, ray.N) < 0.0f) // pick mirror of sample (same importance)
+	// 		new_dir = normalize(z - x - y);
+	// 	ray.mask *= spec_importance > 0 ? ray.spec / spec_importance : 0;
+	// }
 	else
 	{
 		//Diffuse reflection (default)
@@ -412,20 +441,17 @@ __kernel void bounce( 	__global Ray *rays,
 
 		//generate random direction on the unit hemisphere (cosine-weighted fo)
 		float r = native_sqrt(r1);
-		float theta = 2.0f * PI * r2;
+		float theta = 2 * PI * r2;
 
 		//combine for new direction
 		new_dir = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
-		ray.mask *= diff_importance > 0.0f ? ray.diff / diff_importance : 0.0f;
+		ray.mask *= diff_importance > 0 ? ray.diff / diff_importance : 0;
 	}
 
 	ray.origin = ray.origin + ray.direction * ray.t + ray.N * NORMAL_SHIFT;
 	ray.direction = new_dir;
 	ray.inv_dir = 1.0f / new_dir;
-	if (dot(ray.mask, ray.mask) > 0.0f)
-		ray.status = TRAVERSE;
-	else
-		ray.status = DEAD;
+	ray.status = TRAVERSE;
 
 	rays[gid] = ray;
 	seeds[2 * gid] = seed0;
@@ -459,7 +485,12 @@ __kernel void collect(	__global Ray *rays,
 	if (ray.status == DEAD)
 	{
 		if (ray.hit_ind == -1)
-			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
+		{
+			if (ray.bounce_count != 0)
+				output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
+			else
+				output[ray.pixel_id] += 0.1f * SUN_BRIGHTNESS;
+		}
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
 	}
@@ -560,10 +591,3 @@ __kernel void traverse(	__global Ray *rays,
 
 	rays[gid] = ray;
 }
-
-// kernel void group_traverse(	__global Ray *rays,
-// 							__global Box *boxes,
-// 							__global float3 *V)
-// {
-	
-// }
