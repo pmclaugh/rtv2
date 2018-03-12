@@ -63,11 +63,11 @@ t_env		*init_env(void)
 	env->cam = init_camera();
 	//load camera settings from config file and import scene
 	load_config(env);
-	set_camera(&env->cam, (float)DIM_INTER);
-	env->inter = malloc(sizeof(t_mlx_data));
-	env->inter->bpp = 0;
-	env->inter->size_line = 0;
-	env->inter->endian = 0;
+	set_camera(&env->cam, (float)DIM_IA);
+	env->ia = malloc(sizeof(t_mlx_data));
+	env->ia->bpp = 0;
+	env->ia->size_line = 0;
+	env->ia->endian = 0;
 	env->pt = malloc(sizeof(t_mlx_data));
 	env->pt->bpp = 0;
 	env->pt->size_line = 0;
@@ -89,7 +89,7 @@ t_env		*init_env(void)
 
 void		path_tracer(t_env *env)
 {
-	if (!env->pt->win)
+	if (!env->pt->win || !env->pt->img || !env->pt->imgbuff)
 	{
 		env->pt->win = mlx_new_window(env->mlx, DIM_PT, DIM_PT, "CLIVE - Path Tracer");
 		env->pt->img = mlx_new_image(env->mlx, DIM_PT, DIM_PT);
@@ -97,8 +97,11 @@ void		path_tracer(t_env *env)
 		env->pt->bpp /= 8;
 	}
 	set_camera(&env->cam, DIM_PT);
+	printf("1\n");
 	env->pt->pixels = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, env->spp);
+	printf("2\n");
 	draw_pixels(env->pt, DIM_PT, DIM_PT);
+	printf("3\n");
 	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
 	mlx_key_hook(env->pt->win, exit_hook, env);
 }
@@ -135,16 +138,16 @@ int 		main(int ac, char **av)
 
   	//Enter interactive loop
   	env->mlx = mlx_init();
-	env->inter->win = mlx_new_window(env->mlx, DIM_INTER, DIM_INTER, "CLIVE - Interactive Mode");
-	env->inter->img = mlx_new_image(env->mlx, DIM_INTER, DIM_INTER);
-	env->inter->imgbuff = mlx_get_data_addr(env->inter->img, &env->inter->bpp, &env->inter->size_line, &env->inter->endian);
-	env->inter->bpp /= 8;
-	env->inter->pixels = malloc(sizeof(cl_double3) * ((DIM_INTER) * (DIM_INTER)));
+	env->ia->win = mlx_new_window(env->mlx, DIM_IA, DIM_IA, "CLIVE - Interactive Mode");
+	env->ia->img = mlx_new_image(env->mlx, DIM_IA, DIM_IA);
+	env->ia->imgbuff = mlx_get_data_addr(env->ia->img, &env->ia->bpp, &env->ia->size_line, &env->ia->endian);
+	env->ia->bpp /= 8;
+	env->ia->pixels = malloc(sizeof(cl_double3) * ((DIM_IA) * (DIM_IA)));
 
-	mlx_hook(env->inter->win, 2, 0, key_press, env);
-	mlx_hook(env->inter->win, 3, 0, key_release, env);
+	mlx_hook(env->ia->win, 2, 0, key_press, env);
+	mlx_hook(env->ia->win, 3, 0, key_release, env);
 	// mlx_hook(env->win, 6, 0, mouse_pos, env);
-	mlx_hook(env->inter->win, 17, 0, exit_hook, env);
+	mlx_hook(env->ia->win, 17, 0, exit_hook, env);
 	mlx_loop_hook(env->mlx, forever_loop, env);
 	mlx_loop(env->mlx);
 	

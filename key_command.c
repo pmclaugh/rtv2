@@ -22,8 +22,8 @@ int		exit_hook(int key, t_env *env)
 {
 	if (key == KEY_ESC)
 	{
-		mlx_destroy_image(env->mlx, env->inter->img);
-		mlx_destroy_window(env->mlx, env->inter->win);
+		mlx_destroy_image(env->mlx, env->ia->img);
+		mlx_destroy_window(env->mlx, env->ia->win);
 		if (env->pt->win)
 		{
 			mlx_destroy_image(env->mlx, env->pt->img);
@@ -193,17 +193,17 @@ int		forever_loop(t_env *env)
 			while (env->cam.angle_y > 2 * M_PI)
 				env->cam.angle_y -= 2 * M_PI;
 		}
-		set_camera(&env->cam, (float)DIM_INTER);
 	}
+	set_camera(&env->cam, (float)DIM_IA);
 	interactive(env);
-	draw_pixels(env->inter, DIM_INTER, DIM_INTER);
-	mlx_put_image_to_window(env->mlx, env->inter->win, env->inter->img, 0, 0);
+	draw_pixels(env->ia, DIM_IA, DIM_IA);
+	mlx_put_image_to_window(env->mlx, env->ia->win, env->ia->img, 0, 0);
 	if (env->show_fps)
 	{
 		float frames = 1.0f / (((float)clock() - (float)frame_start) / (float)CLOCKS_PER_SEC);
 		char *fps = NULL;
 		asprintf(&fps, "%lf", frames);
-		mlx_string_put(env->mlx, env->inter->win, 0, 0, 0x00ff00, fps);
+		mlx_string_put(env->mlx, env->ia->win, 0, 0, 0x00ff00, fps);
 	}
 	return 0;
 }

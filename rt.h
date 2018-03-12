@@ -25,7 +25,7 @@
 #define UNIT_Y (cl_float3){0, 1, 0}
 #define UNIT_Z (cl_float3){0, 0, 1}
 
-#define DIM_INTER	400
+#define DIM_IA		400
 #define DIM_PT		512
 
 #define ERROR 1e-4
@@ -281,7 +281,7 @@ typedef struct s_env
 	t_key		key;
 
 	void		*mlx;
-	t_mlx_data	*inter;
+	t_mlx_data	*ia;
 	t_mlx_data	*pt;
 	int			mode;
 	_Bool		show_fps;

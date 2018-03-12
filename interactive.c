@@ -225,9 +225,9 @@ t_ray	generate_ray(t_camera cam, float x, float y)
 
 void	interactive(t_env *env)
 {
-	for (int y = 0; y < DIM_INTER; y += 2)
+	for (int y = 0; y < DIM_IA; y += 2)
 	{
-		for (int x = 0; x < DIM_INTER; x += 2)
+		for (int x = 0; x < DIM_IA; x += 2)
 		{
 			//find world co-ordinates from camera and pixel plane (generate ray)
 			t_ray ray = generate_ray(env->cam, x, y);
@@ -238,10 +238,10 @@ void	interactive(t_env *env)
 			else if (env->mode == 4)
 				trace_bvh_heatmap(env->scene->bins, &ray);
 			//upscaling the resolution by 2x
-			env->inter->pixels[x + (y * DIM_INTER)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
-			env->inter->pixels[(x + 1) + (y * DIM_INTER)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
-			env->inter->pixels[x + ((y + 1) * DIM_INTER)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
-			env->inter->pixels[(x + 1) + ((y + 1) * DIM_INTER)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[x + (y * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[(x + 1) + (y * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[x + ((y + 1) * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[(x + 1) + ((y + 1) * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
 		}
 	}
 }
