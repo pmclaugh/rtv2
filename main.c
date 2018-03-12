@@ -8,7 +8,7 @@
 //THIS DOESNT WORK RIGHT, JUST FOR TESTING
 #define H_FOV M_PI_2 * 60.0 / 90.0
 
-void		set_camera(t_camera *cam)
+void		set_camera(t_camera *cam, float win_dim)
 {
 	cam->focus = vec_add(cam->pos, vec_scale(cam->dir, cam->dist));
 
@@ -27,8 +27,8 @@ void		set_camera(t_camera *cam)
 	// 	camera_y.y *= -1;
 	
 	//pixel deltas
-	cam->d_x = vec_scale(camera_x, cam->width / (float)XDIM);
-	cam->d_y = vec_scale(camera_y, cam->height / (float)YDIM);
+	cam->d_x = vec_scale(camera_x, cam->width / win_dim);
+	cam->d_y = vec_scale(camera_y, cam->height / win_dim);
 
 	//start at bottom corner (the plane's "origin")
 	cam->origin = vec_sub(cam->pos, vec_scale(camera_x, cam->width / 2.0));
@@ -63,8 +63,15 @@ t_env		*init_env(void)
 	env->cam = init_camera();
 	//load camera settings from config file and import scene
 	load_config(env);
-	set_camera(&env->cam);
-	env->pixels = malloc(sizeof(cl_double3) * ((XDIM) * (YDIM)));
+	set_camera(&env->cam, (float)DIM_IA);
+	env->ia = malloc(sizeof(t_mlx_data));
+	env->ia->bpp = 0;
+	env->ia->size_line = 0;
+	env->ia->endian = 0;
+	env->pt = malloc(sizeof(t_mlx_data));
+	env->pt->bpp = 0;
+	env->pt->size_line = 0;
+	env->pt->endian = 0;
 	env->mode = 1;
 	env->show_fps = 0;
 	env->key.w = 0;
@@ -78,6 +85,25 @@ t_env		*init_env(void)
 	env->key.space = 0;
 	env->key.shift = 0;
 	return env;
+}
+
+void		path_tracer(t_env *env)
+{
+	if (!env->pt->win || !env->pt->img || !env->pt->imgbuff)
+	{
+		env->pt->win = mlx_new_window(env->mlx, DIM_PT, DIM_PT, "CLIVE - Path Tracer");
+		env->pt->img = mlx_new_image(env->mlx, DIM_PT, DIM_PT);
+		env->pt->imgbuff = mlx_get_data_addr(env->pt->img, &env->pt->bpp, &env->pt->size_line, &env->pt->endian);
+		env->pt->bpp /= 8;
+	}
+	set_camera(&env->cam, DIM_PT);
+	printf("1\n");
+	env->pt->pixels = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, env->spp);
+	printf("2\n");
+	draw_pixels(env->pt, DIM_PT, DIM_PT);
+	printf("3\n");
+	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
+	mlx_key_hook(env->pt->win, exit_hook, env);
 }
 
 int 		main(int ac, char **av)
@@ -108,34 +134,20 @@ int 		main(int ac, char **av)
 	env->scene->bins = tree;
 	env->scene->bin_count = box_count;
 	env->scene->face_count = ref_count;
-	printf("flattening bvh\n");
 	flatten_faces(env->scene);
 
-// 	cl_double3 *pixels = gpu_render(sponza, cam, XDIM, YDIM, samples);
-
-// 	void *mlx = mlx_init();
-// 	void *win = mlx_new_window(mlx, XDIM, YDIM, "pathtracer");
-// 	void *img = mlx_new_image(mlx, XDIM, YDIM);
-// 	draw_pixels(img, XDIM, YDIM, pixels);
-// 	mlx_put_image_to_window(mlx, win, img, 0, 0);
-
-// // 	t_param *param = calloc(1, sizeof(t_param));
-// 	*param = (t_param){mlx, win, img, XDIM, YDIM, sponza, cam, NULL, 0};
-	
-// 	mlx_key_hook(win, key_hook, param);
-// 	mlx_loop(mlx);
-
-	printf("RENDER\n");
-
-  	// Enter interactive loop
+  	//Enter interactive loop
   	env->mlx = mlx_init();
-	env->win = mlx_new_window(env->mlx, XDIM, YDIM, "PATH_TRACER");
-	env->img = mlx_new_image(env->mlx, XDIM, YDIM);
+	env->ia->win = mlx_new_window(env->mlx, DIM_IA, DIM_IA, "CLIVE - Interactive Mode");
+	env->ia->img = mlx_new_image(env->mlx, DIM_IA, DIM_IA);
+	env->ia->imgbuff = mlx_get_data_addr(env->ia->img, &env->ia->bpp, &env->ia->size_line, &env->ia->endian);
+	env->ia->bpp /= 8;
+	env->ia->pixels = malloc(sizeof(cl_double3) * ((DIM_IA) * (DIM_IA)));
 
-	mlx_hook(env->win, 2, 0, key_press, env);
-	mlx_hook(env->win, 3, 0, key_release, env);
+	mlx_hook(env->ia->win, 2, 0, key_press, env);
+	mlx_hook(env->ia->win, 3, 0, key_release, env);
 	// mlx_hook(env->win, 6, 0, mouse_pos, env);
-	mlx_hook(env->win, 17, 0, exit_hook, env);
+	mlx_hook(env->ia->win, 17, 0, exit_hook, env);
 	mlx_loop_hook(env->mlx, forever_loop, env);
 	mlx_loop(env->mlx);
 	
