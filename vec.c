@@ -147,16 +147,16 @@ void vec_rot(const cl_float3 rotate, cl_float3 *V)
 	angle = (M_PI * rotate.x) / 180.0;
 	tmp[0] = V->z * cos(angle) + V->y * sin(angle);
 	tmp[1] = V->y * cos(angle) - V->z * sin(angle);
-	V->z = round(tmp[0]);
-	V->y = round(tmp[1]);
+	V->z = tmp[0];
+	V->y = tmp[1];
 	angle = (M_PI * rotate.y) / 180.0;
 	tmp[0] = V->x * cos(angle) + V->z * sin(angle);
 	tmp[1] = V->z * cos(angle) - V->x * sin(angle);
-	V->x = round(tmp[0]);
-	V->z = round(tmp[1]);
+	V->x = tmp[0];
+	V->z = tmp[1];
 	angle = (M_PI * rotate.z) / 180.0;
 	tmp[0] = V->x * cos(angle) + V->y * sin(angle);
 	tmp[1] = V->y * cos(angle) - V->x * sin(angle);
-	V->x = round(tmp[0]);
-	V->y = round(tmp[1]);
+	V->x = tmp[0];
+	V->y = tmp[1];
 }
