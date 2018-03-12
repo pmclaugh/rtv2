@@ -9,7 +9,7 @@
 
 #define XDIM 1024
 #define YDIM 1024
-#define SPP_PER_DEVICE 500
+#define SPP_PER_DEVICE 200
 
 typedef struct s_param
 {
@@ -64,46 +64,6 @@ int key_hook(int keycode, void *param)
 	}
 	return (1);
 }
-
-// typedef struct s_new_scene
-// {
-// 	Material *materials;
-// 	int mat_count;
-// 	Face *faces;
-// 	int face_count;
-// 	AABB *bins;
-// 	int bin_count;
-// }				Scene;
-
-// typedef struct s_material
-// {
-// 	char *friendly_name;
-// 	float Ns; //specular exponent
-// 	float Ni; //index of refraction
-// 	float d; //opacity
-// 	float Tr; //transparency (1 - d)
-// 	cl_float3 Tf; //transmission filter (ie color)
-// 	int illum; //flag for illumination model, raster only
-// 	cl_float3 Ka; //ambient mask
-// 	cl_float3 Kd; //diffuse mask
-// 	cl_float3 Ks; //specular mask
-// 	cl_float3 Ke; //emission mask
-
-// 	char *map_Ka_path;
-// 	Map *map_Ka;
-
-// 	char *map_Kd_path;
-// 	Map *map_Kd;
-
-// 	char *map_bump_path;
-// 	Map *map_bump;
-
-// 	char *map_d_path;
-// 	Map *map_d;
-
-// 	char *map_Ks_path;
-// 	Map *map_Ks;
-// }				Material;
 
 Scene *scene_from_ply(char *filename)
 {

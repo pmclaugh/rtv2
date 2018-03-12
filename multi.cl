@@ -114,15 +114,15 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 }
 
 //intersect_box
-static inline int intersect_box(Ray ray, Box b, float t, float *t_out)
+static inline int intersect_box(const float3 origin, const float3 inv_dir, Box b, float t, float *t_out)
 {
-	float tx0 = (b.minx - ray.origin.x) * ray.inv_dir.x;
-	float tx1 = (b.maxx - ray.origin.x) * ray.inv_dir.x;
+	float tx0 = (b.minx - origin.x) * inv_dir.x;
+	float tx1 = (b.maxx - origin.x) * inv_dir.x;
 	float tmin = fmin(tx0, tx1);
 	float tmax = fmax(tx0, tx1);
 
-	float ty0 = (b.miny - ray.origin.y) * ray.inv_dir.y;
-	float ty1 = (b.maxy - ray.origin.y) * ray.inv_dir.y;
+	float ty0 = (b.miny - origin.y) * inv_dir.y;
+	float ty1 = (b.maxy - origin.y) * inv_dir.y;
 	float tymin = fmin(ty0, ty1);
 	float tymax = fmax(ty0, ty1);
 
@@ -133,8 +133,8 @@ static inline int intersect_box(Ray ray, Box b, float t, float *t_out)
 	tmin = fmax(tymin, tmin);
 	tmax = fmin(tymax, tmax);
 
-	float tz0 = (b.minz - ray.origin.z) * ray.inv_dir.z;
-	float tz1 = (b.maxz - ray.origin.z) * ray.inv_dir.z;
+	float tz0 = (b.minz - origin.z) * inv_dir.z;
+	float tz1 = (b.maxz - origin.z) * inv_dir.z;
 	float tzmin = fmin(tz0, tz1);
 	float tzmax = fmax(tz0, tz1);
 
@@ -153,7 +153,7 @@ static inline int intersect_box(Ray ray, Box b, float t, float *t_out)
 	return (1);
 }
 
-static inline void intersect_triangle(Ray ray, __global float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
+static inline void intersect_triangle(const float3 origin, const float3 direction, __global float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
 {
 	float this_t, this_u, this_v;
 	float3 v0 = V[test_i];
@@ -163,16 +163,16 @@ static inline void intersect_triangle(Ray ray, __global float3 *V, int test_i, i
 	float3 e1 = v1 - v0;
 	float3 e2 = v2 - v0;
 
-	float3 h = cross(ray.direction, e2);
+	float3 h = cross(direction, e2);
 	float a = dot(h, e1);
 
 	float f = 1.0f / a;
-	float3 s = ray.origin - v0;
+	float3 s = origin - v0;
 	this_u = f * dot(s, h);
 	if (this_u < 0.0 || this_u > 1.0)
 		return;
 	float3 q = cross(s, e1);
-	this_v = f * dot(ray.direction, q);
+	this_v = f * dot(direction, q);
 	if (this_v < 0.0 || this_u + this_v > 1.0)
 		return;
 	this_t = f * dot(e2, q);
@@ -389,9 +389,6 @@ __kernel void bounce( 	__global Ray *rays,
 	spec_importance /= total;
 	diff_importance /= total;
 
-	// float spec_importance = ray.spec.x;
-	// float diff_importance = 1.0f - spec_importance;
-
 	if(spec_importance > 0.0f && get_random(&seed0, &seed1) <= spec_importance)
 	{
 		//let's just hardcode these for now
@@ -411,26 +408,6 @@ __kernel void bounce( 	__global Ray *rays,
 
 		ray.mask *= (ray.spec * weight) / (spec_importance);
 	}
-	// if(get_random(&seed0, &seed1) < spec_importance)
-	// {
-	// 	float3 spec_dir = normalize(ray.direction - 2.0f * dot(ray.direction, ray.N) * ray.N);
-
-	// 	//local orthonormal system
-	// 	float3 axis = fabs(spec_dir.x) > fabs(spec_dir.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-	// 	float3 hem_x = cross(axis, spec_dir);
-	// 	float3 hem_y = cross(spec_dir, hem_x);
-
-	// 	float phi = 2.0f * PI * r1;
-	// 	float theta = acos(native_powr((1.0f - r2), 1.0f / (50.0f)));
-
-	// 	float3 x = hem_x * native_sin(theta) * native_cos(phi);
-	// 	float3 y = hem_y * native_sin(theta) * native_sin(phi);
-	// 	float3 z = spec_dir * native_cos(theta);
-	// 	new_dir = normalize(x + y + z);
-	// 	if (dot(new_dir, ray.N) < 0.0f) // pick mirror of sample (same importance)
-	// 		new_dir = normalize(z - x - y);
-	// 	ray.mask *= spec_importance > 0 ? ray.spec / spec_importance : 0;
-	// }
 	else
 	{
 		//Diffuse reflection (default)
@@ -546,14 +523,14 @@ __kernel void traverse(	__global Ray *rays,
 			b = boxes[b_i];
 
 		//check
-		if (intersect_box(ray, b, t, 0))
+		if (intersect_box(ray.origin, ray.inv_dir, b, t, 0))
 		{
 			if (b.rind < 0)
 			{
 				const int count = -1 * b.rind;
 				const int start = -1 * b.lind;
 				for (int i = start; i < start + count; i += 3)
-					intersect_triangle(ray, V, i, &ind, &t, &u, &v);	
+					intersect_triangle(ray.origin, ray.direction, V, i, &ind, &t, &u, &v);	
 			}
 			else
 			{
@@ -571,8 +548,8 @@ __kernel void traverse(	__global Ray *rays,
 				}
                 float t_l = FLT_MAX;
                 float t_r = FLT_MAX;
-                int lhit = intersect_box(ray, l, t, &t_l);
-                int rhit = intersect_box(ray, r, t, &t_r);
+                int lhit = intersect_box(ray.origin, ray.inv_dir, l, t, &t_l);
+                int rhit = intersect_box(ray.origin, ray.inv_dir, r, t, &t_r);
                 if (lhit && t_l >= t_r)
                     stack[s_i++] = lind;
                 if (rhit)
@@ -588,6 +565,5 @@ __kernel void traverse(	__global Ray *rays,
 	ray.v = v;
 	ray.hit_ind = ind;
 	ray.status = ind == -1 ? DEAD : FETCH;
-
 	rays[gid] = ray;
 }

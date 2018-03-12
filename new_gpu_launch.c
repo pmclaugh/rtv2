@@ -181,7 +181,14 @@ gpu_context *prep_gpu(void)
     	clGetDeviceIDs(gpu->platform[i], CL_DEVICE_TYPE_GPU, gpu->numDevices, &device_ids[offset], &d);
     	gpu->contexts[i] = clCreateContext(0, d, &device_ids[offset], NULL, NULL, &err);
     	for (int j = 0; j < d; j++)
-    		gpu->commands[offset + j] = clCreateCommandQueueWithProperties(gpu->contexts[i], device_ids[offset + j], NULL, &err);
+    	{
+    		#ifndef __APPLE__
+    			gpu->commands[offset + j] = clCreateCommandQueueWithProperties(gpu->contexts[i], device_ids[offset + j], NULL, &err);
+    		#endif
+    		#ifdef __APPLE__
+    			gpu->commands[offset + j] = clCreateCommandQueue(gpu->contexts[i], device_ids[offset + j], CL_QUEUE_PROFILING_ENABLE, &err);
+    		#endif
+    	}
     	offset += d;
     }
     // printf("made contexts and CQs\n");
