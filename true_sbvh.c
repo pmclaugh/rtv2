@@ -444,3 +444,54 @@ gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count)
 
 	return bins;
 }
+
+gpu_bin *flatten_bvh_depth_first(Scene *scene, gpu_bin **boost, int *boost_count)
+{
+	gpu_bin *bins = calloc(scene->bin_count, sizeof(gpu_bin));
+	int bin_ind = 0;
+	int boost_ind = 0;
+
+	//do a "dummy" traversal and fill in flat_ind for each AABB
+
+	AABB *stack = scene->bins;
+	scene->bins->next = NULL;
+
+	while (stack)
+	{
+		stack->flat_ind = bin_ind++;
+		if (stack->left)
+		{
+			AABB *l = stack->left;
+			AABB *r = stack->right;
+			l->next = stack;
+			stack = l;
+			r->next = stack;
+			stack = r;
+		}
+		stack = stack->next;
+	}
+
+	//second pass to actually populate the gpu_bins
+	stack = scene->bins;
+	scene->bins->next = NULL;
+
+	while (stack)
+	{
+		bins[stack->flat_ind] = bin_from_box(stack);
+		if (stack->left)
+		{
+			AABB *l = stack->left;
+			AABB *r = stack->right;
+			l->next = stack;
+			stack = l;
+			r->next = stack;
+			stack = r;
+		}
+		stack = stack->next;
+	}
+
+	*boost = bins;
+	*boost_count = 2048 > scene->bin_count ? scene->bin_count : 2048;
+
+	return bins;
+}

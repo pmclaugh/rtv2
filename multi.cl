@@ -208,7 +208,7 @@ static void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *te
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : (float3)(0.7f, 0.25f, 0.45f);
-	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : (float3)(0.1f, 0.1f, 0.1f);
+	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : BLACK;
 }
 
 static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
@@ -459,12 +459,7 @@ __kernel void collect(	__global Ray *rays,
 	if (ray.status == DEAD)
 	{
 		if (ray.hit_ind == -1)
-		{
-			if (ray.bounce_count != 0)
-				output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
-			else
-				output[ray.pixel_id] += 0.1f * SUN_BRIGHTNESS;
-		}
+			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
 	}
@@ -565,3 +560,10 @@ __kernel void traverse(	__global Ray *rays,
 
 	rays[gid] = ray;
 }
+
+// kernel void group_traverse(	__global Ray *rays,
+// 							__global Box *boxes,
+// 							__global float3 *V)
+// {
+	
+// }

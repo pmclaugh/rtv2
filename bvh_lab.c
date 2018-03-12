@@ -38,7 +38,7 @@ static int inside_box(Traversal *ray, AABB *box)
 	return 0;
 }
 
-static int intersect_box(Traversal *ray, AABB *box)
+static int intersect_box(Traversal *ray, AABB *box, float *t_out)
 {
 	ray->box_comps++;
 
@@ -75,6 +75,8 @@ static int intersect_box(Traversal *ray, AABB *box)
 	if (tmin > ray->t)
 		return(0);
 	ray->boxes_hit++;
+	if (t_out)
+		*t_out = fmax(0.0f, tmin);
 	return (1);
 }
 
@@ -124,12 +126,19 @@ void traverse(AABB *tree, Traversal *ray)
 	while(stack)
 	{
 		AABB *box = pop(&stack);
-		if (intersect_box(ray, box))
+		if (intersect_box(ray, box, NULL))
 		{
 			if (box->left) //boxes have either 0 or 2 children
 			{
-				push(&stack, box->left);
-				push(&stack, box->right);
+				float tleft, tright;
+				int lret = intersect_box(ray, box->left, &tleft);
+				int rret = intersect_box(ray, box->right, &tright);
+				 if (lret && tleft >= tright)
+                    push(&stack, box->left);
+                if (rret)
+                    push(&stack, box->right);
+                if (lret && tleft < tright)
+                    push(&stack, box->left);
 			}
 			else
 				check_tris(ray, box);
