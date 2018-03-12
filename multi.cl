@@ -1,7 +1,7 @@
 
 #define PI 3.14159265359f
 #define NORMAL_SHIFT 0.0001f
-#define COLLISION_ERROR 0.0003f
+#define COLLISION_ERROR 0.00001f
 
 #define BLACK (float3)(0.0f, 0.0f, 0.0f)
 #define WHITE (float3)(1.0f, 1.0f, 1.0f)
@@ -169,14 +169,14 @@ static inline void intersect_triangle(const float3 origin, const float3 directio
 	float f = 1.0f / a;
 	float3 s = origin - v0;
 	this_u = f * dot(s, h);
-	if (this_u < 0.0 || this_u > 1.0)
+	if (this_u < 0.0f || this_u > 1.0f)
 		return;
 	float3 q = cross(s, e1);
 	this_v = f * dot(direction, q);
-	if (this_v < 0.0 || this_u + this_v > 1.0)
+	if (this_v < 0.0f || this_u + this_v > 1.0f)
 		return;
 	this_t = f * dot(e2, q);
-	if (this_t < *t && this_t > COLLISION_ERROR)
+	if (this_t < *t && this_t > 0.0f)
 	{
 		*t = this_t;
 		*u = this_u;
@@ -202,9 +202,8 @@ static float3 fetch_tex(	float3 txcrd,
 	return out;
 }
 
-static void fetch_all_tex(__global Material *mats, int m_ind, __global uchar *tex, float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
+static void fetch_all_tex(const Material mat, __global uchar *tex, float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
 {
-	Material mat = mats[m_ind];
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
 	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : (float3)(0.1f, 0.1f, 0.1f);
@@ -263,7 +262,8 @@ __kernel void fetch(	__global Ray *rays,
 	float3 txcrd;
 	fetch_NT(V, N, T, ray.direction, ray.hit_ind, ray.u, ray.v, &ray.N, &txcrd);
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
-	fetch_all_tex(mats, M[ray.hit_ind / 3], tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
+	Material mat = mats[M[ray.hit_ind / 3]];
+	fetch_all_tex(mat, tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
 	ray.status = BOUNCE;
 
 	if (ray.trans.x < 1.0f)
@@ -271,6 +271,12 @@ __kernel void fetch(	__global Ray *rays,
 		ray.origin = ray.origin + ray.direction * (ray.t + NORMAL_SHIFT);
 		ray.bounce_count--;
 		ray.status = TRAVERSE;
+	}
+
+	if (dot(mat.Ke, mat.Ke) > 0.0f)
+	{
+		ray.hit_ind = -1;
+		ray.status = DEAD;
 	}
 
 	rays[gid] = ray;
@@ -462,12 +468,7 @@ __kernel void collect(	__global Ray *rays,
 	if (ray.status == DEAD)
 	{
 		if (ray.hit_ind == -1)
-		{
-			if (ray.bounce_count != 0)
-				output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
-			else
-				output[ray.pixel_id] += 0.1f * SUN_BRIGHTNESS;
-		}
+			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS;// * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
 	}

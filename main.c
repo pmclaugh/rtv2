@@ -9,7 +9,7 @@
 
 #define XDIM 1024
 #define YDIM 1024
-#define SPP_PER_DEVICE 200
+#define SPP_PER_DEVICE 80
 
 typedef struct s_param
 {
@@ -65,16 +65,115 @@ int key_hook(int keycode, void *param)
 	return (1);
 }
 
+void add_box(Face **faces, cl_float3 min, cl_float3 max)
+{
+	Face *box = calloc(14, sizeof(Face));
+
+	//manually (ugh) populate vertices
+	cl_float3 LDF = min;
+	cl_float3 LDB = (cl_float3){min.x, min.y, max.z};
+	cl_float3 RDF = (cl_float3){max.x, min.y, min.z};
+	cl_float3 RDB = (cl_float3){max.x, min.y, max.z};
+	cl_float3 RUB = max;
+	cl_float3 LUB = (cl_float3){min.x, max.y, max.z};
+	cl_float3 RUF = (cl_float3){max.x, max.y, min.z};
+	cl_float3 LUF = (cl_float3){min.x, max.y, min.z};
+
+	//front face
+	box[0].verts[0] = LDF;
+	box[0].verts[1] = RDF;
+	box[0].verts[2] = RUF;
+	box[1].verts[0] = LDF;
+	box[1].verts[1] = LUF;
+	box[1].verts[2] = RUF;
+
+	//left face
+	box[2].verts[0] = LDF;
+	box[2].verts[1] = LUF;
+	box[2].verts[2] = LDB;
+	box[3].verts[0] = LUF;
+	box[3].verts[1] = LDB;
+	box[3].verts[2] = LUB;
+
+	//right face
+	box[4].verts[0] = RDF;
+	box[4].verts[1] = RUF;
+	box[4].verts[2] = RDB;
+	box[5].verts[0] = RUF;
+	box[5].verts[1] = RDB;
+	box[5].verts[2] = RUB;
+
+	//back face
+	box[6].verts[0] = LDB;
+	box[6].verts[1] = RDB;
+	box[6].verts[2] = RUB;
+	box[7].verts[0] = LDB;
+	box[7].verts[1] = LUB;
+	box[7].verts[2] = RUB;
+
+	//down face
+	box[8].verts[0] = LDF;
+	box[8].verts[1] = RDF;
+	box[8].verts[2] = RDB;
+	box[9].verts[0] = RDB;
+	box[9].verts[1] = LDB;
+	box[9].verts[2] = LDF;
+
+	//up face
+	box[10].verts[0] = LUF;
+	box[10].verts[1] = RUF;
+	box[10].verts[2] = RUB;
+	box[11].verts[0] = RUB;
+	box[11].verts[1] = LUB;
+	box[11].verts[2] = LUF;
+
+	for (int i = 0; i < 12; i++)
+	{
+		if (i != 0)
+			box[i - 1].next = &box[i];
+		box[i].shape = 3;
+		box[i].mat_ind = 1; //default wall material
+		if (i == 11)
+			box[i].mat_ind = 2; //lighted ceiling
+		box[i].center = vec_scale(vec_add(vec_add(box[i].verts[0], box[i].verts[1]), box[i].verts[2]), 1.0 / 3.0);
+		cl_float3 N = cross(vec_sub(box[i].verts[1], box[i].verts[0]), vec_sub(box[i].verts[2], box[i].verts[0]));
+		box[i].norms[0] = N;
+		box[i].norms[1] = N;
+		box[i].norms[2] = N;
+		box[i].tex[0] = (cl_float3){0.0f, 0.0f, 0.0f};
+		box[i].tex[1] = (cl_float3){0.0f, 0.0f, 0.0f};
+		box[i].tex[2] = (cl_float3){0.0f, 0.0f, 0.0f};
+	}
+	box[11].next = *faces;
+	*faces = &box[0];
+}
+
 Scene *scene_from_ply(char *filename)
 {
 	Face *ply = ply_import(filename);
 	int box_count, ref_count;
 
+	cl_float3 min, max;
+
+	min = (cl_float3){-0.25, 0.05, -0.25};
+	max = (cl_float3){0.25, 0.35, 0.25};
+
+	add_box(&ply, min, max);
+
 	Scene *scene = calloc(1, sizeof(Scene));
-	scene->materials = calloc(1, sizeof(Material));
-	scene->materials->Kd = (cl_float3){0.2f, 0.2f, 0.6f};
-	scene->materials->Ka = (cl_float3){0.8f, 0.8f, 0.8f};
-	scene->mat_count = 1;
+	scene->materials = calloc(3, sizeof(Material));
+	scene->materials[0].Kd = (cl_float3){0.2f, 0.2f, 0.7f};
+	scene->materials[0].Ka = (cl_float3){0.4f, 0.4f, 0.4f};
+	scene->materials[0].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
+	
+	scene->materials[1].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
+	scene->materials[1].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
+	scene->materials[1].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
+
+	scene->materials[2].Kd = (cl_float3){1.0f, 1.0f, 1.0f};
+	scene->materials[2].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
+	scene->materials[2].Ke = (cl_float3){1.0f, 1.0f, 1.0f};
+	scene->mat_count = 3;
 	scene->bins = sbvh(ply, &box_count, &ref_count);
 	study_tree(scene->bins, 10000);
 	scene->face_count = ref_count;
@@ -90,10 +189,19 @@ Scene *scene_from_stl(char *filename)
 	int box_count, ref_count;
 
 	Scene *scene = calloc(1, sizeof(Scene));
-	scene->materials = calloc(1, sizeof(Material));
-	scene->materials->Kd = (cl_float3){0.2f, 0.2f, 0.7f};
-	scene->materials->Ka = (cl_float3){0.4f, 0.4f, 0.4f};
-	scene->mat_count = 1;
+	scene->materials = calloc(3, sizeof(Material));
+	scene->materials[0].Kd = (cl_float3){0.2f, 0.2f, 0.7f};
+	scene->materials[0].Ka = (cl_float3){0.4f, 0.4f, 0.4f};
+	scene->materials[0].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
+	
+	scene->materials[1].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
+	scene->materials[1].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
+	scene->materials[1].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
+
+	scene->materials[2].Kd = (cl_float3){1.0f, 1.0f, 1.0f};
+	scene->materials[2].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
+	scene->materials[2].Ke = (cl_float3){1.0f, 1.0f, 1.0f};
+	scene->mat_count = 3;
 	scene->bins = sbvh(ply, &box_count, &ref_count);
 	study_tree(scene->bins, 10000);
 	scene->face_count = ref_count;
@@ -107,32 +215,32 @@ int main(int ac, char **av)
 	srand(time(NULL));
 	// scene_from_stl("iona.stl");
 	
-	// Scene *scene = scene_from_ply("objects/ply/dragon.ply");
+	Scene *scene = scene_from_ply("objects/ply/dragon.ply");
 
-	Scene *scene = scene_from_obj("objects/sponza/", "sponza.obj");
+	// Scene *scene = scene_from_obj("objects/sponza/", "sponza.obj");
 
-	// LL is best for this bvh. don't want to rearrange import for now, will do later
-	Face *face_list = NULL;
-	for (int i = 0; i < scene->face_count; i++)
-	{
-		Face *f = calloc(1, sizeof(Face));
-		memcpy(f, &scene->faces[i], sizeof(Face));
-		f->next = face_list;
-		face_list = f;
-	}
-	free(scene->faces);
+	// // LL is best for this bvh. don't want to rearrange import for now, will do later
+	// Face *face_list = NULL;
+	// for (int i = 0; i < scene->face_count; i++)
+	// {
+	// 	Face *f = calloc(1, sizeof(Face));
+	// 	memcpy(f, &scene->faces[i], sizeof(Face));
+	// 	f->next = face_list;
+	// 	face_list = f;
+	// }
+	// free(scene->faces);
 
-	int box_count, ref_count;
-	AABB *tree = sbvh(face_list, &box_count, &ref_count);
-	printf("finished with %d boxes\n", box_count);
-	study_tree(tree, 100000);
+	// int box_count, ref_count;
+	// AABB *tree = sbvh(face_list, &box_count, &ref_count);
+	// printf("finished with %d boxes\n", box_count);
+	// study_tree(tree, 100000);
 
 
-	scene->bins = tree;
-	scene->bin_count = box_count;
-	scene->face_count = ref_count;
-	printf("about to flatten\n");
-	flatten_faces(scene);
+	// scene->bins = tree;
+	// scene->bin_count = box_count;
+	// scene->face_count = ref_count;
+	// printf("about to flatten\n");
+	// flatten_faces(scene);
 
 	//return 0;
 
@@ -142,7 +250,7 @@ int main(int ac, char **av)
 	//cam.center = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
 	//cam.center = (cl_float3){-800.0, 450.0, 0.0}; //standard high perspective on curtain
 	// cam.center = (cl_float3){100.0, 450.0, 0.0}; //standard high perspective on curtain
-	cam.center = (cl_float3){-800.0, 600.0, 350.0}; //upstairs left
+	// cam.center = (cl_float3){-800.0, 600.0, 350.0}; //upstairs left
 	//cam.center = (cl_float3){-300.0, 30.0, 400.0}; //down left
 	//cam.center = (cl_float3){600.0, 150.0, -95.0}; //lion
 	// cam.center = (cl_float3){780.0, 650.0, -35.0}; //lion
@@ -150,10 +258,10 @@ int main(int ac, char **av)
 	//cam.center = (cl_float3){-3000.0, 2200.0, 0.0}; //outside
 
 	// cam.center = (cl_float3){-0.3, 0.1, 0.0}; //bunn
-	cam.normal = (cl_float3){1.0, 0.0, 0.0};
+	// cam.normal = (cl_float3){1.0, 0.0, 0.0};
 
-	// cam.center = (cl_float3){0.0, 0.12, -0.25}; //trogdor
-	// cam.normal = (cl_float3){0.0, 0.0, 1.0};
+	cam.center = (cl_float3){0.0, 0.12, -0.25}; //trogdor
+	cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
 	cam.normal = unit_vec(cam.normal);
 	cam.width = 0.1f * (float)XDIM / (float)YDIM;
