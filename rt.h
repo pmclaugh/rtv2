@@ -72,6 +72,15 @@
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
 
+typedef struct s_file_info
+{
+	FILE *ptr;
+	char name[512];
+	int header_size;
+	int	verts_size;
+	int	faces_size;
+}				File_info;
+
 typedef struct s_3x3
 {
 	cl_float3 row1;
