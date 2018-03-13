@@ -206,7 +206,7 @@ static void fetch_all_tex(const Material mat, __global uchar *tex, float3 txcrd,
 {
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
-	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : (float3)(0.1f, 0.1f, 0.1f);
+	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : mat.Ka;
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 }
 
@@ -275,7 +275,7 @@ __kernel void fetch(	__global Ray *rays,
 
 	if (dot(mat.Ke, mat.Ke) > 0.0f)
 	{
-		ray.hit_ind = -1;
+		ray.color = SUN_BRIGHTNESS * ray.mask;
 		ray.status = DEAD;
 	}
 
@@ -398,7 +398,7 @@ __kernel void bounce( 	__global Ray *rays,
 	if(spec_importance > 0.0f && get_random(&seed0, &seed1) <= spec_importance)
 	{
 		//let's just hardcode these for now
-		float a = 0.1f;
+		float a = 0.05f;
 		float n1 = 1.0f;
 		float n2 = 1.0f;
 
@@ -467,8 +467,7 @@ __kernel void collect(	__global Ray *rays,
 	}
 	if (ray.status == DEAD)
 	{
-		if (ray.hit_ind == -1)
-			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS;// * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
+		output[ray.pixel_id] += ray.color;
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
 	}

@@ -7,9 +7,9 @@
 #endif
 
 
-#define XDIM 1024
-#define YDIM 1024
-#define SPP_PER_DEVICE 80
+#define XDIM 2048
+#define YDIM 2048
+#define SPP_PER_DEVICE 2000
 
 typedef struct s_param
 {
@@ -127,14 +127,30 @@ void add_box(Face **faces, cl_float3 min, cl_float3 max)
 	box[11].verts[1] = LUB;
 	box[11].verts[2] = LUF;
 
-	for (int i = 0; i < 12; i++)
+
+	cl_float3 offset = (cl_float3){0.0f, -0.0001f, 0.0f};
+	cl_float3 ceil_span = vec_sub(RUB, LUF);
+	cl_float3 other_span = vec_sub(RUF, LUB);
+	cl_float3 ceil_ctr = vec_add(offset, vec_add(LUF, vec_scale(ceil_span, 0.5f)));
+
+	//light
+	box[12].verts[0] = vec_add(ceil_ctr, vec_scale(ceil_span, 0.1f));
+	box[12].verts[1] = vec_sub(ceil_ctr, vec_scale(ceil_span, 0.1f));
+	box[12].verts[2] = vec_add(ceil_ctr, vec_scale(other_span, 0.1f));
+	box[13].verts[0] = vec_add(ceil_ctr, vec_scale(ceil_span, 0.1f));
+	box[13].verts[1] = vec_sub(ceil_ctr, vec_scale(ceil_span, 0.1f));
+	box[13].verts[2] = vec_sub(ceil_ctr, vec_scale(other_span, 0.1f));;
+
+	for (int i = 0; i < 14; i++)
 	{
 		if (i != 0)
 			box[i - 1].next = &box[i];
 		box[i].shape = 3;
 		box[i].mat_ind = 1; //default wall material
-		if (i == 11)
+		if (i == 12 || i == 13)
 			box[i].mat_ind = 2; //lighted ceiling
+		if (i == 8 || i ==9)
+			box[i].mat_ind = 3; //glossy floor
 		box[i].center = vec_scale(vec_add(vec_add(box[i].verts[0], box[i].verts[1]), box[i].verts[2]), 1.0 / 3.0);
 		cl_float3 N = cross(vec_sub(box[i].verts[1], box[i].verts[0]), vec_sub(box[i].verts[2], box[i].verts[0]));
 		box[i].norms[0] = N;
@@ -144,7 +160,7 @@ void add_box(Face **faces, cl_float3 min, cl_float3 max)
 		box[i].tex[1] = (cl_float3){0.0f, 0.0f, 0.0f};
 		box[i].tex[2] = (cl_float3){0.0f, 0.0f, 0.0f};
 	}
-	box[11].next = *faces;
+	box[13].next = *faces;
 	*faces = &box[0];
 }
 
@@ -155,13 +171,13 @@ Scene *scene_from_ply(char *filename)
 
 	cl_float3 min, max;
 
-	min = (cl_float3){-0.25, 0.05, -0.25};
+	min = (cl_float3){-0.25, 0.05, -0.85};
 	max = (cl_float3){0.25, 0.35, 0.25};
 
 	add_box(&ply, min, max);
 
 	Scene *scene = calloc(1, sizeof(Scene));
-	scene->materials = calloc(3, sizeof(Material));
+	scene->materials = calloc(4, sizeof(Material));
 	scene->materials[0].Kd = (cl_float3){0.2f, 0.2f, 0.7f};
 	scene->materials[0].Ka = (cl_float3){0.4f, 0.4f, 0.4f};
 	scene->materials[0].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
@@ -173,7 +189,12 @@ Scene *scene_from_ply(char *filename)
 	scene->materials[2].Kd = (cl_float3){1.0f, 1.0f, 1.0f};
 	scene->materials[2].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[2].Ke = (cl_float3){1.0f, 1.0f, 1.0f};
-	scene->mat_count = 3;
+
+	scene->materials[3].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
+	scene->materials[3].Ka = (cl_float3){0.8f, 0.8f, 0.8f};
+	scene->materials[3].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
+
+	scene->mat_count = 4;
 	scene->bins = sbvh(ply, &box_count, &ref_count);
 	study_tree(scene->bins, 10000);
 	scene->face_count = ref_count;
@@ -260,7 +281,7 @@ int main(int ac, char **av)
 	// cam.center = (cl_float3){-0.3, 0.1, 0.0}; //bunn
 	// cam.normal = (cl_float3){1.0, 0.0, 0.0};
 
-	cam.center = (cl_float3){0.0, 0.12, -0.25}; //trogdor
+	cam.center = (cl_float3){0.0, 0.12, -0.35}; //trogdor
 	cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
 	cam.normal = unit_vec(cam.normal);
