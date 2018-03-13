@@ -83,7 +83,7 @@ typedef struct s_map
 typedef struct s_material
 {
 	char *friendly_name;
-	float Ns; //specular exponent
+	cl_float3 Ns; //specular exponent
 	float Ni; //index of refraction
 	float d; //opacity
 	float Tr; //transparency (1 - d)

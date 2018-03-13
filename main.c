@@ -9,7 +9,7 @@
 
 #define XDIM 1024
 #define YDIM 1024
-#define SPP_PER_DEVICE 10000
+#define SPP_PER_DEVICE 600
 
 typedef struct s_param
 {
@@ -79,53 +79,53 @@ void add_box(Face **faces, cl_float3 min, cl_float3 max)
 	cl_float3 RUF = (cl_float3){max.x, max.y, min.z};
 	cl_float3 LUF = (cl_float3){min.x, max.y, min.z};
 
-	//front face
+	//front face - check
 	box[0].verts[0] = LDF;
 	box[0].verts[1] = RDF;
 	box[0].verts[2] = RUF;
 	box[1].verts[0] = LDF;
-	box[1].verts[1] = LUF;
-	box[1].verts[2] = RUF;
+	box[1].verts[1] = RUF;
+	box[1].verts[2] = LUF;
 
-	//left face
+	//left face -check
 	box[2].verts[0] = LDF;
 	box[2].verts[1] = LUF;
 	box[2].verts[2] = LDB;
 	box[3].verts[0] = LUF;
-	box[3].verts[1] = LDB;
-	box[3].verts[2] = LUB;
+	box[3].verts[1] = LUB;
+	box[3].verts[2] = LDB;
 
-	//right face
-	box[4].verts[0] = RDF;
+	//right face - check
+	box[4].verts[0] = RDB;
 	box[4].verts[1] = RUF;
-	box[4].verts[2] = RDB;
-	box[5].verts[0] = RUF;
-	box[5].verts[1] = RDB;
-	box[5].verts[2] = RUB;
+	box[4].verts[2] = RDF;
+	box[5].verts[0] = RDB;
+	box[5].verts[1] = RUB;
+	box[5].verts[2] = RUF;
 
-	//back face
+	//back face -good
 	box[6].verts[0] = LDB;
-	box[6].verts[1] = RDB;
-	box[6].verts[2] = RUB;
+	box[6].verts[1] = RUB;
+	box[6].verts[2] = RDB;
 	box[7].verts[0] = LDB;
 	box[7].verts[1] = LUB;
 	box[7].verts[2] = RUB;
 
-	//down face
+	//down face -good
 	box[8].verts[0] = LDF;
-	box[8].verts[1] = RDF;
-	box[8].verts[2] = RDB;
-	box[9].verts[0] = RDB;
+	box[8].verts[1] = RDB;
+	box[8].verts[2] = RDF;
+	box[9].verts[0] = LDF;
 	box[9].verts[1] = LDB;
-	box[9].verts[2] = LDF;
+	box[9].verts[2] = RDB;
 
-	//up face
+	//up face - check
 	box[10].verts[0] = LUF;
 	box[10].verts[1] = RUF;
 	box[10].verts[2] = RUB;
-	box[11].verts[0] = RUB;
-	box[11].verts[1] = LUB;
-	box[11].verts[2] = LUF;
+	box[11].verts[0] = LUF;
+	box[11].verts[1] = RUB;
+	box[11].verts[2] = LUB;
 
 
 	cl_float3 offset = (cl_float3){0.0f, -0.0001f, 0.0f};
@@ -134,12 +134,12 @@ void add_box(Face **faces, cl_float3 min, cl_float3 max)
 	cl_float3 ceil_ctr = vec_add(offset, vec_add(LUF, vec_scale(ceil_span, 0.5f)));
 
 	//light
-	box[12].verts[0] = vec_add(ceil_ctr, vec_scale(ceil_span, 0.2f));
-	box[12].verts[1] = vec_sub(ceil_ctr, vec_scale(ceil_span, 0.2f));
-	box[12].verts[2] = vec_add(ceil_ctr, vec_scale(other_span, 0.2f));
-	box[13].verts[0] = vec_add(ceil_ctr, vec_scale(ceil_span, 0.2f));
-	box[13].verts[1] = vec_sub(ceil_ctr, vec_scale(ceil_span, 0.2f));
-	box[13].verts[2] = vec_sub(ceil_ctr, vec_scale(other_span, 0.2f));;
+	box[12].verts[0] = vec_sub(ceil_ctr, vec_scale(ceil_span, 0.2f)); //luf
+	box[12].verts[1] = vec_add(ceil_ctr, vec_scale(other_span, 0.2f)); //ruf
+	box[12].verts[2] = vec_add(ceil_ctr, vec_scale(ceil_span, 0.2f)); //rub
+	box[13].verts[0] = vec_sub(ceil_ctr, vec_scale(ceil_span, 0.2f)); //luf
+	box[13].verts[1] = vec_add(ceil_ctr, vec_scale(ceil_span, 0.2f)); //rub
+	box[13].verts[2] = vec_sub(ceil_ctr, vec_scale(other_span, 0.2f)); //lub
 
 	for (int i = 0; i < 14; i++)
 	{
@@ -171,8 +171,8 @@ Scene *scene_from_ply(char *filename)
 
 	cl_float3 min, max;
 
-	min = (cl_float3){-0.25, 0.05, -0.85};
-	max = (cl_float3){0.25, 0.35, 0.25};
+	min = (cl_float3){-0.45, 0.05, -0.35};
+	max = (cl_float3){0.45, 0.35, 0.35};
 
 	add_box(&ply, min, max);
 
@@ -181,18 +181,22 @@ Scene *scene_from_ply(char *filename)
 	scene->materials[0].Kd = (cl_float3){0.2f, 0.2f, 0.7f};
 	scene->materials[0].Ka = (cl_float3){0.4f, 0.4f, 0.4f};
 	scene->materials[0].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
+	scene->materials[0].Ns = (cl_float3){0.0f, 0.0f, 0.0f};
 	
 	scene->materials[1].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
 	scene->materials[1].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[1].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
+	scene->materials[1].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
 
 	scene->materials[2].Kd = (cl_float3){0.8f, 0.8f, 0.8f};
 	scene->materials[2].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[2].Ke = (cl_float3){1.0f, 1.0f, 1.0f};
+	scene->materials[2].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
 
 	scene->materials[3].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
 	scene->materials[3].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[3].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
+	scene->materials[3].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
 
 	scene->mat_count = 4;
 	scene->bins = sbvh(ply, &box_count, &ref_count);
@@ -215,14 +219,7 @@ Scene *scene_from_stl(char *filename)
 	scene->materials[0].Ka = (cl_float3){0.4f, 0.4f, 0.4f};
 	scene->materials[0].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	
-	scene->materials[1].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
-	scene->materials[1].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
-	scene->materials[1].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
-
-	scene->materials[2].Kd = (cl_float3){1.0f, 1.0f, 1.0f};
-	scene->materials[2].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
-	scene->materials[2].Ke = (cl_float3){1.0f, 1.0f, 1.0f};
-	scene->mat_count = 3;
+	scene->mat_count = 1;
 	scene->bins = sbvh(ply, &box_count, &ref_count);
 	study_tree(scene->bins, 10000);
 	scene->face_count = ref_count;
@@ -281,7 +278,11 @@ int main(int ac, char **av)
 	// cam.center = (cl_float3){-0.3, 0.1, 0.0}; //bunn
 	// cam.normal = (cl_float3){1.0, 0.0, 0.0};
 
-	cam.center = (cl_float3){0.0, 0.12, -0.35}; //trogdor
+	// cam.center = (cl_float3){-0.3, 0.15, 0.0}; //dragon facing
+	// cam.normal = (cl_float3){1.0, 0.0, 0.0};
+
+
+	cam.center = (cl_float3){0.0, 0.12, -0.27}; //trogdor
 	cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
 	cam.normal = unit_vec(cam.normal);

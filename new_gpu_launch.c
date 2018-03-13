@@ -49,7 +49,7 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 	{
 		simple_mats[i].Ka = s->materials[i].Ka;
 		simple_mats[i].Kd = s->materials[i].Kd;
-		simple_mats[i].Ns.x = s->materials[i].Ns;
+		simple_mats[i].Ns = s->materials[i].Ns;
 		simple_mats[i].Ke = s->materials[i].Ke;
 
 		if (s->materials[i].map_Kd)
@@ -202,6 +202,7 @@ gpu_context *prep_gpu(void)
     // #endif
 
     char *source = load_cl_file("multi.cl");
+    printf("loaded kernel source\n");
 
     //create (platforms) programs and build them
     gpu->programs = calloc(gpu->numPlatforms, sizeof(cl_program));

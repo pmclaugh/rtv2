@@ -204,7 +204,7 @@ static float3 fetch_tex(	float3 txcrd,
 
 static void fetch_all_tex(const Material mat, __global uchar *tex, float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
 {
-	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : UNIT_X;
+	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : mat.Ns;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
 	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : mat.Ka;
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
@@ -222,7 +222,8 @@ static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T,
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-	*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
+	// *N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
+	*N_out = sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
 	txcrd.x -= floor(txcrd.x);
@@ -266,12 +267,12 @@ __kernel void fetch(	__global Ray *rays,
 	fetch_all_tex(mat, tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
 	ray.status = BOUNCE;
 
-	if (ray.trans.x < 1.0f)
-	{
-		ray.origin = ray.origin + ray.direction * (ray.t + NORMAL_SHIFT);
-		ray.bounce_count--;
-		ray.status = TRAVERSE;
-	}
+	// if (ray.trans.x < 1.0f)
+	// {
+	// 	ray.origin = ray.origin + ray.direction * (ray.t + NORMAL_SHIFT);
+	// 	ray.bounce_count--;
+	// 	ray.status = TRAVERSE;
+	// }
 
 	if (dot(mat.Ke, mat.Ke) > 0.0f)
 	{
@@ -326,7 +327,7 @@ static float GGX_F(float3 i, float3 m, float n1, float n2)
 	float num = n1 - n2;
 	float denom = n1 + n2;
 	float r0 = (num * num) / (denom * denom);
-	float cos_term = pow(1.0f - dot(i, m), 5.0f);
+	float cos_term = pow(1.0f - fabs(dot(i, m)), 5.0f);
 	return r0 + (1.0f - r0) * cos_term;
 }
 
@@ -369,8 +370,8 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
 {
-	float num = dot(i,m) * GGX_G(i, o, m, n, a);
-	float denom = dot(i, n) * dot(m, n);
+	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a);
+	float denom = fabs(dot(i, n)) * fabs(dot(m, n));
 	float weight = denom > 0.0f ? num / denom : 0.0f;
 	return weight;
 }
@@ -390,42 +391,74 @@ __kernel void bounce( 	__global Ray *rays,
 	float r2 = get_random(&seed0, &seed1);
 
 	float3 weight = BLACK;
-	float a = 0.001f;
-	float n1 = 1.0f;
-	float n2 = 1.5f;
+	float a = 0.1f;
 
+	//inside or outside the glass?
+	float norm_sign = dot(ray.N, ray.direction) < 0.0f ? 1.0f : -1.0f;  
+	float n1, n2;
+	if (norm_sign > 0.0f)
+	{
+		n1 = 1.0f;
+		n2 = 1.5f;
+	}
+	else
+	{
+		n1 = 1.5f;
+		n2 = 1.0f;
+	}
+	
 	float3 n = ray.N;
 	float3 i = ray.direction * -1.0f;
 	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
 	float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
 
-	if(get_random(&seed0, &seed1) <= GGX_F(i, m, n1, n2))
+	if(get_random(&seed0, &seed1) < GGX_F(i, m, n1, n2))
 	{
 		new_dir = o;
 		weight = GGX_weight(i, o, m, n, a) * ray.spec;
 	}
 	if (dot(weight, weight) == 0.0f) //didn't try spec, or spec failed
 	{
-		//Diffuse reflection (default)
-		//local orthonormal system
-		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-		float3 hem_x = cross(axis, ray.N);
-		float3 hem_y = cross(ray.N, hem_x);
+		float index = n1 / n2;
+		float c = dot(i,m);
+		if (ray.trans.x < 1.0f && 1.0f + index * (c * c - 1.0f) >= 0.0f)
+		{
+			float sign = dot(i,n) > 0.0f ? 1.0f : -1.0f;
+			float coeff = index * c + sign * sqrt(1.0f + index * (c * c - 1.0f));
+			if (coeff != coeff)
+				printf("coeff nan\n");
+			new_dir = normalize(coeff * m - index * i);
+			//new_dir = ray.direction;
+			norm_sign *= -1.0f;
+			weight = ray.diff;// * GGX_weight(i,new_dir,m,n,a);
+		}
+		else
+		{
+			//Diffuse reflection (default)
+			//local orthonormal system
+			float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+			float3 hem_x = cross(axis, ray.N);
+			float3 hem_y = cross(ray.N, hem_x);
 
-		//generate random direction on the unit hemisphere (cosine-weighted fo)
-		float r = native_sqrt(r1);
-		float theta = 2.0f * PI * r2;
+			//generate random direction on the unit hemisphere (cosine-weighted fo)
+			float r = native_sqrt(r1);
+			float theta = 2.0f * PI * r2;
 
-		//combine for new direction
-		new_dir = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
-		weight = ray.diff;
+			//combine for new direction
+			new_dir = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
+			weight = ray.diff;
+		}
+		
 	}
 
 	ray.mask *= weight;
-	ray.origin = ray.origin + ray.direction * ray.t + ray.N * NORMAL_SHIFT;
+	
+	ray.origin = ray.origin + ray.direction * ray.t + ray.N * norm_sign * NORMAL_SHIFT;
 	ray.direction = new_dir;
 	ray.inv_dir = 1.0f / new_dir;
 	ray.status = TRAVERSE;
+	if (dot(ray.mask, ray.mask) == 0.0f)
+		ray.status = DEAD;
 
 	rays[gid] = ray;
 	seeds[2 * gid] = seed0;
