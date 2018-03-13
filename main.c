@@ -7,9 +7,9 @@
 #endif
 
 
-#define XDIM 2048
-#define YDIM 2048
-#define SPP_PER_DEVICE 2000
+#define XDIM 1024
+#define YDIM 1024
+#define SPP_PER_DEVICE 10000
 
 typedef struct s_param
 {
@@ -134,12 +134,12 @@ void add_box(Face **faces, cl_float3 min, cl_float3 max)
 	cl_float3 ceil_ctr = vec_add(offset, vec_add(LUF, vec_scale(ceil_span, 0.5f)));
 
 	//light
-	box[12].verts[0] = vec_add(ceil_ctr, vec_scale(ceil_span, 0.1f));
-	box[12].verts[1] = vec_sub(ceil_ctr, vec_scale(ceil_span, 0.1f));
-	box[12].verts[2] = vec_add(ceil_ctr, vec_scale(other_span, 0.1f));
-	box[13].verts[0] = vec_add(ceil_ctr, vec_scale(ceil_span, 0.1f));
-	box[13].verts[1] = vec_sub(ceil_ctr, vec_scale(ceil_span, 0.1f));
-	box[13].verts[2] = vec_sub(ceil_ctr, vec_scale(other_span, 0.1f));;
+	box[12].verts[0] = vec_add(ceil_ctr, vec_scale(ceil_span, 0.2f));
+	box[12].verts[1] = vec_sub(ceil_ctr, vec_scale(ceil_span, 0.2f));
+	box[12].verts[2] = vec_add(ceil_ctr, vec_scale(other_span, 0.2f));
+	box[13].verts[0] = vec_add(ceil_ctr, vec_scale(ceil_span, 0.2f));
+	box[13].verts[1] = vec_sub(ceil_ctr, vec_scale(ceil_span, 0.2f));
+	box[13].verts[2] = vec_sub(ceil_ctr, vec_scale(other_span, 0.2f));;
 
 	for (int i = 0; i < 14; i++)
 	{
@@ -186,12 +186,12 @@ Scene *scene_from_ply(char *filename)
 	scene->materials[1].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[1].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 
-	scene->materials[2].Kd = (cl_float3){1.0f, 1.0f, 1.0f};
+	scene->materials[2].Kd = (cl_float3){0.8f, 0.8f, 0.8f};
 	scene->materials[2].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[2].Ke = (cl_float3){1.0f, 1.0f, 1.0f};
 
 	scene->materials[3].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
-	scene->materials[3].Ka = (cl_float3){0.8f, 0.8f, 0.8f};
+	scene->materials[3].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[3].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 
 	scene->mat_count = 4;

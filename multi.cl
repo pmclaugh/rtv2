@@ -389,32 +389,22 @@ __kernel void bounce( 	__global Ray *rays,
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
 
-	float spec_importance = ray.spec.x + ray.spec.y + ray.spec.z;
-	float diff_importance = ray.diff.x + ray.diff.y + ray.diff.z;
-	float total = spec_importance + diff_importance;
-	spec_importance /= total;
-	diff_importance /= total;
+	float3 weight = BLACK;
+	float a = 0.001f;
+	float n1 = 1.0f;
+	float n2 = 1.5f;
 
-	if(spec_importance > 0.0f && get_random(&seed0, &seed1) <= spec_importance)
+	float3 n = ray.N;
+	float3 i = ray.direction * -1.0f;
+	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
+	float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
+
+	if(get_random(&seed0, &seed1) <= GGX_F(i, m, n1, n2))
 	{
-		//let's just hardcode these for now
-		float a = 0.2f;
-		float n1 = 1.0f;
-		float n2 = 1.0f;
-
-		float3 n = ray.N;
-		float3 i = ray.direction * -1.0f;
-		float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
-		float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
-		
 		new_dir = o;
-
-		float eval = GGX_eval(i, o, m, n, a, n1, n2);
-		float weight = GGX_weight(i, o, m, n, a);
-
-		ray.mask *= (ray.spec * weight) / (spec_importance);
+		weight = GGX_weight(i, o, m, n, a) * ray.spec;
 	}
-	else
+	if (dot(weight, weight) == 0.0f) //didn't try spec, or spec failed
 	{
 		//Diffuse reflection (default)
 		//local orthonormal system
@@ -424,13 +414,14 @@ __kernel void bounce( 	__global Ray *rays,
 
 		//generate random direction on the unit hemisphere (cosine-weighted fo)
 		float r = native_sqrt(r1);
-		float theta = 2 * PI * r2;
+		float theta = 2.0f * PI * r2;
 
 		//combine for new direction
 		new_dir = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
-		ray.mask *= diff_importance > 0 ? ray.diff / diff_importance : 0;
+		weight = ray.diff;
 	}
 
+	ray.mask *= weight;
 	ray.origin = ray.origin + ray.direction * ray.t + ray.N * NORMAL_SHIFT;
 	ray.direction = new_dir;
 	ray.inv_dir = 1.0f / new_dir;
