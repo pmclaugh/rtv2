@@ -149,8 +149,8 @@ void add_box(Face **faces, cl_float3 min, cl_float3 max)
 		box[i].mat_ind = 1; //default wall material
 		if (i == 12 || i == 13)
 			box[i].mat_ind = 2; //lighted ceiling
-		if (i == 8 || i ==9)
-			box[i].mat_ind = 3; //glossy floor
+		// if (i == 8 || i ==9)
+		// 	box[i].mat_ind = 3; //glossy floor
 		box[i].center = vec_scale(vec_add(vec_add(box[i].verts[0], box[i].verts[1]), box[i].verts[2]), 1.0 / 3.0);
 		cl_float3 N = cross(vec_sub(box[i].verts[1], box[i].verts[0]), vec_sub(box[i].verts[2], box[i].verts[0]));
 		box[i].norms[0] = N;

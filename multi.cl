@@ -398,7 +398,7 @@ __kernel void bounce( 	__global Ray *rays,
 	if(spec_importance > 0.0f && get_random(&seed0, &seed1) <= spec_importance)
 	{
 		//let's just hardcode these for now
-		float a = 0.05f;
+		float a = 0.2f;
 		float n1 = 1.0f;
 		float n2 = 1.0f;
 
