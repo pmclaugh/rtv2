@@ -9,7 +9,7 @@
 
 #define XDIM 1024
 #define YDIM 1024
-#define SPP_PER_DEVICE 100
+#define SPP_PER_DEVICE 500
 
 typedef struct s_param
 {
@@ -150,7 +150,9 @@ void add_box(Face **faces, cl_float3 min, cl_float3 max)
 		if (i == 12 || i == 13)
 			box[i].mat_ind = 2; //lighted ceiling
 		if (i == 6 || i == 7)
-			box[i].mat_ind = 3; //glossy floor
+			box[i].mat_ind = 3; //other color
+		if (i == 2 || i == 3)
+			box[i].mat_ind = 4; // another color
 		box[i].center = vec_scale(vec_add(vec_add(box[i].verts[0], box[i].verts[1]), box[i].verts[2]), 1.0 / 3.0);
 		cl_float3 N = cross(vec_sub(box[i].verts[1], box[i].verts[0]), vec_sub(box[i].verts[2], box[i].verts[0]));
 		box[i].norms[0] = N;
@@ -171,16 +173,16 @@ Scene *scene_from_ply(char *filename)
 
 	cl_float3 min, max;
 
-	min = (cl_float3){-0.45, 0.05, -0.35};
-	max = (cl_float3){0.45, 0.35, 0.35};
+	min = (cl_float3){-2.0, -2.0, -3.0};
+	max = (cl_float3){2.0, 2.0, 3.0};
 
 	add_box(&ply, min, max);
 
 	Scene *scene = calloc(1, sizeof(Scene));
-	scene->materials = calloc(4, sizeof(Material));
+	scene->materials = calloc(5, sizeof(Material));
 	//imported model
 	scene->materials[0].Kd = (cl_float3){0.8f, 0.8f, 0.8f};
-	scene->materials[0].Ka = (cl_float3){0.6f, 0.6f, 0.6f};
+	scene->materials[0].Ka = (cl_float3){0.8f, 0.8f, 0.8f};
 	scene->materials[0].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[0].Ns = (cl_float3){0.0f, 0.0f, 0.0f};
 	
@@ -202,7 +204,13 @@ Scene *scene_from_ply(char *filename)
 	scene->materials[3].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[3].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
 
-	scene->mat_count = 4;
+	//optional alternate wall
+	scene->materials[4].Kd = (cl_float3){0.8f, 0.3f, 0.3f};
+	scene->materials[4].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
+	scene->materials[4].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
+	scene->materials[4].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
+
+	scene->mat_count = 5;
 	scene->bins = sbvh(ply, &box_count, &ref_count);
 	study_tree(scene->bins, 10000);
 	scene->face_count = ref_count;
@@ -237,7 +245,7 @@ int main(int ac, char **av)
 	srand(time(NULL));
 	// scene_from_stl("iona.stl");
 	
-	Scene *scene = scene_from_ply("objects/ply/dragon.ply");
+	Scene *scene = scene_from_ply("objects/ply/oct.ply");
 
 	// Scene *scene = scene_from_obj("objects/sponza/", "sponza.obj");
 
@@ -286,7 +294,7 @@ int main(int ac, char **av)
 	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 
-	cam.center = (cl_float3){0.0, 0.12, -0.27}; //trogdor
+	cam.center = (cl_float3){0.0, 0.4, -2.9}; //trogdor
 	cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
 	cam.normal = unit_vec(cam.normal);
