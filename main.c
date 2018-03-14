@@ -9,7 +9,7 @@
 
 #define XDIM 1024
 #define YDIM 1024
-#define SPP_PER_DEVICE 500
+#define SPP_PER_DEVICE 1000
 
 typedef struct s_param
 {

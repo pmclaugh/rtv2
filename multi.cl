@@ -1,6 +1,6 @@
 
 #define PI 3.14159265359f
-#define NORMAL_SHIFT 0.0001f
+#define NORMAL_SHIFT 0.00001f
 #define COLLISION_ERROR 0.00001f
 
 #define BLACK (float3)(0.0f, 0.0f, 0.0f)
@@ -10,7 +10,7 @@
 #define LUMA (float3)(0.2126f, 0.7152f, 0.0722f)
 
 #define SUN (float3)(0.0f, 10000.0f, 0.0f)
-#define SUN_BRIGHTNESS 6000.0f
+#define SUN_BRIGHTNESS 60000.0f
 #define SUN_RAD 1.0f;
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
@@ -277,7 +277,7 @@ __kernel void fetch(	__global Ray *rays,
 	if (dot(mat.Ke, mat.Ke) > 0.0f)
 	{
 		ray.color = SUN_BRIGHTNESS * ray.mask;
-		//ray.status = DEAD;
+		ray.status = DEAD;
 	}
 
 	rays[gid] = ray;
@@ -392,8 +392,12 @@ __kernel void bounce( 	__global Ray *rays,
 	float3 weight = BLACK;
 	float a = 0.0f;
 
+	float3 n = ray.N;
+	float3 i = ray.direction * -1.0f;
+	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
+
 	//inside or outside the glass?
-	float norm_sign = dot(ray.N, ray.direction) < 0.0f ? 1.0f : -1.0f;  
+	float norm_sign = dot(n, i) > 0.0f ? 1.0f : -1.0f;  
 	float ni, nt;
 	if (norm_sign > 0.0f)
 	{
@@ -406,9 +410,6 @@ __kernel void bounce( 	__global Ray *rays,
 		nt = 1.0f;
 	}
 	
-	float3 n = ray.N;
-	float3 i = ray.direction * -1.0f;
-	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
 	float3 o;
 
 	if (dot(ray.spec, ray.spec) > 0.0f) 
@@ -416,22 +417,21 @@ __kernel void bounce( 	__global Ray *rays,
 		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
 		{
 			o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m);
-			weight = GGX_weight(i, o, m, n, a) * WHITE;// * ray.spec;
+			weight = GGX_weight(i, o, m, n, a) * ray.spec;
 		}
 		else
 		{
 			float index = ni / nt;
 			float c = dot(i,m);
-			float sign = dot(i, n) > 0.0f ? 1.0f : -1.0f;
-			float coeff = index * c - sign * sqrt(1.0f + index * (c * c - 1.0f));
+			float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
 			if (coeff != coeff)
 				weight = 0.0f;
 			else
 			{
 				o = normalize((coeff * m) - (index * i));
 				weight = (GGX_weight(i, o, m, n, a) / (1.0f - GGX_F(i, m, ni, nt))) * norm_sign > 0.0f ? WHITE : ray.diff;
-				norm_sign *= -1.0f;
 			}
+			norm_sign *= -1.0f;
 		}
 	}
 	if (dot(ray.spec, ray.spec) == 0.0f || dot(weight, weight) == 0.0f)
@@ -447,7 +447,7 @@ __kernel void bounce( 	__global Ray *rays,
 		float theta = 2.0f * PI * r2;
 
 		//combine for new direction
-		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
+		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + norm_sign * ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
 	}
 
