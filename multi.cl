@@ -17,7 +17,7 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define MIN_BOUNCES 5
+#define MIN_BOUNCES 8
 #define RR_PROB 0.3f
 
 #define NEW 0
@@ -398,11 +398,11 @@ __kernel void bounce( 	__global Ray *rays,
 	if (norm_sign > 0.0f)
 	{
 		n1 = 1.0f;
-		n2 = 1.5f;
+		n2 = 1.3f;
 	}
 	else
 	{
-		n1 = 1.5f;
+		n1 = 1.3f;
 		n2 = 1.0f;
 	}
 	
@@ -427,21 +427,24 @@ __kernel void bounce( 	__global Ray *rays,
 		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
 	}
-	else if (get_random(&seed0, &seed1) < GGX_F(i, m, n1, n2))
+	else 
 	{
-		o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m);
-		weight = GGX_weight(i, o, m, n, a) * ray.spec;
-	}
-	else
-	{
-		float index = n1 / n2;
-		float c = dot(i,m);
-		float sign = dot(i, n) > 0.0f ? 1.0f : -1.0f;
-		float coeff = index * c - sign * sqrt(1.0f + index * (c * c - 1.0f));
-		if (coeff != coeff)
-			coeff = 0.0f;
-		o = normalize((coeff * m) - (index * i));
-		weight = GGX_weight(i, o, m, n, a) * ray.diff;
+		if (get_random(&seed0, &seed1) < GGX_F(i, m, n1, n2))
+		{
+			o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m);
+			weight = GGX_weight(i, o, m, n, a) * ray.spec;
+		}
+		if (dot(weight, weight) == 0.0f)
+		{
+			float index = n1 / n2;
+			float c = dot(i,m);
+			float sign = dot(i, n) > 0.0f ? 1.0f : -1.0f;
+			float coeff = index * c - sign * sqrt(1.0f + index * (c * c - 1.0f));
+			if (coeff != coeff)
+				coeff = 0.0f;
+			o = normalize((coeff * m) - (index * i));
+			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
+		}
 	}
 
 	ray.mask *= weight;
