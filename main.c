@@ -7,9 +7,9 @@
 #endif
 
 
-#define XDIM 1024
-#define YDIM 1024
-#define SPP_PER_DEVICE 12000
+#define XDIM 4096
+#define YDIM 4096
+#define SPP_PER_DEVICE 30000
 
 typedef struct s_param
 {
@@ -149,8 +149,8 @@ void add_box(Face **faces, cl_float3 min, cl_float3 max)
 		box[i].mat_ind = 1; //default wall material
 		if (i == 12 || i == 13)
 			box[i].mat_ind = 2; //lighted ceiling
-		// if (i == 8 || i ==9)
-		// 	box[i].mat_ind = 3; //glossy floor
+		if (i == 6 || i == 7)
+			box[i].mat_ind = 3; //glossy floor
 		box[i].center = vec_scale(vec_add(vec_add(box[i].verts[0], box[i].verts[1]), box[i].verts[2]), 1.0 / 3.0);
 		cl_float3 N = cross(vec_sub(box[i].verts[1], box[i].verts[0]), vec_sub(box[i].verts[2], box[i].verts[0]));
 		box[i].norms[0] = N;
@@ -178,22 +178,26 @@ Scene *scene_from_ply(char *filename)
 
 	Scene *scene = calloc(1, sizeof(Scene));
 	scene->materials = calloc(4, sizeof(Material));
-	scene->materials[0].Kd = (cl_float3){0.2f, 0.2f, 0.7f};
-	scene->materials[0].Ka = (cl_float3){0.4f, 0.4f, 0.4f};
+	//imported model
+	scene->materials[0].Kd = (cl_float3){0.8f, 0.8f, 0.8f};
+	scene->materials[0].Ka = (cl_float3){0.6f, 0.6f, 0.6f};
 	scene->materials[0].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[0].Ns = (cl_float3){0.0f, 0.0f, 0.0f};
 	
+	//walls
 	scene->materials[1].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
 	scene->materials[1].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[1].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[1].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
 
+	//light
 	scene->materials[2].Kd = (cl_float3){0.8f, 0.8f, 0.8f};
 	scene->materials[2].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[2].Ke = (cl_float3){1.0f, 1.0f, 1.0f};
 	scene->materials[2].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
 
-	scene->materials[3].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
+	//optional alternate wall
+	scene->materials[3].Kd = (cl_float3){0.3f, 0.8f, 0.3f};
 	scene->materials[3].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[3].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[3].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
@@ -278,8 +282,8 @@ int main(int ac, char **av)
 	// cam.center = (cl_float3){-0.3, 0.1, 0.0}; //bunn
 	// cam.normal = (cl_float3){1.0, 0.0, 0.0};
 
-	// cam.center = (cl_float3){-0.3, 0.15, 0.0}; //dragon facing
-	// cam.normal = (cl_float3){1.0, 0.0, 0.0};
+	// cam.center = (cl_float3){0.3, 0.15, 0.0}; //dragon facing
+	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 
 	cam.center = (cl_float3){0.0, 0.12, -0.27}; //trogdor
@@ -295,7 +299,10 @@ int main(int ac, char **av)
 	cl_double3 *pixels = gpu_render(scene, cam, XDIM, YDIM, SPP_PER_DEVICE);
 
 	char *filename;
-	asprintf(&filename, "out.ppm");
+	if (ac == 1)
+		asprintf(&filename, "out.ppm");
+	else
+		filename = strdup(av[1]);
 	FILE *f = fopen(filename, "w");
 	fprintf(f, "P3\n%d %d\n%d\n ",XDIM,YDIM,255);
 	for (int row=0; row<YDIM; row++)

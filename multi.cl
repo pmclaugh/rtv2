@@ -17,7 +17,7 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define MIN_BOUNCES 8
+#define MIN_BOUNCES 5
 #define RR_PROB 0.3f
 
 #define NEW 0
@@ -300,7 +300,7 @@ static float GGX_D(float a, float cost)
 
 static float GGX_G1(float3 v, float3 n, float a)
 {
-	float theta = acos(dot(v, n)); //still not sure if this should be n or m.
+	float theta = acos(fabs(dot(v, n))); //still not sure if this should be n or m.
 	//I think it has to be n, because dot(i,m) == dot(o,m) and then they'd just say g1^2
 	if (theta != theta)
 		theta = 0.0f; //acos(1.0f) is nan for some reason.
@@ -390,20 +390,20 @@ __kernel void bounce( 	__global Ray *rays,
 	float r2 = get_random(&seed0, &seed1);
 
 	float3 weight = BLACK;
-	float a = 0.1f;
+	float a = 0.0f;
 
 	//inside or outside the glass?
 	float norm_sign = dot(ray.N, ray.direction) < 0.0f ? 1.0f : -1.0f;  
-	float n1, n2;
+	float ni, nt;
 	if (norm_sign > 0.0f)
 	{
-		n1 = 1.0f;
-		n2 = 1.3f;
+		ni = 1.0f;
+		nt = 1.5f;
 	}
 	else
 	{
-		n1 = 1.3f;
-		n2 = 1.0f;
+		ni = 1.5f;
+		nt = 1.0f;
 	}
 	
 	float3 n = ray.N;
@@ -429,21 +429,22 @@ __kernel void bounce( 	__global Ray *rays,
 	}
 	else 
 	{
-		if (get_random(&seed0, &seed1) < GGX_F(i, m, n1, n2))
+		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
 		{
 			o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m);
-			weight = GGX_weight(i, o, m, n, a) * ray.spec;
+			weight = GGX_weight(i, o, m, n, a) * WHITE;// * ray.spec;
 		}
-		if (dot(weight, weight) == 0.0f)
+		else
 		{
-			float index = n1 / n2;
+			float index = ni / nt;
 			float c = dot(i,m);
 			float sign = dot(i, n) > 0.0f ? 1.0f : -1.0f;
 			float coeff = index * c - sign * sqrt(1.0f + index * (c * c - 1.0f));
 			if (coeff != coeff)
 				coeff = 0.0f;
 			o = normalize((coeff * m) - (index * i));
-			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
+			weight = (GGX_weight(i, o, m, n, a) / (1.0f - GGX_F(i, m, ni, nt))) * norm_sign > 0.0f ? WHITE : ray.diff;
+			norm_sign *= -1.0f;
 		}
 	}
 

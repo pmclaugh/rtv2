@@ -266,7 +266,7 @@ typedef struct s_split
 //bvh_util.c
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
-#define SPLIT_TEST_NUM 64
+#define SPLIT_TEST_NUM 256
 #define LEAF_THRESHOLD 4
 #define BOOST_DEPTH 11
 #define ALPHA 0.01f
