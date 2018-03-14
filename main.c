@@ -185,7 +185,7 @@ Scene *scene_from_ply(char *filename)
 	scene->materials[0].Ns = (cl_float3){0.0f, 0.0f, 0.0f};
 	
 	//walls
-	scene->materials[1].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
+	scene->materials[1].Kd = (cl_float3){0.3f, 0.3f, 0.8f};
 	scene->materials[1].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[1].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[1].Ns = (cl_float3){1.0f, 0.0f, 0.0f};

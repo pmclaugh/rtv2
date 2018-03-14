@@ -277,7 +277,7 @@ __kernel void fetch(	__global Ray *rays,
 	if (dot(mat.Ke, mat.Ke) > 0.0f)
 	{
 		ray.color = SUN_BRIGHTNESS * ray.mask;
-		ray.status = DEAD;
+		//ray.status = DEAD;
 	}
 
 	rays[gid] = ray;
@@ -411,7 +411,30 @@ __kernel void bounce( 	__global Ray *rays,
 	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
 	float3 o;
 
-	if (dot(ray.spec, ray.spec) == 0.0f)
+	if (dot(ray.spec, ray.spec) > 0.0f) 
+	{
+		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
+		{
+			o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m);
+			weight = GGX_weight(i, o, m, n, a) * WHITE;// * ray.spec;
+		}
+		else
+		{
+			float index = ni / nt;
+			float c = dot(i,m);
+			float sign = dot(i, n) > 0.0f ? 1.0f : -1.0f;
+			float coeff = index * c - sign * sqrt(1.0f + index * (c * c - 1.0f));
+			if (coeff != coeff)
+				weight = 0.0f;
+			else
+			{
+				o = normalize((coeff * m) - (index * i));
+				weight = (GGX_weight(i, o, m, n, a) / (1.0f - GGX_F(i, m, ni, nt))) * norm_sign > 0.0f ? WHITE : ray.diff;
+				norm_sign *= -1.0f;
+			}
+		}
+	}
+	if (dot(ray.spec, ray.spec) == 0.0f || dot(weight, weight) == 0.0f)
 	{
 		//Cosine-weighted pure diffuse reflection
 		//local orthonormal system
@@ -426,26 +449,6 @@ __kernel void bounce( 	__global Ray *rays,
 		//combine for new direction
 		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
-	}
-	else 
-	{
-		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
-		{
-			o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m);
-			weight = GGX_weight(i, o, m, n, a) * WHITE;// * ray.spec;
-		}
-		else
-		{
-			float index = ni / nt;
-			float c = dot(i,m);
-			float sign = dot(i, n) > 0.0f ? 1.0f : -1.0f;
-			float coeff = index * c - sign * sqrt(1.0f + index * (c * c - 1.0f));
-			if (coeff != coeff)
-				coeff = 0.0f;
-			o = normalize((coeff * m) - (index * i));
-			weight = (GGX_weight(i, o, m, n, a) / (1.0f - GGX_F(i, m, ni, nt))) * norm_sign > 0.0f ? WHITE : ray.diff;
-			norm_sign *= -1.0f;
-		}
 	}
 
 	ray.mask *= weight;
