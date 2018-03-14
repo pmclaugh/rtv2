@@ -384,7 +384,6 @@ __kernel void bounce( 	__global Ray *rays,
 	if (ray.status != BOUNCE)
 		return;
 
-	float3 new_dir;
 	uint seed0 = seeds[2 * gid];
 	uint seed1 = seeds[2 * gid + 1];
 	float r1 = get_random(&seed0, &seed1);
@@ -410,52 +409,45 @@ __kernel void bounce( 	__global Ray *rays,
 	float3 n = ray.N;
 	float3 i = ray.direction * -1.0f;
 	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
-	float3 o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m); //generate specular direction based on m
+	float3 o;
 
-	if(get_random(&seed0, &seed1) < GGX_F(i, m, n1, n2))
+	if (dot(ray.spec, ray.spec) == 0.0f)
 	{
-		new_dir = o;
+		//Cosine-weighted pure diffuse reflection
+		//local orthonormal system
+		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+		float3 hem_x = cross(axis, ray.N);
+		float3 hem_y = cross(ray.N, hem_x);
+
+		//generate random direction on the unit hemisphere (cosine-weighted)
+		float r = native_sqrt(r1);
+		float theta = 2.0f * PI * r2;
+
+		//combine for new direction
+		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
+		weight = ray.diff;
+	}
+	else if (get_random(&seed0, &seed1) < GGX_F(i, m, n1, n2))
+	{
+		o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m);
 		weight = GGX_weight(i, o, m, n, a) * ray.spec;
 	}
-	if (dot(weight, weight) == 0.0f) //didn't try spec, or spec failed
+	else
 	{
 		float index = n1 / n2;
 		float c = dot(i,m);
-		if (ray.trans.x < 1.0f && 1.0f + index * (c * c - 1.0f) >= 0.0f)
-		{
-			float sign = dot(i,n) > 0.0f ? 1.0f : -1.0f;
-			float coeff = index * c + sign * sqrt(1.0f + index * (c * c - 1.0f));
-			if (coeff != coeff)
-				printf("coeff nan\n");
-			new_dir = normalize(coeff * m - index * i);
-			//new_dir = ray.direction;
-			norm_sign *= -1.0f;
-			weight = ray.diff;// * GGX_weight(i,new_dir,m,n,a);
-		}
-		else
-		{
-			//Diffuse reflection (default)
-			//local orthonormal system
-			float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-			float3 hem_x = cross(axis, ray.N);
-			float3 hem_y = cross(ray.N, hem_x);
-
-			//generate random direction on the unit hemisphere (cosine-weighted fo)
-			float r = native_sqrt(r1);
-			float theta = 2.0f * PI * r2;
-
-			//combine for new direction
-			new_dir = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
-			weight = ray.diff;
-		}
-		
+		float sign = dot(i, n) > 0.0f ? 1.0f : -1.0f;
+		float coeff = index * c - sign * sqrt(1.0f + index * (c * c - 1.0f));
+		if (coeff != coeff)
+			coeff = 0.0f;
+		o = normalize((coeff * m) - (index * i));
+		weight = GGX_weight(i, o, m, n, a) * ray.diff;
 	}
 
 	ray.mask *= weight;
-	
-	ray.origin = ray.origin + ray.direction * ray.t + ray.N * norm_sign * NORMAL_SHIFT;
-	ray.direction = new_dir;
-	ray.inv_dir = 1.0f / new_dir;
+	ray.origin = ray.origin + ray.direction * ray.t + o * NORMAL_SHIFT;
+	ray.direction = o;
+	ray.inv_dir = 1.0f / o;
 	ray.status = TRAVERSE;
 	if (dot(ray.mask, ray.mask) == 0.0f)
 		ray.status = DEAD;
