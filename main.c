@@ -7,9 +7,9 @@
 #endif
 
 
-#define XDIM 4096
-#define YDIM 4096
-#define SPP_PER_DEVICE 30000
+#define XDIM 1024
+#define YDIM 1024
+#define SPP_PER_DEVICE 100
 
 typedef struct s_param
 {
