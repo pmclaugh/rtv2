@@ -40,7 +40,7 @@ int		key_press(int key, t_env *env)
 	if (key == KEY_ESC)
 		exit_hook(key, env);
 	if (key == KEY_ENTER)
-		path_tracer(env);
+		env->render = 1;
 	else if (key == KEY_TAB)
 	{
 		env->mode++;
@@ -205,5 +205,7 @@ int		forever_loop(t_env *env)
 		asprintf(&fps, "%lf", frames);
 		mlx_string_put(env->mlx, env->ia->win, 0, 0, 0x00ff00, fps);
 	}
+	if (env->render && env->samples <= env->spp)
+		path_tracer(env);
 	return 0;
 }

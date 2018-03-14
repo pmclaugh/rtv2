@@ -5,56 +5,71 @@
 #else
 #endif
 
-//THIS DOESNT WORK RIGHT, JUST FOR TESTING
-#define H_FOV M_PI_2 * 60.0 / 90.0
-
-void		set_camera(t_camera *cam, float win_dim)
+void	sum_color(cl_float3 *a, cl_float3 *b, int size)
 {
-	cam->focus = vec_add(cam->pos, vec_scale(cam->dir, cam->dist));
-
-	cl_float3 camera_x, camera_y;
-	//horizontal reference
-	if (fabs(cam->dir.x) < .00001)
-		camera_x = (cam->dir.z > 0) ? UNIT_X : vec_scale(UNIT_X, -1);
-	else
-		camera_x = unit_vec(cross((cl_float3){cam->dir.x, 0, cam->dir.z}, (cl_float3){0, -1, 0}));
-	//vertical reference
-	if (fabs(cam->dir.y) < .00001)
-		camera_y = UNIT_Y;
-	else
-		camera_y = unit_vec(cross(cam->dir, camera_x));
-	// if (camera_y.y < 0) //when vertical plane reference points down
-	// 	camera_y.y *= -1;
-	
-	//pixel deltas
-	cam->d_x = vec_scale(camera_x, cam->width / win_dim);
-	cam->d_y = vec_scale(camera_y, cam->height / win_dim);
-
-	//start at bottom corner (the plane's "origin")
-	cam->origin = vec_sub(cam->pos, vec_scale(camera_x, cam->width / 2.0));
-	cam->origin = vec_sub(cam->origin, vec_scale(camera_y, cam->height / 2.0));
+	for (int i = 0; i < size; i++)
+	{
+		a[i].x += b[i].x;
+		a[i].y += b[i].y;
+		a[i].z += b[i].z;
+	}
 }
 
-t_camera	init_camera(void)
+void		path_tracer(t_env *env)
 {
-	t_camera	cam;
-	//cam.pos = (cl_float3){-400.0, 50.0, -220.0}; //reference vase view (1,0,0)
-	//cam.pos = (cl_float3){-540.0, 150.0, 380.0}; //weird wall-hole (0,0,1)
-	cam.pos = (cl_float3){800.0, 450.0, 0.0}; //standard high perspective on curtain
-	//cam.pos = (cl_float3){-800.0, 600.0, 350.0}; upstairs left
-	//cam.pos = (cl_float3){800.0, 100.0, 350.0}; //down left
-	//cam.pos = (cl_float3){900.0, 150.0, -35.0}; //lion
-	//cam.pos = (cl_float3){-250.0, 100.0, 0.0};
-	cam.dir = unit_vec((cl_float3){-1.0, 0.0, 0.0});
-	cam.width = 1.0;
-	cam.height = 1.0;
-	cam.angle_x = atan2(cam.dir.z, cam.dir.x);
-	cam.angle_y = 0;
-	//determine a focus point in front of the view-plane
-	//such that the edge-focus-edge vertex has angle H_FOV
+	env->samples += 1;
+	if (env->samples > env->spp)
+	{
+		env->samples = 0;
+		env->render = 0;
+		for (int i = 0; i < DIM_PT * DIM_PT; i++)
+		{
+			env->pt->total_clr[i].x = 0;
+			env->pt->total_clr[i].y = 0;
+			env->pt->total_clr[i].z = 0;
+		}
+		return ;
+	}
+	set_camera(&env->cam, DIM_PT);
+	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1);
+	sum_color(env->pt->total_clr, pix, DIM_PT * DIM_PT);
+	alt_composite(env->pt, DIM_PT * DIM_PT, env->samples);
+	draw_pixels(env->pt, DIM_PT, DIM_PT);
+	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
+	mlx_key_hook(env->pt->win, exit_hook, env);
+}
 
-	cam.dist = (cam.width / 2.0) / tan(H_FOV / 2.0);
-	return cam;
+void		init_mlx_data(t_env *env)
+{
+	env->mlx = mlx_init();
+
+	env->pt = malloc(sizeof(t_mlx_data));
+	env->pt->bpp = 0;
+	env->pt->size_line = 0;
+	env->pt->endian = 0;
+	env->pt->win = mlx_new_window(env->mlx, DIM_PT, DIM_PT, "CLIVE - Path Tracer");
+	env->pt->img = mlx_new_image(env->mlx, DIM_PT, DIM_PT);
+	env->pt->imgbuff = mlx_get_data_addr(env->pt->img, &env->pt->bpp, &env->pt->size_line, &env->pt->endian);
+	env->pt->bpp /= 8;
+	env->pt->pixels = malloc(sizeof(cl_double3) * (DIM_PT * DIM_PT));
+	env->pt->total_clr = malloc(sizeof(cl_double3) * (DIM_PT * DIM_PT));
+	for (int i = 0; i < DIM_PT * DIM_PT; i++)
+	{
+		env->pt->total_clr[i].x = 0;
+		env->pt->total_clr[i].y = 0;
+		env->pt->total_clr[i].z = 0;
+	}
+	
+	env->ia = malloc(sizeof(t_mlx_data));
+	env->ia->bpp = 0;
+	env->ia->size_line = 0;
+	env->ia->endian = 0;
+	env->ia->win = mlx_new_window(env->mlx, DIM_IA, DIM_IA, "CLIVE - Interactive Mode");
+	env->ia->img = mlx_new_image(env->mlx, DIM_IA, DIM_IA);
+	env->ia->imgbuff = mlx_get_data_addr(env->ia->img, &env->ia->bpp, &env->ia->size_line, &env->ia->endian);
+	env->ia->bpp /= 8;
+	env->ia->pixels = malloc(sizeof(cl_double3) * ((DIM_IA) * (DIM_IA)));
+	env->ia->total_clr = NULL;
 }
 
 t_env		*init_env(void)
@@ -64,14 +79,6 @@ t_env		*init_env(void)
 	//load camera settings from config file and import scene
 	load_config(env);
 	set_camera(&env->cam, (float)DIM_IA);
-	env->ia = malloc(sizeof(t_mlx_data));
-	env->ia->bpp = 0;
-	env->ia->size_line = 0;
-	env->ia->endian = 0;
-	env->pt = malloc(sizeof(t_mlx_data));
-	env->pt->bpp = 0;
-	env->pt->size_line = 0;
-	env->pt->endian = 0;
 	env->mode = 1;
 	env->show_fps = 0;
 	env->key.w = 0;
@@ -84,16 +91,9 @@ t_env		*init_env(void)
 	env->key.rarr = 0;
 	env->key.space = 0;
 	env->key.shift = 0;
+	env->samples = 0;
+	env->render = 0;
 	return env;
-}
-
-void		path_tracer(t_env *env)
-{
-	set_camera(&env->cam, DIM_PT);
-	env->pt->pixels = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, env->spp);
-	draw_pixels(env->pt, DIM_PT, DIM_PT);
-	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
-	mlx_key_hook(env->pt->win, exit_hook, env);
 }
 
 int 		main(int ac, char **av)
@@ -126,23 +126,10 @@ int 		main(int ac, char **av)
 	env->scene->face_count = ref_count;
 	flatten_faces(env->scene);
 
+	init_mlx_data(env);
   	//Enter interactive loop
-  	env->mlx = mlx_init();
-
-	env->pt->win = mlx_new_window(env->mlx, DIM_PT, DIM_PT, "CLIVE - Path Tracer");
-	env->pt->img = mlx_new_image(env->mlx, DIM_PT, DIM_PT);
-	env->pt->imgbuff = mlx_get_data_addr(env->pt->img, &env->pt->bpp, &env->pt->size_line, &env->pt->endian);
-	env->pt->bpp /= 8;
-
-	env->ia->win = mlx_new_window(env->mlx, DIM_IA, DIM_IA, "CLIVE - Interactive Mode");
-	env->ia->img = mlx_new_image(env->mlx, DIM_IA, DIM_IA);
-	env->ia->imgbuff = mlx_get_data_addr(env->ia->img, &env->ia->bpp, &env->ia->size_line, &env->ia->endian);
-	env->ia->bpp /= 8;
-	env->ia->pixels = malloc(sizeof(cl_double3) * ((DIM_IA) * (DIM_IA)));
-
 	mlx_hook(env->ia->win, 2, 0, key_press, env);
 	mlx_hook(env->ia->win, 3, 0, key_release, env);
-	// mlx_hook(env->win, 6, 0, mouse_pos, env);
 	mlx_hook(env->ia->win, 17, 0, exit_hook, env);
 	mlx_loop_hook(env->mlx, forever_loop, env);
 	mlx_loop(env->mlx);
