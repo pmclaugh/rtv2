@@ -412,24 +412,16 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 		clSetKernelArg(bounce[i], 1, sizeof(cl_mem), &d_seeds[i]);
 	}
 
-	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
-	for (int i = 0; i < CL->numDevices; i++)
-		outputs[i] = calloc(worksize, sizeof(cl_float3));
-
-	cl_int **counts = calloc(CL->numDevices, sizeof(cl_int *));
-	for (int i = 0; i < CL->numDevices; i++)
-		counts[i] = calloc(worksize, sizeof(cl_int));
 
 	printf("any key to launch\n");
 	getchar();
 	//ACTUAL LAUNCH TIME
 	cl_event begin, finish;
 	cl_ulong start, end;
-	
+	// cl_event collectE, traverseE, fetchE, bounceE;
 	for (int i = 0; i < d; i++)
 		for (int j = 0; j < samples; j++)
 		{
-			cl_event collectE, traverseE, fetchE, bounceE;
 			clEnqueueNDRangeKernel(CL->commands[i], collect[i], 1, 0, &worksize, &localsize, 0, NULL, j == 0 ? &begin: NULL);
 			clEnqueueNDRangeKernel(CL->commands[i], traverse[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
 			clEnqueueNDRangeKernel(CL->commands[i], fetch[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
@@ -446,6 +438,14 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 	clGetEventProfilingInfo(finish, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 	printf("took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
 	
+	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
+	for (int i = 0; i < CL->numDevices; i++)
+		outputs[i] = calloc(worksize, sizeof(cl_float3));
+
+	cl_int **counts = calloc(CL->numDevices, sizeof(cl_int *));
+	for (int i = 0; i < CL->numDevices; i++)
+		counts[i] = calloc(worksize, sizeof(cl_int));
+
 	for (int i = 0; i < d; i++)
 	{
 		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_TRUE, 0, worksize * sizeof(cl_float3), outputs[i], 0, NULL, NULL);

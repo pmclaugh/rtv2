@@ -459,16 +459,17 @@ gpu_bin *flatten_bvh_depth_first(Scene *scene, gpu_bin **boost, int *boost_count
 	while (stack)
 	{
 		stack->flat_ind = bin_ind++;
-		if (stack->left)
+		AABB *popped = stack;
+		stack = stack->next;
+		if (popped->left)
 		{
-			AABB *l = stack->left;
-			AABB *r = stack->right;
-			l->next = stack;
-			stack = l;
+			AABB *l = popped->left;
+			AABB *r = popped->right;
 			r->next = stack;
 			stack = r;
+			l->next = stack;
+			stack = l;
 		}
-		stack = stack->next;
 	}
 
 	//second pass to actually populate the gpu_bins
@@ -477,17 +478,18 @@ gpu_bin *flatten_bvh_depth_first(Scene *scene, gpu_bin **boost, int *boost_count
 
 	while (stack)
 	{
-		bins[stack->flat_ind] = bin_from_box(stack);
-		if (stack->left)
+		AABB *popped = stack;
+		stack = stack->next;
+		bins[stack->flat_ind] = bin_from_box(popped);
+		if (popped->left)
 		{
-			AABB *l = stack->left;
-			AABB *r = stack->right;
-			l->next = stack;
-			stack = l;
+			AABB *l = popped->left;
+			AABB *r = popped->right;
 			r->next = stack;
 			stack = r;
+			l->next = stack;
+			stack = l;
 		}
-		stack = stack->next;
 	}
 
 	*boost = bins;
