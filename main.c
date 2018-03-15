@@ -182,7 +182,7 @@ Scene *scene_from_ply(char *filename)
 	scene->materials = calloc(5, sizeof(Material));
 	//imported model
 	scene->materials[0].Kd = (cl_float3){0.8f, 0.8f, 0.8f};
-	scene->materials[0].Ka = (cl_float3){1.0f, 0.41f, 0.71f};
+	scene->materials[0].Ka = (cl_float3){0.9f, 0.4f, 0.7f};
 	scene->materials[0].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[0].Ns = (cl_float3){0.0f, 0.0f, 0.0f};
 	
