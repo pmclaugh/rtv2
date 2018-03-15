@@ -426,12 +426,12 @@ __kernel void bounce( 	__global Ray *rays,
 		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
 		{
 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE;
+			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : pow(ray.spec, ray.t);
 			if (dot(weight, weight) == 0.0f)
 			{
 				//if microfacet reflection fails, fall back to macro-normal
 				o = normalize(2.0f * fabs(dot(i, n)) * n - i);
-				weight = GGX_weight(i, o, m, n, a) * WHITE;// * ray.spec;
+				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : pow(ray.spec, ray.t);
 			}
 		}
 		else
@@ -443,12 +443,12 @@ __kernel void bounce( 	__global Ray *rays,
 			{
 				//if coeff is Nan, means total internal reflection
 				o = normalize(2.0f * fabs(dot(i, n)) * n - i);
-				weight = GGX_weight(i, o, m, n, a) * WHITE;
+				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : pow(ray.spec, ray.t);
 			}
 			else
 			{
 				o = normalize((coeff * m) - (index * i));
-				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE;
+				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : pow(ray.spec, ray.t);
 			}
 		}
 	}
@@ -465,7 +465,7 @@ __kernel void bounce( 	__global Ray *rays,
 		float theta = 2.0f * PI * r2;
 
 		//combine for new direction
-		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + norm_sign * ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
+		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
 	}
 
