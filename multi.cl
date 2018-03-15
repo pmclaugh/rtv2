@@ -426,12 +426,12 @@ __kernel void bounce( 	__global Ray *rays,
 		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
 		{
 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-			weight = GGX_weight(i, o, m, n, a) * ray.spec;
+			weight = GGX_weight(i, o, m, n, a);// * ray.spec;
 			if (dot(weight, weight) == 0.0f)
 			{
 				//if microfacet reflection fails, fall back to macro-normal
 				o = normalize(2.0f * fabs(dot(i, n)) * n - i);
-				weight = GGX_weight(i, o, m, n, a) * ray.spec;
+				weight = GGX_weight(i, o, m, n, a) * WHITE;// * ray.spec;
 			}
 		}
 		else
@@ -443,12 +443,12 @@ __kernel void bounce( 	__global Ray *rays,
 			{
 				//if coeff is Nan, means total internal reflection
 				o = normalize(2.0f * fabs(dot(i, n)) * n - i);
-				weight = GGX_weight(i, o, m, n, a) * ray.spec;
+				weight = GGX_weight(i, o, m, n, a) * WHITE;
 			}
 			else
 			{
 				o = normalize((coeff * m) - (index * i));
-				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
+				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE;
 				norm_sign *= -1.0f;
 			}
 		}
