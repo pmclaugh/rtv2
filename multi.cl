@@ -1,6 +1,6 @@
 
 #define PI 3.14159265359f
-#define NORMAL_SHIFT 0.00001f
+#define NORMAL_SHIFT 0.0001f
 #define COLLISION_ERROR 0.00001f
 
 #define BLACK (float3)(0.0f, 0.0f, 0.0f)
@@ -276,8 +276,8 @@ __kernel void fetch(	__global Ray *rays,
 
 	if (dot(mat.Ke, mat.Ke) > 0.0f)
 	{
-		ray.color = SUN_BRIGHTNESS * ray.mask;
-		ray.status = DEAD;
+		ray.color += SUN_BRIGHTNESS * ray.mask;
+		//ray.status = DEAD;
 	}
 
 	rays[gid] = ray;
@@ -365,6 +365,8 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 	float3 z = n * native_cos(theta);
 
 	float3 m = normalize(x + y + z);
+	if (dot(m, i) * dot(n, i) < 0.0f)
+		m = normalize(z - x - y);
 	return m;
 }
 
@@ -384,16 +386,23 @@ __kernel void bounce( 	__global Ray *rays,
 	if (ray.status != BOUNCE)
 		return;
 
+	// ray.status = DEAD;
+	// ray.color = (1.0f + ray.N) / 2.0f;
+	// rays[gid] = ray;
+	// return;
+
 	uint seed0 = seeds[2 * gid];
 	uint seed1 = seeds[2 * gid + 1];
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
 
 	float3 weight = BLACK;
-	float a = 0.0f;
+	
 
 	float3 n = ray.N;
 	float3 i = ray.direction * -1.0f;
+	float a = 0.01f;
+	a = (1.2f - 0.2f * sqrt(fabs(dot(i,n)))) * a; //softening approximation to reduce weight variance
 	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
 
 	//inside or outside the glass?
@@ -416,8 +425,14 @@ __kernel void bounce( 	__global Ray *rays,
 	{
 		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
 		{
-			o = normalize(ray.direction - 2.0f * dot(ray.direction, m) * m);
+			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
 			weight = GGX_weight(i, o, m, n, a) * ray.spec;
+			if (dot(weight, weight) == 0.0f)
+			{
+				//if microfacet reflection fails, fall back to macro-normal
+				o = normalize(2.0f * fabs(dot(i, n)) * n - i);
+				weight = GGX_weight(i, o, m, n, a) * ray.spec;
+			}
 		}
 		else
 		{
@@ -425,16 +440,20 @@ __kernel void bounce( 	__global Ray *rays,
 			float c = dot(i,m);
 			float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
 			if (coeff != coeff)
-				weight = 0.0f;
+			{
+				//if coeff is Nan, means total internal reflection
+				o = normalize(2.0f * fabs(dot(i, n)) * n - i);
+				weight = GGX_weight(i, o, m, n, a) * ray.spec;
+			}
 			else
 			{
 				o = normalize((coeff * m) - (index * i));
-				weight = (GGX_weight(i, o, m, n, a) / (1.0f - GGX_F(i, m, ni, nt))) * norm_sign > 0.0f ? WHITE : ray.diff;
+				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
+				norm_sign *= -1.0f;
 			}
-			norm_sign *= -1.0f;
 		}
 	}
-	if (dot(ray.spec, ray.spec) == 0.0f || dot(weight, weight) == 0.0f)
+	else
 	{
 		//Cosine-weighted pure diffuse reflection
 		//local orthonormal system
@@ -452,7 +471,7 @@ __kernel void bounce( 	__global Ray *rays,
 	}
 
 	ray.mask *= weight;
-	ray.origin = ray.origin + ray.direction * ray.t + o * NORMAL_SHIFT;
+	ray.origin = ray.origin + ray.direction * ray.t + n * norm_sign * NORMAL_SHIFT;
 	ray.direction = o;
 	ray.inv_dir = 1.0f / o;
 	ray.status = TRAVERSE;

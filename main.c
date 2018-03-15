@@ -173,8 +173,8 @@ Scene *scene_from_ply(char *filename)
 
 	cl_float3 min, max;
 
-	min = (cl_float3){-2.0, -2.0, -3.0};
-	max = (cl_float3){2.0, 2.0, 3.0};
+	min = (cl_float3){-0.25, 0.05, -0.35};
+	max = (cl_float3){0.25, 0.35, 0.35};
 
 	add_box(&ply, min, max);
 
@@ -245,7 +245,7 @@ int main(int ac, char **av)
 	srand(time(NULL));
 	// scene_from_stl("iona.stl");
 	
-	Scene *scene = scene_from_ply("objects/ply/oct.ply");
+	Scene *scene = scene_from_ply("objects/ply/dragon.ply");
 
 	// Scene *scene = scene_from_obj("objects/sponza/", "sponza.obj");
 
@@ -294,7 +294,7 @@ int main(int ac, char **av)
 	// cam.normal = (cl_float3){-1.0, 0.0, 0.0};
 
 
-	cam.center = (cl_float3){0.0, 0.4, -2.9}; //trogdor
+	cam.center = (cl_float3){0.0, 0.12, -0.27}; //trogdor
 	cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
 	cam.normal = unit_vec(cam.normal);
