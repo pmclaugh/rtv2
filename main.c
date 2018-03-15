@@ -9,7 +9,7 @@
 
 #define XDIM 1024
 #define YDIM 1024
-#define SPP_PER_DEVICE 200
+#define SPP_PER_DEVICE 420
 
 typedef struct s_param
 {
@@ -182,12 +182,12 @@ Scene *scene_from_ply(char *filename)
 	scene->materials = calloc(5, sizeof(Material));
 	//imported model
 	scene->materials[0].Kd = (cl_float3){0.8f, 0.8f, 0.8f};
-	scene->materials[0].Ka = (cl_float3){0.3f, 0.8f, 0.3f};
+	scene->materials[0].Ka = (cl_float3){1.0f, 0.41f, 0.71f};
 	scene->materials[0].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[0].Ns = (cl_float3){0.0f, 0.0f, 0.0f};
 	
 	//walls
-	scene->materials[1].Kd = (cl_float3){0.3f, 0.3f, 0.8f};
+	scene->materials[1].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
 	scene->materials[1].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[1].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[1].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
@@ -199,13 +199,13 @@ Scene *scene_from_ply(char *filename)
 	scene->materials[2].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
 
 	//optional alternate wall
-	scene->materials[3].Kd = (cl_float3){0.5f, 0.7f, 0.5f};
+	scene->materials[3].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
 	scene->materials[3].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[3].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[3].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
 
 	//optional alternate wall
-	scene->materials[4].Kd = (cl_float3){0.8f, 0.3f, 0.3f};
+	scene->materials[4].Kd = (cl_float3){0.6f, 0.6f, 0.6f};
 	scene->materials[4].Ka = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[4].Ke = (cl_float3){0.0f, 0.0f, 0.0f};
 	scene->materials[4].Ns = (cl_float3){1.0f, 0.0f, 0.0f};
@@ -290,11 +290,11 @@ int main(int ac, char **av)
 	// cam.center = (cl_float3){-0.3, 0.1, 0.0}; //bunn
 	// cam.normal = (cl_float3){1.0, 0.0, 0.0};
 
-	cam.center = (cl_float3){-0.28, 0.13, 0.0}; //dragon facing
-	cam.normal = (cl_float3){1.0, 0.0, 0.0};
+	// cam.center = (cl_float3){-0.28, 0.13, 0.0}; //dragon facing
+	// cam.normal = (cl_float3){1.0, 0.0, 0.0};
 
-	// cam.center = (cl_float3){0.0, 0.12, -0.26}; //trogdor
-	// cam.normal = (cl_float3){0.0, 0.0, 1.0};
+	cam.center = (cl_float3){0.0, 0.12, -0.25}; //trogdor
+	cam.normal = (cl_float3){0.0, 0.0, 1.0};
 
 	cam.normal = unit_vec(cam.normal);
 	cam.width = 0.1f * (float)XDIM / (float)YDIM;

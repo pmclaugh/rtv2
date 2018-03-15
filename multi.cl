@@ -277,7 +277,7 @@ __kernel void fetch(	__global Ray *rays,
 	if (dot(mat.Ke, mat.Ke) > 0.0f)
 	{
 		ray.color += SUN_BRIGHTNESS * ray.mask;
-		//ray.status = DEAD;
+		ray.status = DEAD;
 	}
 
 	rays[gid] = ray;
@@ -426,7 +426,7 @@ __kernel void bounce( 	__global Ray *rays,
 		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
 		{
 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-			weight = GGX_weight(i, o, m, n, a);// * ray.spec;
+			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE;
 			if (dot(weight, weight) == 0.0f)
 			{
 				//if microfacet reflection fails, fall back to macro-normal
@@ -449,7 +449,6 @@ __kernel void bounce( 	__global Ray *rays,
 			{
 				o = normalize((coeff * m) - (index * i));
 				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE;
-				norm_sign *= -1.0f;
 			}
 		}
 	}
@@ -470,8 +469,9 @@ __kernel void bounce( 	__global Ray *rays,
 		weight = ray.diff;
 	}
 
+	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
-	ray.origin = ray.origin + ray.direction * ray.t + n * norm_sign * NORMAL_SHIFT;
+	ray.origin = ray.origin + ray.direction * ray.t + n * o_sign * NORMAL_SHIFT;
 	ray.direction = o;
 	ray.inv_dir = 1.0f / o;
 	ray.status = TRAVERSE;
