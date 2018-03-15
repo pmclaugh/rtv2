@@ -50,8 +50,31 @@
 #define MOVE_SPEED	10
 #define TURN_SPEED	M_PI / 30
 
+#define CHAR 1
+#define SHORT 2
+#define INT 4
+#define FLOAT 6
+#define DOUBLE 8
+
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
+
+typedef struct s_property
+{
+	char name[512];
+	uint32_t n;
+	int	n_datatype;
+	void *data;
+	int datatype;
+}				Property;
+
+typedef struct s_elements
+{
+	char name[512];
+	int total;
+	int	property_total;
+	Property *props
+}				Elements;
 
 typedef struct s_file_info
 {
@@ -352,6 +375,7 @@ void vec_rot(const cl_float3 rotate, cl_float3 *V);
 
 //utility functions
 char *strtrim(char const *s);
+char *itoa(int n);
 cl_float3 get_vec(const char *line);
 void print_vec(const cl_float3 vec);
 void print_3x3(const t_3x3 mat);
