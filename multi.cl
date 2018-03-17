@@ -276,7 +276,7 @@ __kernel void fetch(	__global Ray *rays,
 
 	if (dot(mat.Ke, mat.Ke) > 0.0f)
 	{
-		ray.color += SUN_BRIGHTNESS * ray.mask;
+		ray.color += SUN_BRIGHTNESS * ray.mask * fabs(dot(ray.N, ray.direction));
 		ray.status = DEAD;
 	}
 
@@ -351,22 +351,27 @@ static float GGX_eval(float3 i, float3 o, float3 m, float3 n, float a, float n1,
 
 static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 {
-	//return a direction m with relative probability GGX_D(m)|m dot n|
-	float theta = atan(a * sqrt(r1) * rsqrt(1.0f - r1));
-	float phi = 2.0f * PI * r2;
-	
-	//local orthonormal system
-	float3 axis = fabs(n.x) > fabs(n.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-	float3 hem_x = cross(axis, n);
-	float3 hem_y = cross(n, hem_x);
+	float3 m;
+	do
+	{
+		//return a direction m with relative probability GGX_D(m)|m dot n|
+		float theta = atan(a * sqrt(r1) * rsqrt(1.0f - r1));
+		float phi = 2.0f * PI * r2;
+		
+		//local orthonormal system
+		float3 axis = fabs(n.x) > fabs(n.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+		float3 hem_x = cross(axis, n);
+		float3 hem_y = cross(n, hem_x);
 
-	float3 x = hem_x * native_sin(theta) * native_cos(phi);
-	float3 y = hem_y * native_sin(theta) * native_sin(phi);
-	float3 z = n * native_cos(theta);
+		float3 x = hem_x * native_sin(theta) * native_cos(phi);
+		float3 y = hem_y * native_sin(theta) * native_sin(phi);
+		float3 z = n * native_cos(theta);
 
-	float3 m = normalize(x + y + z);
-	if (dot(m, i) * dot(n, i) < 0.0f)
-		m = normalize(z - x - y);
+		float3 m = normalize(x + y + z);
+		if (dot(m, i) * dot(n, i) < 0.0f)
+			m = normalize(z - x - y);
+	}
+	while (dot(normalize(2.0f * fabs(dot(i, m)) * m - i), n) <= 0.0f);
 	return m;
 }
 
@@ -401,7 +406,7 @@ __kernel void bounce( 	__global Ray *rays,
 
 	float3 n = ray.N;
 	float3 i = ray.direction * -1.0f;
-	float a = 0.01f;
+	float a = 0.4f;
 	a = (1.2f - 0.2f * sqrt(fabs(dot(i,n)))) * a; //softening approximation to reduce weight variance
 	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
 
@@ -426,30 +431,23 @@ __kernel void bounce( 	__global Ray *rays,
 		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
 		{
 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
-			if (dot(weight, weight) == 0.0f)
-			{
-				//if microfacet reflection fails, fall back to macro-normal
-				o = normalize(2.0f * fabs(dot(i, n)) * n - i);
-				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
-			}
+			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.01f, 1.0f * ray.t);
 		}
 		else
 		{
-			float index = ni / nt;
-			float c = dot(i,m);
-			float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
-			if (coeff != coeff)
-			{
-				//if coeff is Nan, means total internal reflection
-				o = normalize(2.0f * fabs(dot(i, n)) * n - i);
-				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
-			}
-			else
-			{
-				o = normalize((coeff * m) - (index * i));
-				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE * pow(0.001f, ray.t);
-			}
+			//Cosine-weighted pure diffuse reflection
+			//local orthonormal system
+			float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+			float3 hem_x = cross(axis, ray.N);
+			float3 hem_y = cross(ray.N, hem_x);
+
+			//generate random direction on the unit hemisphere (cosine-weighted)
+			float r = native_sqrt(r1);
+			float theta = 2.0f * PI * r2;
+
+			//combine for new direction
+			o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + norm_sign * ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
+			weight = ray.spec * norm_sign > 0.0f ? 1.0f : pow(0.01f, 1.0f * ray.t);
 		}
 	}
 	else
