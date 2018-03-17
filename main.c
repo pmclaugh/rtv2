@@ -9,7 +9,7 @@
 
 #define XDIM 1024
 #define YDIM 1024
-#define SPP_PER_DEVICE 300
+#define SPP_PER_DEVICE 420
 
 typedef struct s_param
 {
@@ -174,7 +174,7 @@ Scene *scene_from_ply(char *filename)
 	cl_float3 min, max;
 
 	min = (cl_float3){-0.25, 0.05, -0.35};
-	max = (cl_float3){0.25, 0.30, 0.35};
+	max = (cl_float3){0.25, 0.35, 0.35};
 
 	add_box(&ply, min, max);
 
