@@ -198,8 +198,8 @@ void	trace_scene(AABB *tree, t_ray *ray, int mode)
 		ray->color = (cl_double3){.25, .25, .25};
 	else
 	{
-		cl_float3	light = unit_vec((cl_float3){.5, 1, -.25});
-		float		cost = dot(ray->N, light);
+		// cl_float3	light = unit_vec((cl_float3){.5, 1, -.25});
+		float		cost = dot(ray->N, ray->direction);
 		if (cost < 0)
 			cost *= -1.0f;
 		cost = ((cost - .5) / 2) + .5; //make greyscale contrast less extreme
@@ -218,6 +218,7 @@ t_ray	generate_ray(t_camera cam, float x, float y)
 	ray.inv_dir.x = 1.0f / ray.direction.x;
 	ray.inv_dir.y = 1.0f / ray.direction.y;
 	ray.inv_dir.z = 1.0f / ray.direction.z;
+	ray.N = ray.direction;
 	ray.t = FLT_MAX;
 	ray.poly_edge = 0;
 	return ray;

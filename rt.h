@@ -28,6 +28,8 @@
 #define DIM_IA		400
 #define DIM_PT		512
 
+#define H_FOV M_PI_2 * 60.0 / 90.0
+
 #define ERROR 1e-4
 
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
@@ -314,20 +316,24 @@ typedef struct	s_mlx_data
 	int			size_line;
 	int			endian;
 	cl_double3	*pixels;
+	cl_float3	*total_clr;
 }				t_mlx_data;
 
 typedef struct s_env
 {
 	t_camera	cam;
 	Scene		*scene;
-	t_key		key;
 
 	void		*mlx;
 	t_mlx_data	*ia;
 	t_mlx_data	*pt;
+	t_key		key;
+	
 	int			mode;
 	_Bool		show_fps;
 	int			spp;
+	int			samples;
+	_Bool		render;
 }				t_env;
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
@@ -347,7 +353,8 @@ void load_config(t_env *env);
 Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info);
 Scene *scene_from_ply(char *rel_path, char *filename, File_edits edit_info);
 
-cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples);
+void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples);
+cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples);
 
 void old_bvh(Scene *S);
 Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
@@ -374,7 +381,7 @@ cl_float3	vec_rotate_xz(const cl_float3 a, const float angle);
 cl_float3	vec_rotate_xyz(const cl_float3 a, const float angle_x, const float angle_y);
 cl_float3 vec_rev(cl_float3 v);
 void vec_rot(const cl_float3 rotate, cl_float3 *V);
-
+void	clr_avg(cl_double3 *a, cl_double3 *b, int samples, int size);
 
 //utility functions
 char *strtrim(char const *s);
@@ -386,13 +393,6 @@ void print_clf3(cl_float3 v);
 float max3(float a, float b, float c);
 float min3(float a, float b, float c);
 
-//main.c
-void		set_camera(t_camera *cam, float win_dim);
-void		path_tracer(t_env *env);
-t_env		*init_env(void);
-
-//interactive.c
-void	interactive(t_env *env);
 
 //key_command.c
 int		exit_hook(int key, t_env *env);
@@ -409,3 +409,16 @@ int				read_int(FILE *fp, const int file_endian, const int machine_endian);
 unsigned int	read_uint(FILE *fp, const int file_endian, const int machine_endian);
 float			read_float(FILE *fp, const int file_endian, const int machine_endian);
 double			read_double(FILE *fp, const int file_endian, const int machine_endian);
+
+//interactive.c
+void	interactive(t_env *env);
+
+//camera.c
+void		set_camera(t_camera *cam, float win_dim);
+t_camera	init_camera(void);
+
+
+//main.c
+void		path_tracer(t_env *env);
+void		init_mlx_data(t_env *env);
+t_env		*init_env(void);

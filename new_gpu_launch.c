@@ -207,6 +207,38 @@ gpu_context *prep_gpu(void)
     return gpu;
 }
 
+void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples)
+{
+	double Lw = 0.0;
+	for (int i = 0; i < resolution; i++)
+	{
+		double scale = 1.0 / (double)samples;
+		data->pixels[i].x = data->total_clr[i].x * scale;
+		data->pixels[i].y = data->total_clr[i].y * scale;
+		data->pixels[i].z = data->total_clr[i].z * scale;
+
+		double this_lw = log(0.1 + 0.2126 * data->pixels[i].x + 0.7152 * data->pixels[i].y + 0.0722 * data->pixels[i].z);
+		if (this_lw == this_lw)
+			Lw += this_lw;
+		else
+			printf("NaN alert\n");
+	}
+
+	Lw /= (double)resolution;
+	Lw = exp(Lw);
+
+	for (int i = 0; i < resolution; i++)
+	{
+		data->pixels[i].x = data->pixels[i].x * 0.36 / Lw;
+		data->pixels[i].y = data->pixels[i].y * 0.36 / Lw;
+		data->pixels[i].z = data->pixels[i].z * 0.36 / Lw;
+
+		data->pixels[i].x = data->pixels[i].x / (data->pixels[i].x + 1.0);
+		data->pixels[i].y = data->pixels[i].y / (data->pixels[i].y + 1.0);
+		data->pixels[i].z = data->pixels[i].z / (data->pixels[i].z + 1.0);
+	}
+}
+
 cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, unsigned int samples)
 {
 	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
@@ -293,7 +325,7 @@ cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution,
 	return output_sum;
 }
 
-cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples)
+cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples)
 {
 	static gpu_context *CL;
 	if (!CL)
@@ -338,8 +370,8 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int 
 	 printf("per-platform copies done\n");
 
 	//per-device pointers
-	cl_mem *d_outputs = calloc(CL->numDevices, sizeof(cl_mem));;
-	cl_mem *d_seeds = calloc(CL->numDevices, sizeof(cl_mem));;
+	cl_mem *d_outputs = calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_seeds = calloc(CL->numDevices, sizeof(cl_mem));
 	
 	cl_uint d;
 	clGetDeviceIDs(CL->platform[0], CL_DEVICE_TYPE_GPU, 0, NULL, &d);
@@ -446,5 +478,5 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int 
 	clReleaseKernel(render);
 
 	//printf("going to composite\n");
-	return composite(outputs, d, resolution, samples);
+	return *outputs;
 }
