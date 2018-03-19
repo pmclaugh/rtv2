@@ -51,9 +51,12 @@
 #define TURN_SPEED	M_PI / 30
 
 #define CHAR 1
-#define SHORT 2
-#define INT 4
-#define FLOAT 6
+#define UCHAR 2
+#define SHORT 3
+#define USHORT 4
+#define INT 5
+#define UINT 6
+#define FLOAT 7
 #define DOUBLE 8
 
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
@@ -396,3 +399,13 @@ int		exit_hook(int key, t_env *env);
 int		key_press(int key, t_env *env);
 int		key_release(int key, t_env *env);
 int		forever_loop(t_env *env);
+
+//read.c
+char			read_char(FILE *fp, const int file_endian, const int machine_endian);
+unsigned char	read_uchar(FILE *fp, const int file_endian, const int machine_endian);
+short			read_short(FILE *fp, const int file_endian, const int machine_endian);
+unsigned short	read_ushort(FILE *fp, const int file_endian, const int machine_endian);
+int				read_int(FILE *fp, const int file_endian, const int machine_endian);
+unsigned int	read_uint(FILE *fp, const int file_endian, const int machine_endian);
+float			read_float(FILE *fp, const int file_endian, const int machine_endian);
+double			read_double(FILE *fp, const int file_endian, const int machine_endian);

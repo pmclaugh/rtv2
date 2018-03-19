@@ -1,18 +1,5 @@
 #include "rt.h"
 
-typedef union	s_union32
-{
-	uint8_t	bytes[4];
-	float	f_val;
-	int		i_val;
-}				t_union32;
-
-typedef union	s_union16
-{
-	uint8_t	bytes[2];
-	short	value;
-}				t_union16;
-
 Scene	*scene_from_ply(char *rel_path, char *filename, File_edits edit_info)
 {
 	char *file = malloc(strlen(rel_path) + strlen(filename) + 1);
@@ -78,8 +65,6 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 	int	endian = ((int)*ptr == 1) ? 0 : 1;// Big endian == 1; Little endian == 0;
 	printf("this machine is %s endian\n", (endian) ? "big" : "little");
 
-	t_union32	u;
-	uint8_t	tmp;
 	for (int j = 0; j < elem_total; j++)
 	{
 		if (strncmp(elems[j].name, "vertex", 6) == 0)
@@ -92,24 +77,12 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 					{
 						for (int xyz = 0; xyz < 3; xyz++)
 						{
-							bzero(u.bytes, 4);
-							fread(u.bytes, 1, 4, fp);
-							if (endian != file_endian)
-							{
-								//reorganize bytes to fit machine endian architecture
-								tmp = u.bytes[0];
-								u.bytes[0] = u.bytes[3];
-								u.bytes[3] = tmp;
-								tmp = u.bytes[1];
-								u.bytes[1] = u.bytes[2];
-								u.bytes[2] = tmp;
-							}
 							if (xyz == 0)
-								V[i].x = (float)u.f_val;
+								V[i].x = read_float(fp, file_endian, endian);
 							else if (xyz == 1)
-								V[i].y = (float)u.f_val;
+								V[i].y = read_float(fp, file_endian, endian);
 							else
-								V[i].z = (float)u.f_val;
+								V[i].z = read_float(fp, file_endian, endian);
 						}
 					}
 					else if (elems[j].props[k].name[0] != 'y' && elems[j].props[k].name[0] != 'z')
@@ -117,54 +90,58 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 						if (elems[j].props[k].n != 1)
 						{
 							if (elems[j].props[k].n_datatype == CHAR)
-							{
-								uint8_t val;
-								fread(&val, 1, 1, fp);
-								elems[j].props[k].n = val;
-							}
+								elems[j].props[k].n = (uint32_t)read_char(fp, file_endian, endian);
+							else if (elems[j].props[k].n_datatype == UCHAR)
+								elems[j].props[k].n = (uint32_t)read_uchar(fp, file_endian, endian);
 							else if (elems[j].props[k].n_datatype == SHORT)
-							{
-								uint16_t val;
-								fread(&val, 1, 2, fp);
-								elems[j].props[k].n = val;
-							}
+								elems[j].props[k].n = (uint32_t)read_short(fp, file_endian, endian);
+							else if (elems[j].props[k].n_datatype == USHORT)
+								elems[j].props[k].n = (uint32_t)read_ushort(fp, file_endian, endian);
 							else if (elems[j].props[k].n_datatype == INT)
-							{
-								uint32_t val;
-								fread(&val, 1, 4, fp);
-								elems[j].props[k].n = val;
-							}
+								elems[j].props[k].n = (uint32_t)read_int(fp, file_endian, endian);
+							else if (elems[j].props[k].n_datatype == UINT)
+								elems[j].props[k].n = (uint32_t)read_uint(fp, file_endian, endian);
 						}
 						for (int x = 0; x < elems[j].props[k].n; x++)
 						{
 							if (elems[j].props[k].datatype == CHAR)
 							{
-								uint8_t val;
-								fread(&val, 1, 1, fp);
+								char val = read_char(fp, file_endian, endian);
+								elems[j].props[k].data = &val;
+							}
+							else if (elems[j].props[k].datatype == UCHAR)
+							{
+								unsigned char val = read_uchar(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
 							else if (elems[j].props[k].datatype == SHORT)
 							{
-								uint16_t val;
-								fread(&val, 1, 2, fp);
+								int16_t val = read_short(fp, file_endian, endian);
+								elems[j].props[k].data = &val;
+							}
+							else if (elems[j].props[k].datatype == USHORT)
+							{
+								uint16_t val = read_ushort(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
 							else if (elems[j].props[k].datatype == INT)
 							{
-								uint32_t val;
-								fread(&val, 1, 4, fp);
+								int32_t val = read_int(fp, file_endian, endian);
+								elems[j].props[k].data = &val;
+							}
+							else if (elems[j].props[k].datatype == UINT)
+							{
+								uint32_t val = read_uint(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
 							else if (elems[j].props[k].datatype == FLOAT)
 							{
-								float val;
-								fread(&val, 1, 4, fp);
+								float val = read_float(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
 							else if (elems[j].props[k].datatype == DOUBLE)
 							{
-								double val;
-								fread(&val, 1, 8, fp);
+								double val = read_double(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
 						}
@@ -202,29 +179,17 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 					if (strstr(elems[j].props[k].name, "vertex_indices"))
 					{
 						int a, b, c;
-						fread(&n, 1, 1, fp);
+						n = (uint8_t)read_uchar(fp, file_endian, endian);
 						if (n != 3)
 							printf("this polygon has %hhu vertices\n", n);
-						for (int xyz = 0; xyz < 3; xyz++)
+						for (int xyz = 0; xyz < n; xyz++)
 						{
-							bzero(u.bytes, 4);
-							fread(u.bytes, 1, 4, fp);
-							if (endian != file_endian)
-							{
-								//reorganize bytes to fit machine endian architecture
-								tmp = u.bytes[0];
-								u.bytes[0] = u.bytes[3];
-								u.bytes[3] = tmp;
-								tmp = u.bytes[1];
-								u.bytes[1] = u.bytes[2];
-								u.bytes[2] = tmp;
-							}
 							if (xyz == 0)
-								a = (int)u.i_val;
+								a = read_int(fp, file_endian, endian);
 							else if (xyz == 1)
-								b = (int)u.i_val;
+								b = read_int(fp, file_endian, endian);
 							else
-								c = (int)u.i_val;
+								c = read_int(fp, file_endian, endian);
 						}
 						if (a < 0 || a >= v_total || b < 0 || b >= v_total || c < 0 || c >= v_total)
 							printf("index is outside of array size\n");
@@ -251,54 +216,58 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 						if (elems[j].props[k].n != 1)
 						{
 							if (elems[j].props[k].n_datatype == CHAR)
-							{
-								uint8_t val;
-								fread(&val, 1, 1, fp);
-								elems[j].props[k].n = val;
-							}
+								elems[j].props[k].n = (uint32_t)read_char(fp, file_endian, endian);
+							else if (elems[j].props[k].n_datatype == UCHAR)
+								elems[j].props[k].n = (uint32_t)read_uchar(fp, file_endian, endian);
 							else if (elems[j].props[k].n_datatype == SHORT)
-							{
-								uint16_t val;
-								fread(&val, 1, 2, fp);
-								elems[j].props[k].n = val;
-							}
+								elems[j].props[k].n = (uint32_t)read_short(fp, file_endian, endian);
+							else if (elems[j].props[k].n_datatype == USHORT)
+								elems[j].props[k].n = (uint32_t)read_ushort(fp, file_endian, endian);
 							else if (elems[j].props[k].n_datatype == INT)
-							{
-								uint32_t val;
-								fread(&val, 1, 4, fp);
-								elems[j].props[k].n = val;
-							}
+								elems[j].props[k].n = (uint32_t)read_int(fp, file_endian, endian);
+							else if (elems[j].props[k].n_datatype == UINT)
+								elems[j].props[k].n = (uint32_t)read_uint(fp, file_endian, endian);
 						}
 						for (int x = 0; x < elems[j].props[k].n; x++)
 						{
 							if (elems[j].props[k].datatype == CHAR)
 							{
-								uint8_t val;
-								fread(&val, 1, 1, fp);
+								char val = read_char(fp, file_endian, endian);
+								elems[j].props[k].data = &val;
+							}
+							else if (elems[j].props[k].datatype == UCHAR)
+							{
+								unsigned char val = read_uchar(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
 							else if (elems[j].props[k].datatype == SHORT)
 							{
-								uint16_t val;
-								fread(&val, 1, 2, fp);
+								int16_t val = read_short(fp, file_endian, endian);
+								elems[j].props[k].data = &val;
+							}
+							else if (elems[j].props[k].datatype == USHORT)
+							{
+								uint16_t val = read_ushort(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
 							else if (elems[j].props[k].datatype == INT)
 							{
-								uint32_t val;
-								fread(&val, 1, 4, fp);
+								int32_t val = read_int(fp, file_endian, endian);
+								elems[j].props[k].data = &val;
+							}
+							else if (elems[j].props[k].datatype == UINT)
+							{
+								uint32_t val = read_uint(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
 							else if (elems[j].props[k].datatype == FLOAT)
 							{
-								float val;
-								fread(&val, 1, 4, fp);
+								float val = read_float(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
 							else if (elems[j].props[k].datatype == DOUBLE)
 							{
-								double val;
-								fread(&val, 1, 8, fp);
+								double val = read_double(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
 						}
@@ -549,9 +518,7 @@ static void get_properties(File_info *file, Elements *elem, int element_total)
 			{
 				size += strlen(line);
 				if (strncmp(line, "property", 8) == 0)
-				{
 					++properties;
-				}
 				else
 				{
 					elem[i].property_total = properties;
@@ -563,21 +530,18 @@ static void get_properties(File_info *file, Elements *elem, int element_total)
 					char *str3 = calloc(512, sizeof(char));
 					while (fgets(line, 512, file->ptr))
 					{
-	//					printf("\t%s", line);
 						if ((ret = sscanf(line, "property %s %s ", str1, str2)) == 0 || ret == EOF)
 							break ;
-	//					printf("\t%s", str1);
 						if (strncmp(str1, "list", 4) == 0)
 						{
 							++j;
 							sscanf(line, "property list %s %s %s ", str1, str2, str3);
-							//printf("(%s)\n", str3);
 							if (strstr(str1, "char"))
-								elem[i].props[j].n_datatype = CHAR;
+								elem[i].props[j].n_datatype = (strstr(str1, "uchar")) ? UCHAR : CHAR;
 							else if (strstr(str1, "short"))
-								elem[i].props[j].n_datatype = SHORT;
+								elem[i].props[j].n_datatype = (strstr(str1, "ushort")) ? USHORT : SHORT;
 							else if (strstr(str1, "int"))
-								elem[i].props[j].n_datatype = INT;
+								elem[i].props[j].n_datatype = (strstr(str1, "uint")) ? UINT : INT;
 							else if (strstr(str1, "float"))
 								elem[i].props[j].n_datatype = FLOAT;
 							else if (strstr(str1, "double"))
@@ -592,13 +556,12 @@ static void get_properties(File_info *file, Elements *elem, int element_total)
 						}
 						else
 							elem[i].props[++j].n = 1;
-	//					printf("\tprop:%s\n", str1);
 						if (strstr(str1, "char"))
-							elem[i].props[j].datatype = CHAR;
+							elem[i].props[j].datatype = (strstr(str1, "uchar")) ? UCHAR : CHAR;
 						else if (strstr(str1, "short"))
-							elem[i].props[j].datatype = SHORT;
+							elem[i].props[j].datatype = (strstr(str1, "ushort")) ? USHORT : SHORT;
 						else if (strstr(str1, "int"))
-							elem[i].props[j].datatype = INT;
+							elem[i].props[j].datatype = (strstr(str1, "uint")) ? UINT : INT;
 						else if (strstr(str1, "float"))
 							elem[i].props[j].datatype = FLOAT;
 						else if (strstr(str1, "double"))
@@ -674,19 +637,22 @@ Face *ply_import(char *ply_file, File_edits edit_info, int *face_count)
 		else if (strncmp(line, "end_header", 10) == 0)
 			break ;
 	}
+	free(line);
 
-//	printf("elem_total=%d\n", element_total);
-	Elements *elems = calloc(element_total, sizeof(Elements));
+	Elements *elems = calloc(element_total, sizeof(Elements));	
 	get_properties(&file, elems, element_total);
-//	free(elems);
+	
 	if (file_type == 2)
 		check_ascii_face_count(&file, &f_total, v_total);
-	free(line);
 	*face_count = f_total;
+	
 	printf("%s: %d vertices, %d faces\n", ply_file, v_total, f_total);
 
+	Face *list;
 	if (file_type == 2)
-		return read_ascii_file(file.ptr, elems, element_total, f_total, v_total, edit_info);
+		list = read_ascii_file(file.ptr, elems, element_total, f_total, v_total, edit_info);
 	else
-		return read_binary_file(file.ptr, elems, element_total, f_total, v_total, edit_info, file_type);
+		list = read_binary_file(file.ptr, elems, element_total, f_total, v_total, edit_info, file_type);
+	free(elems);
+	return list;
 }
