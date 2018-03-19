@@ -13,6 +13,8 @@ SRC =	vec.c \
 		key_command.c \
 		import.c \
 		strtrim.c \
+    itoa.c \
+    read.c \
 		qdbmp/qdbmp.c \
 		camera.c
 

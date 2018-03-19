@@ -52,8 +52,34 @@
 #define MOVE_SPEED	10
 #define TURN_SPEED	M_PI / 30
 
+#define CHAR 1
+#define UCHAR 2
+#define SHORT 3
+#define USHORT 4
+#define INT 5
+#define UINT 6
+#define FLOAT 7
+#define DOUBLE 8
+
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
+
+typedef struct s_property
+{
+	char name[512];
+	uint32_t n;
+	int	n_datatype;
+	void *data;
+	int datatype;
+}				Property;
+
+typedef struct s_elements
+{
+	char name[512];
+	int total;
+	int	property_total;
+	Property *props
+}				Elements;
 
 typedef struct s_file_info
 {
@@ -359,6 +385,7 @@ void	clr_avg(cl_double3 *a, cl_double3 *b, int samples, int size);
 
 //utility functions
 char *strtrim(char const *s);
+char *itoa(int n);
 cl_float3 get_vec(const char *line);
 void print_vec(const cl_float3 vec);
 void print_3x3(const t_3x3 mat);
@@ -372,6 +399,16 @@ int		exit_hook(int key, t_env *env);
 int		key_press(int key, t_env *env);
 int		key_release(int key, t_env *env);
 int		forever_loop(t_env *env);
+
+//read.c
+char			read_char(FILE *fp, const int file_endian, const int machine_endian);
+unsigned char	read_uchar(FILE *fp, const int file_endian, const int machine_endian);
+short			read_short(FILE *fp, const int file_endian, const int machine_endian);
+unsigned short	read_ushort(FILE *fp, const int file_endian, const int machine_endian);
+int				read_int(FILE *fp, const int file_endian, const int machine_endian);
+unsigned int	read_uint(FILE *fp, const int file_endian, const int machine_endian);
+float			read_float(FILE *fp, const int file_endian, const int machine_endian);
+double			read_double(FILE *fp, const int file_endian, const int machine_endian);
 
 //interactive.c
 void	interactive(t_env *env);
