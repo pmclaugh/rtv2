@@ -18,7 +18,7 @@ newmtl leaf
 	map_bump textures/sponza_thorn_ddn.tga
 	bump textures/sponza_thorn_ddn.tga
 	map_Ks textures/sponza_thorn_spec.tga
-
+  
 newmtl vase_round
 	Ns 10.0000
 	Ni 1.5000

@@ -1,10 +1,30 @@
 NAME = raytrace
 
-SRCS = vec.c obj_import.c main.c mlx_stuff.c ply_import.c stl_import.c scene.c new_gpu_launch.c true_sbvh.c bvh_lab.c bvh_util.c composite.c
-OBJS = vec.o obj_import.o main.o mlx_stuff.o ply_import.o stl_import.o scene.o new_gpu_launch.o true_sbvh.o bvh_lab.o bvh_util.o composite.o
+SRC =	vec.c \
+		obj_import.c \
+		main.c \
+		mlx_stuff.c \
+		ply_import.c \
+		scene.c \
+		new_gpu_launch.c \
+		true_sbvh.c \
+		bvh_lab.c \
+		interactive.c \
+		key_command.c \
+		import.c \
+		strtrim.c \
+    itoa.c \
+    read.c \
+		qdbmp/qdbmp.c \
+		camera.c \
+    composite.c \
+    bvh_util.c \
+    stl_import.c
+
+OBJ = $(SRC:.c=.o)
 
 
-FLAGS = -O3 -m64 -march=native -funroll-loops -flto 
+FLAGS = -O3 -m64 -march=native -funroll-loops -flto
 MACLIBS = mac-mlx/libmlx.a -framework OpenCL -framework OpenGL -framework AppKit
 LINUXLIBS = -fopenmp linux-mlx/libmlx.a -lOpenCL -lm -lXext -lX11 
 
@@ -19,8 +39,8 @@ endif
 
 all: $(NAME)
 
-$(NAME): $(OBJS)
-	gcc -o $(NAME) $(FLAGS) $(OBJS) $(LIBS)
+$(NAME): $(OBJ)
+	gcc -o $(NAME) $(FLAGS) $(OBJ) $(LIBS)
 %.o: %.c rt.h
 	gcc $(FLAGS) -c -o $@ $<
 mac-mlx/libmlx.a:
@@ -28,7 +48,7 @@ mac-mlx/libmlx.a:
 linux-mlx/libmlx.a:
 	make -C linux-mlx
 clean:
-	rm -f $(OBJS)
+	rm -f $(OBJ)
 fclean: clean
 	rm -f $(NAME)
 re:	fclean all

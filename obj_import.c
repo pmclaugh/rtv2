@@ -3,7 +3,45 @@
 
 #define VERBOSE 0
 
-Map *load_map(char *rel_path, char *filename)
+Map *load_bmp_map(char *rel_path, char *filename)
+{
+	char *bmp_file = malloc(strlen(rel_path) + strlen(filename) + 1);
+	strcpy(bmp_file, rel_path);
+	strcat(bmp_file, filename);
+	BMP *bmp = BMP_ReadFile(bmp_file);
+
+	BMP_CHECK_ERROR( stdout, -1 );
+	
+	Map *map = calloc(1, sizeof(Map));
+	map->width = (int)BMP_GetWidth(bmp);
+	map->height = (int)BMP_GetHeight(bmp);
+
+	map->pixels = calloc(map->height * map->width, sizeof(cl_uchar) * 3);
+	int i = 0;
+	unsigned char r, g, b;
+	for (int y = 0; y < map->height; ++y)
+	{
+		for (int x = 0; x < map->width; ++x)
+		{
+			BMP_GetPixelRGB( bmp, x, y, &r, &g, &b );
+			map->pixels[i * 3] = (cl_uchar)r;
+			map->pixels[i * 3 + 1] = (cl_uchar)g;
+			map->pixels[i * 3 + 2] = (cl_uchar)b;
+			i++;
+		}
+	}
+	if (VERBOSE)
+	{
+		printf("loaded texture %s\n", bmp_file);
+		printf("%d %d\n", map->height, map->width);
+	}
+	free(bmp_file);
+	BMP_CHECK_ERROR( stdout, -1 );
+	BMP_Free(bmp);
+	return map;
+}
+
+Map *load_tga_map(char *rel_path, char *filename)
 {
 	char *tga_file = malloc(strlen(rel_path) + strlen(filename) + 1);
 	strcpy(tga_file, rel_path);
@@ -70,9 +108,11 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 	int mat_ind = -1;
 	Material m;
 	printf("\n");
+	char *str;
 	while (fgets(line, 512, fp))
 	{
-		if (strncmp(line, "newmtl ", 7) == 0)
+		str = strtrim(line);
+		if (strncmp(str, "newmtl ", 7) == 0)
 		{
 			if (mat_ind >= 0)
 			{
@@ -83,67 +123,82 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			bzero(&m, sizeof(Material));
 			mat_ind++;
 			m.friendly_name = malloc(256);
-			sscanf(line, "newmtl %s\n", m.friendly_name);
+			sscanf(str, "newmtl %s\n", m.friendly_name);
 			if (VERBOSE)
 				printf("new mtl friendly name %s\n", m.friendly_name);
 		}
-		else if (strncmp(line, "\tNs", 3) == 0)
-			sscanf(line, "\tNs %f", &m.Ns);
-		else if (strncmp(line, "\tNi", 3) == 0)
-			sscanf(line, "\tNi %f", &m.Ni);
-		else if (strncmp(line, "\td", 2) == 0)
-			sscanf(line, "\td %f", &m.d);
-		else if (strncmp(line, "\tTr", 3) == 0)
-			sscanf(line, "\tTr %f", &m.Tr);
-		else if (strncmp(line, "\tTf", 3) == 0)
-			sscanf(line, "\tTf %f %f %f", &m.Tf.x, &m.Tf.y, &m.Tf.z);
-		else if (strncmp(line, "\tillum", 6) == 0)
-			sscanf(line, "\tillum %d", &m.illum);
+		else if (strncmp(str, "Ns", 2) == 0)
+			sscanf(str, "Ns %f", &m.Ns);
+		else if (strncmp(str, "Ni", 2) == 0)
+			sscanf(str, "Ni %f", &m.Ni);
+		else if (strncmp(str, "d ", 2) == 0)
+			sscanf(str, "d %f", &m.d);
+		else if (strncmp(str, "Tr", 2) == 0)
+			sscanf(str, "Tr %f", &m.Tr);
+		else if (strncmp(str, "Tf", 2) == 0)
+			sscanf(str, "Tf %f %f %f", &m.Tf.x, &m.Tf.y, &m.Tf.z);
+		else if (strncmp(str, "illum", 5) == 0)
+			sscanf(str, "illum %d", &m.illum);
+		else if (strncmp(str, "Ka", 2) == 0)
+			sscanf(str, "Ka %f %f %f", &m.Ka.x, &m.Ka.y, &m.Ka.z);
+		else if (strncmp(str, "Kd", 2) == 0)
+			sscanf(str, "Kd %f %f %f", &m.Kd.x, &m.Kd.y, &m.Kd.z);
+		else if (strncmp(str, "Ks", 2) == 0)
+			sscanf(str, "Ks %f %f %f", &m.Ks.x, &m.Ks.y, &m.Ks.z);
+		else if (strncmp(str, "Ke", 2) == 0)
+			sscanf(str, "Ke %f %f %f", &m.Ke.x, &m.Ke.y, &m.Ke.z);
 
-		else if (strncmp(line, "\tKa", 3) == 0)
-			sscanf(line, "\tKa %f %f %f", &m.Ka.x, &m.Ka.y, &m.Ka.z);
-		else if (strncmp(line, "\tKd", 3) == 0)
-			sscanf(line, "\tKd %f %f %f", &m.Kd.x, &m.Kd.y, &m.Kd.z);
-		else if (strncmp(line, "\tKs", 3) == 0)
-			sscanf(line, "\tKs %f %f %f", &m.Ks.x, &m.Ks.y, &m.Ks.z);
-		else if (strncmp(line, "\tKe", 3) == 0)
-			sscanf(line, "\tKe %f %f %f", &m.Ke.x, &m.Ke.y, &m.Ke.z);
-
-		else if (strncmp(line, "\tmap_Ka", 7) == 0)
+		else if (strncmp(str, "map_Ka", 6) == 0)
 		{
 			//printf("loading a Ka\n");
 			m.map_Ka_path = calloc(512, 1);
-			sscanf(line, "\tmap_Ka %s\n", m.map_Ka_path);
-			m.map_Ka = load_map(rel_path, m.map_Ka_path);
+			sscanf(str, "map_Ka %s\n", m.map_Ka_path);
+			if (strstr(m.map_Ka_path, ".bmp"))
+				m.map_Ka = load_bmp_map(rel_path, m.map_Ka_path);
+			else
+				m.map_Ka = load_tga_map(rel_path, m.map_Ka_path);
 		}
-		else if (strncmp(line, "\tmap_Kd", 7) == 0)
+		else if (strncmp(str, "map_Kd", 6) == 0)
 		{
 			//printf("loading a Kd\n");
 			m.map_Kd_path = calloc(512, 1);
-			sscanf(line, "\tmap_Kd %s\n", m.map_Kd_path);
-			m.map_Kd = load_map(rel_path, m.map_Kd_path);
+			sscanf(str, "map_Kd %s\n", m.map_Kd_path);
+			if (strstr(m.map_Kd_path, ".bmp"))
+				m.map_Kd = load_bmp_map(rel_path, m.map_Kd_path);
+			else
+				m.map_Kd = load_tga_map(rel_path, m.map_Kd_path);
 		}
-		else if (strncmp(line, "\tmap_bump", 9) == 0)
+		else if (strncmp(str, "map_bump", 8) == 0)
 		{
 			//printf("loading a bump\n");
 			m.map_bump_path = calloc(512, 1);
-			sscanf(line, "\tmap_bump %s\n", m.map_bump_path);
-			m.map_bump = load_map(rel_path, m.map_bump_path);
+			sscanf(str, "map_bump %s\n", m.map_bump_path);
+			if (strstr(m.map_bump_path, ".bmp"))
+				m.map_bump = load_bmp_map(rel_path, m.map_bump_path);
+			else
+				m.map_bump = load_tga_map(rel_path, m.map_bump_path);
 		}
-		else if (strncmp(line, "\tmap_d", 6) == 0)
+		else if (strncmp(str, "map_d", 5) == 0)
 		{
 			//printf("loading a map_d\n");
 			m.map_d_path = calloc(512, 1);
-			sscanf(line, "\tmap_d %s\n", m.map_d_path);
-			m.map_d = load_map(rel_path, m.map_d_path);
+			sscanf(str, "map_d %s\n", m.map_d_path);
+			if (strstr(m.map_d_path, ".bmp"))
+				m.map_d = load_bmp_map(rel_path, m.map_d_path);
+			else
+				m.map_d = load_tga_map(rel_path, m.map_d_path);
 		}
-		else if (strncmp(line, "\tmap_Ks", 7) == 0)
+		else if (strncmp(str, "map_Ks", 6) == 0)
 		{
 			//printf("loading a Ks\n");
 			m.map_Ks_path = calloc(512, 1);
-			sscanf(line, "\tmap_Ks %s\n", m.map_Ks_path);
-			m.map_Ks = load_map(rel_path, m.map_Ks_path);
+			sscanf(str, "map_Ks %s\n", m.map_Ks_path);
+			if (strstr(m.map_Ks_path, ".bmp"))
+				m.map_Ks = load_bmp_map(rel_path, m.map_Ks_path);
+			else
+				m.map_Ks = load_tga_map(rel_path, m.map_Ks_path);
 		}
+		free(str);
 	}
 	S->materials[mat_ind] = m;
 
@@ -151,7 +206,7 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 
 }
 
-Scene *scene_from_obj(char *rel_path, char *filename)
+Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 {
 	//meta function to load whole scene from file (ie sponza.obj + sponza.mtl)
 
@@ -180,7 +235,7 @@ Scene *scene_from_obj(char *rel_path, char *filename)
 	int obj_count = 0;
 	while(fgets(line, 512, fp))
 	{
-		if (strncmp(line, "mtllib ", 7) == 0)
+		if (strncmp(line, "mtllib", 6) == 0)
 			sscanf(line, "mtllib %s\n", matpath);
 		else if (strncmp(line, "v ", 2) == 0)
 			v_count++;

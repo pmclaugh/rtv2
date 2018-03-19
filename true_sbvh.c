@@ -1,7 +1,6 @@
 #include "rt.h"
 
 #define SPATIAL_ENABLE 1
-
 #define VERBOSE 0
 
 Split **new_allocate_splits(AABB *box)

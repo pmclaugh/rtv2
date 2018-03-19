@@ -9,6 +9,7 @@
 #include <float.h>
 #include <time.h>
 #include <pthread.h>
+#include "qdbmp/qdbmp.h"
 
 #ifdef __APPLE__
 # include <OpenCL/cl.h>
@@ -24,6 +25,11 @@
 #define UNIT_Y (cl_float3){0, 1, 0}
 #define UNIT_Z (cl_float3){0, 0, 1}
 
+#define DIM_IA		400
+#define DIM_PT		512
+
+#define H_FOV M_PI_2 * 60.0 / 90.0
+
 #define ERROR 1e-4
 
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
@@ -34,7 +40,6 @@
 
 #define ORIGIN (cl_float3){0.0f, 0.0f, 0.0f}
 
-
 #define GPU_MAT_DIFFUSE 1
 #define GPU_MAT_SPECULAR 2
 #define GPU_MAT_REFRACTIVE 3
@@ -44,8 +49,46 @@
 #define GPU_TRIANGLE 3
 #define GPU_QUAD 4
 
+#define MOVE_SPEED	10
+#define TURN_SPEED	M_PI / 30
+
+#define CHAR 1
+#define UCHAR 2
+#define SHORT 3
+#define USHORT 4
+#define INT 5
+#define UINT 6
+#define FLOAT 7
+#define DOUBLE 8
+
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
+
+typedef struct s_property
+{
+	char name[512];
+	uint32_t n;
+	int	n_datatype;
+	void *data;
+	int datatype;
+}				Property;
+
+typedef struct s_elements
+{
+	char name[512];
+	int total;
+	int	property_total;
+	Property *props
+}				Elements;
+
+typedef struct s_file_info
+{
+	FILE *ptr;
+	char name[512];
+	int header_size;
+	int	verts_size;
+	int	faces_size;
+}				File_info;
 
 enum axis{
 	X_AXIS,
@@ -249,6 +292,43 @@ typedef struct s_gpu_scene
 	cl_uint seed_count;
 }				gpu_scene;
 
+typedef struct s_file_edits
+{
+	float scale;
+	cl_float3 translate;
+	cl_float3 rotate;
+}				File_edits;
+
+typedef struct	s_key
+{
+	_Bool		w;
+	_Bool		a;
+	_Bool		s;
+	_Bool		d;
+	_Bool		larr;
+	_Bool		rarr;
+	_Bool		darr;
+	_Bool		uarr;
+	_Bool		space;
+	_Bool		shift;
+}				t_key;
+
+typedef struct	s_camera
+{
+	cl_float3	pos;
+	cl_float3	dir;
+	float		width;
+	float		height;
+	float		dist;
+	float		angle_x;
+	float		angle_y;
+
+	cl_float3	focus;
+	cl_float3	origin;
+	cl_float3	d_x;
+	cl_float3	d_y;
+}				t_camera;
+
 typedef struct s_split
 {
 	AABB *left;
@@ -301,6 +381,34 @@ float SA_overlap(Split *split);
 
 Face *stl_import(char *stl_file);
 
+typedef struct	s_mlx_data
+{
+	void		*win;
+	void		*img;
+	char		*imgbuff;
+	int			bpp;
+	int			size_line;
+	int			endian;
+	cl_double3	*pixels;
+	cl_float3	*total_clr;
+}				t_mlx_data;
+
+typedef struct s_env
+{
+	t_camera	cam;
+	Scene		*scene;
+
+	void		*mlx;
+	t_mlx_data	*ia;
+	t_mlx_data	*pt;
+	t_key		key;
+	
+	int			mode;
+	_Bool		show_fps;
+	int			spp;
+	int			samples;
+	_Bool		render;
+}				t_env;
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
 void study_tree(AABB *tree, int ray_count);
@@ -311,16 +419,19 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_in
 cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution, int **counts);
 int depth(AABB *box);
 
-Face *ply_import(char *ply_file);
+Face *ply_import(char *ply_file, File_edits edit_info, int *face_count);
 Face *object_flatten(Face *faces, int *face_count);
 
 ////Old stuff
-void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels);
+void draw_pixels(t_mlx_data *data, int xres, int yres);
 
-void init_camera(t_camera *camera, int xres, int yres);
+void load_config(t_env *env);
+Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info);
+Scene *scene_from_ply(char *rel_path, char *filename, File_edits edit_info);
 
+void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples);
+//cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples);
 Scene *scene_from_obj(char *rel_path, char *filename);
-
 cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
 
 void old_bvh(Scene *S);
@@ -342,12 +453,50 @@ cl_float3 vec_scale(const cl_float3 vec, const float scalar);
 cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
 cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec);
 t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b);
+cl_float3	vec_rotate_xy(const cl_float3 a, const float angle);
+cl_float3	vec_rotate_yz(const cl_float3 a, const float angle);
+cl_float3	vec_rotate_xz(const cl_float3 a, const float angle);
+cl_float3	vec_rotate_xyz(const cl_float3 a, const float angle_x, const float angle_y);
 cl_float3 vec_rev(cl_float3 v);
-
+void vec_rot(const cl_float3 rotate, cl_float3 *V);
+void	clr_avg(cl_double3 *a, cl_double3 *b, int samples, int size);
 
 //utility functions
+char *strtrim(char const *s);
+char *itoa(int n);
+cl_float3 get_vec(const char *line);
 void print_vec(const cl_float3 vec);
 void print_3x3(const t_3x3 mat);
 void print_clf3(cl_float3 v);
 float max3(float a, float b, float c);
 float min3(float a, float b, float c);
+
+
+//key_command.c
+int		exit_hook(int key, t_env *env);
+int		key_press(int key, t_env *env);
+int		key_release(int key, t_env *env);
+int		forever_loop(t_env *env);
+
+//read.c
+char			read_char(FILE *fp, const int file_endian, const int machine_endian);
+unsigned char	read_uchar(FILE *fp, const int file_endian, const int machine_endian);
+short			read_short(FILE *fp, const int file_endian, const int machine_endian);
+unsigned short	read_ushort(FILE *fp, const int file_endian, const int machine_endian);
+int				read_int(FILE *fp, const int file_endian, const int machine_endian);
+unsigned int	read_uint(FILE *fp, const int file_endian, const int machine_endian);
+float			read_float(FILE *fp, const int file_endian, const int machine_endian);
+double			read_double(FILE *fp, const int file_endian, const int machine_endian);
+
+//interactive.c
+void	interactive(t_env *env);
+
+//camera.c
+void		set_camera(t_camera *cam, float win_dim);
+t_camera	init_camera(void);
+
+
+//main.c
+void		path_tracer(t_env *env);
+void		init_mlx_data(t_env *env);
+t_env		*init_env(void);

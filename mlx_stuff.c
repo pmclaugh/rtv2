@@ -24,28 +24,20 @@ int color_to_int(cl_double3 c)
 	return color;
 }
 
-void	draw_img_point(void *img, int x, int y, cl_double3 color)
+void	draw_img_point(t_mlx_data *data, int x, int y, cl_double3 color)
 {
-	static t_data_addr *addr;
-
-	if (!addr)
-	{
-		addr = (t_data_addr *)malloc(sizeof(t_data_addr));
-		addr->imgbuff = mlx_get_data_addr(img, &addr->bpp, &addr->size_line, &addr->endian);
-		addr->bpp /= 8;
-	}
 	int		i;
 	int 	c;
 
 	i = -1;
 	c = color_to_int(color);
 	while (++i < 4)
-		addr->imgbuff[y * addr->size_line + (x * addr->bpp + i)] = ((unsigned char *)&c)[i];
+		data->imgbuff[y * data->size_line + (x * data->bpp + i)] = ((unsigned char *)&c)[i];
 }
 
-void draw_pixels(void *img, int xres, int yres, cl_double3 *pixels)
+void draw_pixels(t_mlx_data *data, int xres, int yres)
 {
 	for (int y = 0; y < yres; y++)
 		for (int x = 0; x < xres; x++)
-			draw_img_point(img, xres - x - 1, y, pixels[y * xres + x]);
+			draw_img_point(data, xres - x - 1, y, data->pixels[y * xres + x]);
 }

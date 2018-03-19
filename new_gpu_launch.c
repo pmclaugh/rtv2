@@ -193,14 +193,6 @@ gpu_context *prep_gpu(void)
     }
     // printf("made contexts and CQs\n");
 
-    // #ifdef __APPLE__
-    // char *source = load_cl_file("osx_kernel.cl");
-    // #endif
-
-    // #ifndef __APPLE__
-    // char *source = load_cl_file("new_kernel.cl");
-    // #endif
-
     char *source = load_cl_file("multi.cl");
     printf("loaded kernel source\n");
 
@@ -229,6 +221,95 @@ gpu_context *prep_gpu(void)
     //getchar();
     return gpu;
 }
+
+void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples)
+{
+	double Lw = 0.0;
+	for (int i = 0; i < resolution; i++)
+	{
+		double scale = 1.0 / (double)samples;
+		data->pixels[i].x = data->total_clr[i].x * scale;
+		data->pixels[i].y = data->total_clr[i].y * scale;
+		data->pixels[i].z = data->total_clr[i].z * scale;
+
+		double this_lw = log(0.1 + 0.2126 * data->pixels[i].x + 0.7152 * data->pixels[i].y + 0.0722 * data->pixels[i].z);
+		if (this_lw == this_lw)
+			Lw += this_lw;
+		else
+			printf("NaN alert\n");
+	}
+
+	Lw /= (double)resolution;
+	Lw = exp(Lw);
+
+	for (int i = 0; i < resolution; i++)
+	{
+		data->pixels[i].x = data->pixels[i].x * 0.36 / Lw;
+		data->pixels[i].y = data->pixels[i].y * 0.36 / Lw;
+		data->pixels[i].z = data->pixels[i].z * 0.36 / Lw;
+
+		data->pixels[i].x = data->pixels[i].x / (data->pixels[i].x + 1.0);
+		data->pixels[i].y = data->pixels[i].y / (data->pixels[i].y + 1.0);
+		data->pixels[i].z = data->pixels[i].z / (data->pixels[i].z + 1.0);
+	}
+}
+
+cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, unsigned int samples)
+{
+	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
+	for (int i = 0; i < numDevices; i++)
+	{
+		for (int j = 0; j < resolution; j++)
+		{
+			output_sum[j].x += (double)outputs[i][j].x;
+			output_sum[j].y += (double)outputs[i][j].y;
+			output_sum[j].z += (double)outputs[i][j].z;
+		}
+		free(outputs[i]);
+	}
+
+	free(outputs);
+	// for (int i = 0; i < 10; i++)
+	// 	printf("%lf %lf %lf\n", output_sum[i].x, output_sum[i].y, output_sum[i].z);
+
+	//average samples and apply tone mapping
+	double Lw = 0.0;
+	for (int j = 0;j < resolution; j++)
+	{
+		double scale = 1.0 / (double)(samples * numDevices);
+		output_sum[j].x *= scale;
+		output_sum[j].y *= scale;
+		output_sum[j].z *= scale;
+
+		double this_lw = log(0.1 + 0.2126 * output_sum[j].x + 0.7152 * output_sum[j].y + 0.0722 * output_sum[j].z);
+		if (this_lw == this_lw)
+			Lw += this_lw;
+		else
+			printf("NaN alert\n");
+	}
+	// printf("Lw is %lf\n", Lw);
+	
+
+	Lw /= (double)resolution;
+	// printf("Lw is %lf\n", Lw);
+
+	Lw = exp(Lw);
+	// printf("Lw is %lf\n", Lw);
+
+	for (int j = 0; j < resolution; j++)
+	{
+		output_sum[j].x = output_sum[j].x * 0.36 / Lw;
+		output_sum[j].y = output_sum[j].y * 0.36 / Lw;
+		output_sum[j].z = output_sum[j].z * 0.36 / Lw;
+
+		output_sum[j].x = output_sum[j].x / (output_sum[j].x + 1.0);
+		output_sum[j].y = output_sum[j].y / (output_sum[j].y + 1.0);
+		output_sum[j].z = output_sum[j].z / (output_sum[j].z + 1.0);
+	}
+	return output_sum;
+}
+
+cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples)
 
 typedef struct s_gpu_ray {
 	cl_float3 origin;
@@ -295,6 +376,8 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 	cl_mem d_boxes;
 	cl_mem d_materials;
 	cl_mem d_tex;
+	cl_mem d_TN;
+	cl_mem d_BTN;
 	cl_mem d_material_indices;
 	cl_mem d_boost;
 	
@@ -319,6 +402,7 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 	cl_float3 *blank_output = calloc(worksize, sizeof(cl_float3));
 	gpu_ray *empty_rays = calloc(worksize, sizeof(gpu_ray));
 	cl_int *zero_counts = calloc(worksize, sizeof(cl_int));
+
 
 	cl_uint d;
 	clGetDeviceIDs(CL->platform[0], CL_DEVICE_TYPE_GPU, 0, NULL, &d);
@@ -453,6 +537,5 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 	}
 
 	printf("read complete\n");
-
 	return composite(outputs, d, worksize, counts);
 }

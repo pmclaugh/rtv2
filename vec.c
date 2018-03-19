@@ -2,6 +2,21 @@
 
 //various vector functions
 
+cl_float3 get_vec(const char *line)
+{
+	cl_float3 vec = (cl_float3){0, 0, 0};
+
+	char *ptr = strchr(line, '=') + 1;
+	vec.x = strtof(ptr, &ptr);
+	if (*ptr == ',')
+		++ptr;
+	vec.y = strtof(ptr, &ptr);
+	if (*ptr == ',')
+		++ptr;
+	vec.z = strtof(ptr, &ptr);
+	return vec;
+}
+
 void print_vec(const cl_float3 vec)
 {
 	printf("%f %f %f\n", vec.x, vec.y, vec.z);
@@ -75,7 +90,7 @@ t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b)
 {
 	//returns a matrix that will rotate vector a to be parallel with vector b.
 
-	const float angle = acos(dot(a,b) / (vec_mag(a) * vec_mag(b)));
+	const float angle = acos(dot(a,b));
 	const cl_float3 axis = unit_vec(cross(a, b));
 	t_3x3 rotation;
 	rotation.row1 = (cl_float3){	cos(angle) + axis.x * axis.x * (1 - cos(angle)),
@@ -92,7 +107,56 @@ t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b)
 	return rotation;
 }
 
+cl_float3	vec_rotate_xy(const cl_float3 a, const float angle)
+{
+	cl_float3	res;
+	res.x = (a.x * cos(angle)) + (a.y * -sin(angle));
+	res.y = (a.x * sin(angle)) + (a.y * cos(angle));
+	res.z = a.z;
+	return res;
+}
+
+cl_float3	vec_rotate_yz(const cl_float3 a, const float angle)
+{
+	cl_float3	res;
+	res.x = a.x;
+	res.y = (a.y * cos(angle)) + (a.z * -sin(angle));
+	res.z = (a.y * sin(angle)) + (a.z * cos(angle));
+	return res;
+}
+
+cl_float3	vec_rotate_xz(const cl_float3 a, const float angle)
+{
+	cl_float3	res;
+	res.x = (a.x * cos(angle)) + (a.z * sin(angle));
+	res.y = a.y;
+	res.z = (a.x * -sin(angle)) + (a.z * cos(angle));
+	return res;
+}
+
 cl_float3 vec_rev(const cl_float3 v)
 {
 	return (cl_float3){v.x * -1.0, v.y * -1.0, v.z * -1.0};
+}
+
+void vec_rot(const cl_float3 rotate, cl_float3 *V)
+{
+	float	angle;
+	float	tmp[2];
+
+	angle = (M_PI * rotate.x) / 180.0;
+	tmp[0] = V->z * cos(angle) + V->y * sin(angle);
+	tmp[1] = V->y * cos(angle) - V->z * sin(angle);
+	V->z = tmp[0];
+	V->y = tmp[1];
+	angle = (M_PI * rotate.y) / 180.0;
+	tmp[0] = V->x * cos(angle) + V->z * sin(angle);
+	tmp[1] = V->z * cos(angle) - V->x * sin(angle);
+	V->x = tmp[0];
+	V->z = tmp[1];
+	angle = (M_PI * rotate.z) / 180.0;
+	tmp[0] = V->x * cos(angle) + V->y * sin(angle);
+	tmp[1] = V->y * cos(angle) - V->x * sin(angle);
+	V->x = tmp[0];
+	V->y = tmp[1];
 }
