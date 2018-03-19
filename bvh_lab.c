@@ -7,15 +7,15 @@ typedef struct s_traversal
 	cl_float3 inv_dir;
 	float t;
 
-	int box_comps;
-	int boxes_hit;
-	int inside_comps;
-	int insides_hit;
-	int tri_comps;
-	int tris_hit;
+	size_t box_comps;
+	size_t boxes_hit;
+	size_t inside_comps;
+	size_t insides_hit;
+	size_t tri_comps;
+	size_t tris_hit;
 
-	int max_tris;
-	int max_boxes;
+	size_t max_tris;
+	size_t max_boxes;
 }			Traversal;
 
 typedef struct s_triangle
@@ -38,7 +38,7 @@ static int inside_box(Traversal *ray, AABB *box)
 	return 0;
 }
 
-static int intersect_box(Traversal *ray, AABB *box)
+static int intersect_box(Traversal *ray, AABB *box, float *t_out)
 {
 	ray->box_comps++;
 
@@ -75,6 +75,8 @@ static int intersect_box(Traversal *ray, AABB *box)
 	if (tmin > ray->t)
 		return(0);
 	ray->boxes_hit++;
+	if (t_out)
+		*t_out = fmax(0.0f, tmin);
 	return (1);
 }
 
@@ -114,23 +116,6 @@ void check_tris(Traversal *ray, AABB *box)
 		intersect_triangle(ray, member->f->verts[0], member->f->verts[1], member->f->verts[2]);
 }
 
-static void push(AABB **stack, AABB *box)
-{
-	box->next = *stack;
-	*stack = box;
-}
-
-static AABB *pop(AABB **stack)
-{
-	AABB *popped = NULL;
-	if (*stack)
-	{
-		popped = *stack;
-		*stack = popped->next;
-	}
-	return popped;
-}
-
 void traverse(AABB *tree, Traversal *ray)
 {
 	tree->next = NULL;
@@ -141,12 +126,19 @@ void traverse(AABB *tree, Traversal *ray)
 	while(stack)
 	{
 		AABB *box = pop(&stack);
-		if (intersect_box(ray, box))
+		if (intersect_box(ray, box, NULL))
 		{
 			if (box->left) //boxes have either 0 or 2 children
 			{
-				push(&stack, box->left);
-				push(&stack, box->right);
+				float tleft, tright;
+				int lret = intersect_box(ray, box->left, &tleft);
+				int rret = intersect_box(ray, box->right, &tright);
+				 if (lret && tleft >= tright)
+                    push(&stack, box->left);
+                if (rret)
+                    push(&stack, box->right);
+                if (lret && tleft < tright)
+                    push(&stack, box->left);
 			}
 			else
 				check_tris(ray, box);
@@ -215,9 +207,9 @@ int depth(AABB *box)
 
 void study_tree(AABB *tree, int ray_count)
 {
-	printf("\n\n\nentering the lab\n");
+	printf("\nentering the lab\n");
 
-	printf("\nmeasuring tree:\n");
+	printf("measuring tree:\n");
 
 	float root_area = area(tree);
 
@@ -259,7 +251,7 @@ void study_tree(AABB *tree, int ray_count)
 	printf("leaves are %.2f%% of root box area\n", 100.0f * leaf_area_subtotal / root_area);
 
 
-	printf("\ntesting the tree:\n");
+	printf("testing the tree:\n");
 	Traversal *sum = calloc(1, sizeof(Traversal));
 
 	int i;
@@ -273,6 +265,6 @@ void study_tree(AABB *tree, int ray_count)
 	}
 
 	printf("%d rays complete\n", ray_count);
-	printf("%.2f box comparisons per ray avg, %d max\n", (float)sum->box_comps / (float)ray_count, sum->max_boxes);
-	printf("%.2f triangle comparisons per ray avg, %d max\n", (float)sum->tri_comps / (float)ray_count, sum->max_tris);
+	printf("%.2f box comparisons per ray avg, %lu max\n", (float)sum->box_comps / (float)ray_count, sum->max_boxes);
+	printf("%.2f triangle comparisons per ray avg, %lu max\n", (float)sum->tri_comps / (float)ray_count, sum->max_tris);
 }

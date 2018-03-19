@@ -16,7 +16,10 @@ SRC =	vec.c \
     itoa.c \
     read.c \
 		qdbmp/qdbmp.c \
-		camera.c
+		camera.c \
+    composite.c \
+    bvh_util.c \
+    stl_import.c
 
 OBJ = $(SRC:.c=.o)
 
@@ -39,7 +42,7 @@ all: $(NAME)
 $(NAME): $(OBJ)
 	gcc -o $(NAME) $(FLAGS) $(OBJ) $(LIBS)
 %.o: %.c rt.h
-	gcc $(FLAGS) -c -o $@ $< -lm -w
+	gcc $(FLAGS) -c -o $@ $<
 mac-mlx/libmlx.a:
 	make -C mac-mlx
 linux-mlx/libmlx.a:

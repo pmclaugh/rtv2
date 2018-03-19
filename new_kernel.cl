@@ -69,6 +69,7 @@ typedef struct s_camera
 	float3 focus;
 	float3 d_x;
 	float3 d_y;
+	int width;
 }				Camera;
 
 typedef struct s_box

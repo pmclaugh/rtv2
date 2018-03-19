@@ -49,7 +49,7 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 	{
 		simple_mats[i].Ka = s->materials[i].Ka;
 		simple_mats[i].Kd = s->materials[i].Kd;
-		simple_mats[i].Ns.x = s->materials[i].Ns;
+		simple_mats[i].Ns = s->materials[i].Ns;
 		simple_mats[i].Ke = s->materials[i].Ke;
 
 		if (s->materials[i].map_Kd)
@@ -134,13 +134,14 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 
 
 	//BINS
-	gpu_bin *flat_bvh = flatten_bvh(s);
+	gpu_bin *boost;
+	cl_int boost_count;
+	gpu_bin *flat_bvh = flatten_bvh(s, &boost, &boost_count);
 	printf("BVH has been flattened (?)\n");
 
 	//COMBINE
 	gpu_scene *gs = calloc(1, sizeof(gpu_scene));
-	*gs = (gpu_scene){V, T, N, M, TN, BTN, s->face_count * 3, flat_bvh, s->bin_count, h_tex, tex_size, simple_mats, s->mat_count, h_seeds, xdim * ydim * 2 * CL->numDevices * CL->numPlatforms};
-	printf("made gs\n");
+	*gs = (gpu_scene){V, T, N, M, TN, BTN, s->face_count * 3, flat_bvh, s->bin_count, boost, boost_count, h_tex, tex_size, simple_mats, s->mat_count, h_seeds, xdim * ydim * 2 * CL->numDevices * CL->numPlatforms};
 	return gs;
 }
 
@@ -180,14 +181,20 @@ gpu_context *prep_gpu(void)
     	clGetDeviceIDs(gpu->platform[i], CL_DEVICE_TYPE_GPU, gpu->numDevices, &device_ids[offset], &d);
     	gpu->contexts[i] = clCreateContext(0, d, &device_ids[offset], NULL, NULL, &err);
     	for (int j = 0; j < d; j++)
-    		gpu->commands[offset + j] = clCreateCommandQueue(gpu->contexts[i], device_ids[offset + j], CL_QUEUE_PROFILING_ENABLE, &err);
+    	{
+    		// #ifndef __APPLE__
+    		// 	gpu->commands[offset + j] = clCreateCommandQueueWithProperties(gpu->contexts[i], device_ids[offset + j], NULL, &err);
+    		// #endif
+    		// #ifdef __APPLE__
+    			gpu->commands[offset + j] = clCreateCommandQueue(gpu->contexts[i], device_ids[offset + j], CL_QUEUE_PROFILING_ENABLE, &err);
+    		// #endif
+    	}
     	offset += d;
     }
     // printf("made contexts and CQs\n");
 
-
-    char *source = load_cl_file("new_kernel.cl");
-
+    char *source = load_cl_file("multi.cl");
+    printf("loaded kernel source\n");
 
     //create (platforms) programs and build them
     gpu->programs = calloc(gpu->numPlatforms, sizeof(cl_program));
@@ -198,6 +205,14 @@ gpu_context *prep_gpu(void)
     	if (err != CL_SUCCESS)
     	{
     	 	printf("bad compile\n");
+    	 	char *build_log;
+			size_t ret_val_size = 0;
+			clGetProgramBuildInfo(gpu->programs[i], device_ids[i], CL_PROGRAM_BUILD_LOG, 0, NULL, &ret_val_size);
+			printf("ret val %lu\n", ret_val_size);
+			build_log = malloc(ret_val_size + 1);
+			clGetProgramBuildInfo(gpu->programs[i], device_ids[i], CL_PROGRAM_BUILD_LOG, ret_val_size, build_log, NULL);
+			printf("%s\n", build_log);
+			free(build_log);
     	 	exit(0);
     	}
 	    free(source);
@@ -294,38 +309,40 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, unsig
 	return output_sum;
 }
 
-cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution, unsigned int samples)
-{
-	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
-	for (int i = 0; i < numDevices; i++)
-	{
-		for (int j = 0; j < resolution; j++)
-		{
-
-			output_sum[j].x += (double)outputs[i][j].x;
-			output_sum[j].y += (double)outputs[i][j].y;
-			output_sum[j].z += (double)outputs[i][j].z;
-		}
-		free(outputs[i]);
-	}
-	free(outputs);
-
-	for (int j = 0;j < resolution; j++)
-	{
-		double scale = 1.0 / (double)(samples * numDevices);
-		output_sum[j].x *= scale;
-		output_sum[j].y *= scale;
-		output_sum[j].z *= scale;
-
-		output_sum[j].x = output_sum[j].x / (1.0f + output_sum[j].x);
-		output_sum[j].y = output_sum[j].y / (1.0f + output_sum[j].y);
-		output_sum[j].z = output_sum[j].z / (1.0f + output_sum[j].z);
-	}
-
-	return output_sum;
-}
-
 cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples)
+
+typedef struct s_gpu_ray {
+	cl_float3 origin;
+	cl_float3 direction;
+	cl_float3 inv_dir;
+
+	cl_float3 diff;
+	cl_float3 spec;
+	cl_float3 trans;
+	cl_float3 bump;
+	cl_float3 N;
+	cl_float t;
+	cl_float u;
+	cl_float v;
+
+	cl_float3 color;
+	cl_float3 mask;
+
+	cl_int hit_ind;
+	cl_int pixel_id;
+	cl_int bounce_count;
+	cl_int status;
+}				gpu_ray;
+
+typedef struct s_gpu_camera {
+	cl_float3 origin;
+	cl_float3 focus;
+	cl_float3 d_x;
+	cl_float3 d_y;
+	cl_int width;
+}				gpu_camera;
+
+cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 {
 	static gpu_context *CL;
 	if (!CL)
@@ -336,147 +353,189 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	else
 		reseed(scene);
 
+	gpu_camera gcam;
+	gcam.focus = cam.focus;
+	gcam.origin = cam.origin;
+	gcam.d_x = cam.d_x;
+	gcam.d_y = cam.d_y;
+	gcam.width = xdim;
+
 	//for simplicity assuming one platform for now. can easily be extended, see old gpu_launch.c
 
+	size_t worksize = xdim * ydim;
+	size_t localsize = 32;
+	size_t sample_max = samples;
+	size_t width = xdim;
+
 	//per-platform pointers
-	cl_mem d_V;
-	cl_mem d_T;
-	cl_mem d_N;
-	cl_mem d_M;
-	cl_mem d_bins;
-	cl_mem d_mats;
+	cl_mem d_vertexes;
+	cl_mem d_tex_coords;
+	cl_mem d_normal;
+	cl_mem d_tangent;
+	cl_mem d_bitangent;
+	cl_mem d_boxes;
+	cl_mem d_materials;
 	cl_mem d_tex;
 	cl_mem d_TN;
 	cl_mem d_BTN;
-
-	 printf("alloc:\n");
+	cl_mem d_material_indices;
+	cl_mem d_boost;
 	
-	//per-platform allocs
-	d_V = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_float3) * scene->tri_count, NULL, NULL);
-	d_T = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_float3) * scene->tri_count, NULL, NULL);
-	d_N = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_float3) * scene->tri_count, NULL, NULL);
-	d_M = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_int) * scene->tri_count / 3, NULL, NULL);
-	d_TN = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_float3) * scene->tri_count / 3, NULL, NULL);
-	d_BTN = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_float3) * scene->tri_count / 3, NULL, NULL);
-	d_mats = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(gpu_mat) * scene->mat_count, NULL, NULL);
-	d_bins = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(gpu_bin) * scene->bin_count, NULL, NULL);
-	d_tex = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_uchar) * scene->tex_size, NULL, NULL);
+	//per-platform
+	d_vertexes = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->V, NULL);
+	d_tex_coords = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->T, NULL);
+	d_normal = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->N, NULL);
+	d_tangent = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->TN, NULL);
+	d_bitangent = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->BTN, NULL);
+	d_boxes = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_bin) * scene->bin_count, scene->bins, NULL);
+	d_materials = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_mat) * scene->mat_count, scene->mats, NULL);
+	d_tex = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * scene->tex_size, scene->tex, NULL);
+	d_material_indices= clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * scene->tri_count / 3, scene->M, NULL);
+	d_boost = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_bin) * scene->boost_count, scene->boost, NULL);
 
-	// printf("copy:\n");
-
-	//per-platform copies
-	
-
-	 printf("per-platform copies done\n");
-
-	//per-device pointers
+	//per-device
 	cl_mem *d_outputs = calloc(CL->numDevices, sizeof(cl_mem));
-	cl_mem *d_seeds = calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_seeds = 	calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_rays = 	calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_counts = 	calloc(CL->numDevices, sizeof(cl_mem));
 	
+	cl_float3 *blank_output = calloc(worksize, sizeof(cl_float3));
+	gpu_ray *empty_rays = calloc(worksize, sizeof(gpu_ray));
+	cl_int *zero_counts = calloc(worksize, sizeof(cl_int));
+
+
 	cl_uint d;
 	clGetDeviceIDs(CL->platform[0], CL_DEVICE_TYPE_GPU, 0, NULL, &d);
-
-	size_t resolution = xdim * ydim;
-	size_t groupsize = 256;
-	size_t width = xdim;
-
-	 printf("per-device alloc and copy\n");
-
-	//per-device allocs and copies
 	for (int i = 0; i < d; i++)
 	{
-		d_seeds[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY, sizeof(cl_uint) * 2 * resolution, NULL, NULL);
-		clEnqueueWriteBuffer(CL->commands[i], d_seeds[i], CL_FALSE, 0, sizeof(cl_uint) * 2 * resolution, &scene->seeds[2 * resolution * i], 0, NULL, NULL);
-		d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_WRITE_ONLY, sizeof(cl_float3) * resolution, NULL, NULL);
-		clEnqueueWriteBuffer(CL->commands[i], d_V, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count, scene->V, 0, NULL, NULL);
-		clEnqueueWriteBuffer(CL->commands[i], d_T, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count, scene->T, 0, NULL, NULL);
-		clEnqueueWriteBuffer(CL->commands[i], d_N, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count, scene->N, 0, NULL, NULL);
-		clEnqueueWriteBuffer(CL->commands[i], d_M, CL_FALSE, 0, sizeof(cl_int) * scene->tri_count / 3, scene->M, 0, NULL, NULL);
-		clEnqueueWriteBuffer(CL->commands[i], d_TN, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count / 3, scene->TN, 0, NULL, NULL);
-		clEnqueueWriteBuffer(CL->commands[i], d_BTN, CL_FALSE, 0, sizeof(cl_float3) * scene->tri_count / 3, scene->BTN, 0, NULL, NULL);
-		clEnqueueWriteBuffer(CL->commands[i], d_mats, CL_FALSE, 0, sizeof(gpu_mat) * scene->mat_count, scene->mats, 0, NULL, NULL);
-		clEnqueueWriteBuffer(CL->commands[i], d_bins, CL_FALSE, 0, sizeof(gpu_bin) * scene->bin_count, scene->bins, 0, NULL, NULL);
-		clEnqueueWriteBuffer(CL->commands[i], d_tex, CL_FALSE, 0, sizeof(cl_uchar) * scene->tex_size, scene->tex, 0, NULL, NULL);
+		d_seeds[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uint) * 2 * worksize, &scene->seeds[2 * worksize * i], NULL);
+		d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * worksize, blank_output, NULL);
+		d_rays[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(gpu_ray) * worksize, empty_rays, NULL);
+		d_counts[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * worksize, zero_counts, NULL);
 	}
 
 	for (int i = 0; i < d; i++)
 		clFinish(CL->commands[i]);
 
-	printf("per-device copies done\n");
+	printf("everything should be alloced and copied??\n");
 
-	cl_kernel render = clCreateKernel(CL->programs[0], "render_kernel", NULL);
-	printf("made kernel\n");
+	cl_int err;
 
-	//per-platform args
-	clSetKernelArg(render, 0, sizeof(cl_mem), &d_V);
-	clSetKernelArg(render, 1, sizeof(cl_mem), &d_T);
-	clSetKernelArg(render, 2, sizeof(cl_mem), &d_N);
-	clSetKernelArg(render, 3, sizeof(cl_mem), &d_bins);
-	clSetKernelArg(render, 4, sizeof(cl_mem), &d_mats);
-	clSetKernelArg(render, 5, sizeof(cl_mem), &d_tex);
-	clSetKernelArg(render, 6, sizeof(cl_float3), &cam.origin);
-	clSetKernelArg(render, 7, sizeof(cl_float3), &cam.focus);
-	clSetKernelArg(render, 8, sizeof(cl_float3), &cam.d_x);
-	clSetKernelArg(render, 9, sizeof(cl_float3), &cam.d_y);
-	clSetKernelArg(render, 10, sizeof(cl_uint), &samples);
-	clSetKernelArg(render, 11, sizeof(cl_uint), &width);
-	clSetKernelArg(render, 14, sizeof(cl_mem), &d_M);
-	clSetKernelArg(render, 15, sizeof(cl_mem), &d_TN);
-	clSetKernelArg(render, 16, sizeof(cl_mem), &d_BTN);
-
-	//per-device args and launch
-	printf("about to launch\n");
-
-	//printf("%d %d\n", CL->numDevices, d);
-	cl_event done[CL->numDevices];
-	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
-	for (int i = 0; i < d; i++)
-		outputs[i] = calloc(resolution, sizeof(cl_float3));
+	cl_kernel *collect = calloc(d, sizeof(cl_kernel));
+	cl_kernel *traverse = calloc(d, sizeof(cl_kernel));
+	cl_kernel *fetch = calloc(d, sizeof(cl_kernel));
+	cl_kernel *bounce = calloc(d, sizeof(cl_kernel));
 
 	for (int i = 0; i < d; i++)
 	{
-		// printf("device %d\n", i);
-		clSetKernelArg(render, 12, sizeof(cl_mem), &d_seeds[i]);
-		clSetKernelArg(render, 13, sizeof(cl_mem), &d_outputs[i]);
-		cl_int err = clEnqueueNDRangeKernel(CL->commands[i], render, 1, 0, &resolution, &groupsize, 0, NULL, &done[i]);
-		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_FALSE, 0, sizeof(cl_float3) * resolution, outputs[i], 1, &done[i], NULL);
+		collect[i] = clCreateKernel(CL->programs[0], "collect", &err);
+		traverse[i] = clCreateKernel(CL->programs[0], "traverse", &err);
+		fetch[i] = clCreateKernel(CL->programs[0], "fetch", &err);
+		bounce[i] = clCreateKernel(CL->programs[0], "bounce", &err);
 	}
+
+	printf("made kernels!\n");
+
+
+	//connect arguments
+	for (int i = 0; i < d; i++)
+	{
+		/*
+		__kernel void collect(	__global Ray *rays,
+								__global uint *seeds,
+								const Camera cam,
+								__global float3 *output,
+								__global int *sample_counts,
+								const int sample_max)
+		*/
+		clSetKernelArg(collect[i], 0, sizeof(cl_mem), &d_rays[i]);
+		clSetKernelArg(collect[i], 1, sizeof(cl_mem), &d_seeds[i]);
+		clSetKernelArg(collect[i], 2, sizeof(gpu_camera), &gcam);
+		clSetKernelArg(collect[i], 3, sizeof(cl_mem), &d_outputs[i]);
+		clSetKernelArg(collect[i], 4, sizeof(cl_mem), &d_counts[i]);
+		clSetKernelArg(collect[i], 5, sizeof(cl_int), &sample_max);
+		/*
+		__kernel void traverse(	__global Ray *rays,
+								__global Box *boxes,
+								__global float3 *V,
+								__constant Box *boost,
+								const int boost_count)
+		*/
+		clSetKernelArg(traverse[i], 0, sizeof(cl_mem), &d_rays[i]);
+		clSetKernelArg(traverse[i], 1, sizeof(cl_mem), &d_boxes);
+		clSetKernelArg(traverse[i], 2, sizeof(cl_mem), &d_vertexes);
+		clSetKernelArg(traverse[i], 3, sizeof(cl_mem), &d_boost);
+		clSetKernelArg(traverse[i], 4, sizeof(cl_int), &scene->boost_count);
+
+		/*
+		__kernel void fetch(	__global Ray *rays,
+								__global float3 *V,
+								__global float3 *T,
+								__global float3 *N,
+								__global float3 *TN,
+								__global float3 *BTN,
+								__global Material *mats,
+								__global int *M,
+								__global uchar *tex)
+		*/
+		clSetKernelArg(fetch[i], 0, sizeof(cl_mem), &d_rays[i]);
+		clSetKernelArg(fetch[i], 1, sizeof(cl_mem), &d_vertexes);
+		clSetKernelArg(fetch[i], 2, sizeof(cl_mem), &d_tex_coords);
+		clSetKernelArg(fetch[i], 3, sizeof(cl_mem), &d_normal);
+		clSetKernelArg(fetch[i], 4, sizeof(cl_mem), &d_tangent);
+		clSetKernelArg(fetch[i], 5, sizeof(cl_mem), &d_bitangent);
+		clSetKernelArg(fetch[i], 6, sizeof(cl_mem), &d_materials);
+		clSetKernelArg(fetch[i], 7, sizeof(cl_mem), &d_material_indices);
+		clSetKernelArg(fetch[i], 8, sizeof(cl_mem), &d_tex);
+
+		/*
+		__kernel void bounce( 	__global Ray *rays,
+								__global uint *seeds)
+		*/
+		clSetKernelArg(bounce[i], 0, sizeof(cl_mem), &d_rays[i]);
+		clSetKernelArg(bounce[i], 1, sizeof(cl_mem), &d_seeds[i]);
+	}
+
+
+	printf("any key to launch\n");
+	getchar();
+	//ACTUAL LAUNCH TIME
+	cl_event begin, finish;
+	cl_ulong start, end;
+	// cl_event collectE, traverseE, fetchE, bounceE;
+	for (int i = 0; i < d; i++)
+		for (int j = 0; j < samples; j++)
+		{
+			clEnqueueNDRangeKernel(CL->commands[i], collect[i], 1, 0, &worksize, &localsize, 0, NULL, j == 0 ? &begin: NULL);
+			clEnqueueNDRangeKernel(CL->commands[i], traverse[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
+			clEnqueueNDRangeKernel(CL->commands[i], fetch[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
+			clEnqueueNDRangeKernel(CL->commands[i], bounce[i], 1, 0, &worksize, &localsize, 0, NULL, j == samples - 1 ? &finish : NULL);
+		}
 
 	for (int i = 0; i < d; i++)
 		clFlush(CL->commands[i]);
 
-	// printf("all enqueued\n");
 	for (int i = 0; i < d; i++)
-	{
 		clFinish(CL->commands[i]);
-		cl_ulong start, end;
-		clGetEventProfilingInfo(done[i], CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-		clGetEventProfilingInfo(done[i], CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-		printf("device %d took %.3f seconds\n", i, (float)(end - start) / 1000000000.0f);
-		clReleaseEvent(done[i]);
-	}
-	//printf("done?\n");
 
-	clReleaseMemObject(d_V);
-	clReleaseMemObject(d_T);
-	clReleaseMemObject(d_N);
-	clReleaseMemObject(d_bins);
-	clReleaseMemObject(d_mats);
-	clReleaseMemObject(d_tex);
-	clReleaseMemObject(d_M);
-	clReleaseMemObject(d_TN);
-	clReleaseMemObject(d_BTN);
+	clGetEventProfilingInfo(begin, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+	clGetEventProfilingInfo(finish, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+	printf("took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
+	
+	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
+	for (int i = 0; i < CL->numDevices; i++)
+		outputs[i] = calloc(worksize, sizeof(cl_float3));
+
+	cl_int **counts = calloc(CL->numDevices, sizeof(cl_int *));
+	for (int i = 0; i < CL->numDevices; i++)
+		counts[i] = calloc(worksize, sizeof(cl_int));
+
 	for (int i = 0; i < d; i++)
 	{
-		clReleaseMemObject(d_seeds[i]);
-		clReleaseMemObject(d_outputs[i]);
+		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_TRUE, 0, worksize * sizeof(cl_float3), outputs[i], 0, NULL, NULL);
+		clEnqueueReadBuffer(CL->commands[i], d_counts[i], CL_TRUE, 0, worksize * sizeof(cl_int), counts[i], 0, NULL, NULL);
 	}
 
-	free(d_seeds);
-	free(d_outputs);
-
-	clReleaseKernel(render);
-
-	//printf("going to composite\n");
-	return *outputs;
+	printf("read complete\n");
+	return composite(outputs, d, worksize, counts);
 }
