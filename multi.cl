@@ -222,8 +222,8 @@ static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T,
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-	// *N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
-	*N_out = sample_N;
+	*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
+	// *N_out = sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
 	txcrd.x -= floor(txcrd.x);
@@ -274,11 +274,11 @@ __kernel void fetch(	__global Ray *rays,
 	// 	ray.status = TRAVERSE;
 	// }
 
-	if (dot(mat.Ke, mat.Ke) > 0.0f)
-	{
-		ray.color += SUN_BRIGHTNESS * ray.mask;
-		ray.status = DEAD;
-	}
+	// if (dot(mat.Ke, mat.Ke) > 0.0f)
+	// {
+	// 	ray.color += SUN_BRIGHTNESS * ray.mask;
+	// 	ray.status = DEAD;
+	// }
 
 	rays[gid] = ray;
 }
@@ -421,39 +421,39 @@ __kernel void bounce( 	__global Ray *rays,
 	
 	float3 o;
 
-	if (dot(ray.spec, ray.spec) > 0.0f) 
-	{
-		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
-		{
-			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
-			if (dot(weight, weight) == 0.0f)
-			{
-				//if microfacet reflection fails, fall back to macro-normal
-				o = normalize(2.0f * fabs(dot(i, n)) * n - i);
-				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
-			}
-		}
-		else
-		{
-			float index = ni / nt;
-			float c = dot(i,m);
-			float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
-			if (coeff != coeff)
-			{
-				//if coeff is Nan, means total internal reflection
-				o = normalize(2.0f * fabs(dot(i, n)) * n - i);
-				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
-			}
-			else
-			{
-				o = normalize((coeff * m) - (index * i));
-				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE * pow(0.001f, ray.t);
-			}
-		}
-	}
-	else
-	{
+	// if (dot(ray.spec, ray.spec) > 0.0f) 
+	// {
+	// 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
+	// 	{
+	// 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
+	// 		weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
+	// 		if (dot(weight, weight) == 0.0f)
+	// 		{
+	// 			//if microfacet reflection fails, fall back to macro-normal
+	// 			o = normalize(2.0f * fabs(dot(i, n)) * n - i);
+	// 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
+	// 		}
+	// 	}
+	// 	else
+	// 	{
+	// 		float index = ni / nt;
+	// 		float c = dot(i,m);
+	// 		float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
+	// 		if (coeff != coeff)
+	// 		{
+	// 			//if coeff is Nan, means total internal reflection
+	// 			o = normalize(2.0f * fabs(dot(i, n)) * n - i);
+	// 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
+	// 		}
+	// 		else
+	// 		{
+	// 			o = normalize((coeff * m) - (index * i));
+	// 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE * pow(0.001f, ray.t);
+	// 		}
+	// 	}
+	// }
+	// else
+	// {
 		//Cosine-weighted pure diffuse reflection
 		//local orthonormal system
 		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -467,7 +467,7 @@ __kernel void bounce( 	__global Ray *rays,
 		//combine for new direction
 		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
-	}
+	// }
 
 	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
@@ -509,7 +509,8 @@ __kernel void collect(	__global Ray *rays,
 	}
 	if (ray.status == DEAD)
 	{
-		output[ray.pixel_id] += ray.color;
+		if (ray.hit_ind == -1)
+			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS;
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
 	}
@@ -526,6 +527,7 @@ __kernel void collect(	__global Ray *rays,
 		ray.color = BLACK;
 		ray.mask = WHITE;
 		ray.bounce_count = 0;
+		ray.hit_ind = 0;
 		ray.pixel_id = gid;
 	}
 

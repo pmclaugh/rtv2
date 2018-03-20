@@ -377,7 +377,7 @@ typedef struct	s_mlx_data
 	int			size_line;
 	int			endian;
 	cl_double3	*pixels;
-	cl_float3	*total_clr;
+	cl_double3	*total_clr;
 }				t_mlx_data;
 
 typedef struct s_env
@@ -417,9 +417,9 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info);
 Scene *scene_from_ply(char *rel_path, char *filename, File_edits edit_info);
 
 void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples);
-//cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples);
+cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples);
 //Scene *scene_from_obj(char *rel_path, char *filename);
-cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
+//cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
 
 void old_bvh(Scene *S);
 Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);

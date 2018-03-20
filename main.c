@@ -5,7 +5,7 @@
 #else
 #endif
 
-void	sum_color(cl_float3 *a, cl_float3 *b, int size)
+void	sum_color(cl_double3 *a, cl_float3 *b, int size)
 {
 	for (int i = 0; i < size; i++)
 	{

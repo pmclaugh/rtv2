@@ -340,8 +340,11 @@ typedef struct s_gpu_camera {
 	cl_int width;
 }				gpu_camera;
 
-cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
+cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples)
 {
+	//jank!
+	samples *= 12;
+
 	static gpu_context *CL;
 	if (!CL)
 		CL = prep_gpu();
@@ -535,5 +538,5 @@ cl_double3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples)
 	}
 
 	printf("read complete\n");
-	return composite(outputs, d, worksize, counts);
+	return *outputs;
 }
