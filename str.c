@@ -26,3 +26,14 @@ char	*strtrim(char const *s)
 	str[i] = '\0';
 	return (str);
 }
+
+char *move_str(char *big, char *little, int flag)
+{
+	if (little == NULL)
+		return (big);
+	big = strstr(big, little);
+	big += strlen(little);
+	if (flag == FREE)
+		free(little);
+	return (big);
+}

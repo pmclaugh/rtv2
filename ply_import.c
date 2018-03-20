@@ -1,5 +1,7 @@
 #include "rt.h"
 
+enum DataType {Char, Uchar, Short, Ushort, Int, Uint, Float, Double};
+
 Scene	*scene_from_ply(char *rel_path, char *filename, File_edits edit_info)
 {
 	char *file = malloc(strlen(rel_path) + strlen(filename) + 1);
@@ -89,57 +91,57 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 					{
 						if (elems[j].props[k].n != 1)
 						{
-							if (elems[j].props[k].n_datatype == CHAR)
+							if (elems[j].props[k].n_datatype == Char)
 								elems[j].props[k].n = (uint32_t)read_char(fp, file_endian, endian);
-							else if (elems[j].props[k].n_datatype == UCHAR)
+							else if (elems[j].props[k].n_datatype == Uchar)
 								elems[j].props[k].n = (uint32_t)read_uchar(fp, file_endian, endian);
-							else if (elems[j].props[k].n_datatype == SHORT)
+							else if (elems[j].props[k].n_datatype == Short)
 								elems[j].props[k].n = (uint32_t)read_short(fp, file_endian, endian);
-							else if (elems[j].props[k].n_datatype == USHORT)
+							else if (elems[j].props[k].n_datatype == Ushort)
 								elems[j].props[k].n = (uint32_t)read_ushort(fp, file_endian, endian);
-							else if (elems[j].props[k].n_datatype == INT)
+							else if (elems[j].props[k].n_datatype == Int)
 								elems[j].props[k].n = (uint32_t)read_int(fp, file_endian, endian);
-							else if (elems[j].props[k].n_datatype == UINT)
+							else if (elems[j].props[k].n_datatype == Uint)
 								elems[j].props[k].n = (uint32_t)read_uint(fp, file_endian, endian);
 						}
 						for (int x = 0; x < elems[j].props[k].n; x++)
 						{
-							if (elems[j].props[k].datatype == CHAR)
+							if (elems[j].props[k].datatype == Char)
 							{
 								char val = read_char(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == UCHAR)
+							else if (elems[j].props[k].datatype == Uchar)
 							{
 								unsigned char val = read_uchar(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == SHORT)
+							else if (elems[j].props[k].datatype == Short)
 							{
 								int16_t val = read_short(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == USHORT)
+							else if (elems[j].props[k].datatype == Ushort)
 							{
 								uint16_t val = read_ushort(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == INT)
+							else if (elems[j].props[k].datatype == Int)
 							{
 								int32_t val = read_int(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == UINT)
+							else if (elems[j].props[k].datatype == Uint)
 							{
 								uint32_t val = read_uint(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == FLOAT)
+							else if (elems[j].props[k].datatype == Float)
 							{
 								float val = read_float(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == DOUBLE)
+							else if (elems[j].props[k].datatype == Double)
 							{
 								double val = read_double(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
@@ -215,57 +217,57 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 					{
 						if (elems[j].props[k].n != 1)
 						{
-							if (elems[j].props[k].n_datatype == CHAR)
+							if (elems[j].props[k].n_datatype == Char)
 								elems[j].props[k].n = (uint32_t)read_char(fp, file_endian, endian);
-							else if (elems[j].props[k].n_datatype == UCHAR)
+							else if (elems[j].props[k].n_datatype == Uchar)
 								elems[j].props[k].n = (uint32_t)read_uchar(fp, file_endian, endian);
-							else if (elems[j].props[k].n_datatype == SHORT)
+							else if (elems[j].props[k].n_datatype == Short)
 								elems[j].props[k].n = (uint32_t)read_short(fp, file_endian, endian);
-							else if (elems[j].props[k].n_datatype == USHORT)
+							else if (elems[j].props[k].n_datatype == Ushort)
 								elems[j].props[k].n = (uint32_t)read_ushort(fp, file_endian, endian);
-							else if (elems[j].props[k].n_datatype == INT)
+							else if (elems[j].props[k].n_datatype == Int)
 								elems[j].props[k].n = (uint32_t)read_int(fp, file_endian, endian);
-							else if (elems[j].props[k].n_datatype == UINT)
+							else if (elems[j].props[k].n_datatype == Uint)
 								elems[j].props[k].n = (uint32_t)read_uint(fp, file_endian, endian);
 						}
 						for (int x = 0; x < elems[j].props[k].n; x++)
 						{
-							if (elems[j].props[k].datatype == CHAR)
+							if (elems[j].props[k].datatype == Char)
 							{
 								char val = read_char(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == UCHAR)
+							else if (elems[j].props[k].datatype == Uchar)
 							{
 								unsigned char val = read_uchar(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == SHORT)
+							else if (elems[j].props[k].datatype == Short)
 							{
 								int16_t val = read_short(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == USHORT)
+							else if (elems[j].props[k].datatype == Ushort)
 							{
 								uint16_t val = read_ushort(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == INT)
+							else if (elems[j].props[k].datatype == Int)
 							{
 								int32_t val = read_int(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == UINT)
+							else if (elems[j].props[k].datatype == Uint)
 							{
 								uint32_t val = read_uint(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == FLOAT)
+							else if (elems[j].props[k].datatype == Float)
 							{
 								float val = read_float(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
 							}
-							else if (elems[j].props[k].datatype == DOUBLE)
+							else if (elems[j].props[k].datatype == Double)
 							{
 								double val = read_double(fp, file_endian, endian);
 								elems[j].props[k].data = &val;
@@ -350,8 +352,7 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 					{
 						int a, b, c, d, e;
 						sscanf(ptr, " %d", &n);
-						ptr = strstr(ptr, (tmp = itoa(n))) + strlen(tmp);
-						free(tmp);
+						ptr = move_str(ptr, itoa(n), FREE);
 						if (n == 3)
 							sscanf(ptr, " %d %d %d", &a, &b, &c);
 						else if (n == 4)
@@ -360,21 +361,14 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 							sscanf(ptr, " %d %d %d %d %d", &a, &b, &c, &d, &e);
 						else
 							printf("can't handle %d vertices\n", n);
-						ptr = strstr(ptr, (tmp = itoa(a))) + strlen(tmp);
-						free(tmp);
-						ptr = strstr(ptr, (tmp = itoa(b))) + strlen(tmp);
-						free(tmp);
-						ptr = strstr(ptr, (tmp = itoa(c))) + strlen(tmp);
-						free(tmp);
+						ptr = move_str(ptr, itoa(a), FREE);
+						ptr = move_str(ptr, itoa(b), FREE);
+						ptr = move_str(ptr, itoa(c), FREE);
 						if (n == 4 || n == 5)
 						{
-							ptr = strstr(ptr, (tmp = itoa(d))) + strlen(tmp);
-							free(tmp);
+							ptr = move_str(ptr, itoa(d), FREE);
 							if (n == 5)
-							{
-								ptr = strstr(ptr, (tmp = itoa(e))) + strlen(tmp);
-								free(tmp);
-							}
+								ptr = move_str(ptr, itoa(e), FREE);
 						}
 						Face face;
 						face.shape = 3;
@@ -444,8 +438,7 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 						if (elems[j].props[k].n != 1)
 						{
 							sscanf(ptr, " %d", &(elems[j].props[k].n));
-							ptr = strstr(ptr, (tmp = itoa(elems[j].props[k].n))) + strlen(tmp);
-							free(tmp);
+							ptr = move_str(ptr, itoa(elems[j].props[k].n), FREE);
 						}
 						float *values = calloc(elems[j].props[k].n, sizeof(float));
 						for (int x = 0; x < elems[j].props[k].n; x++)
@@ -453,7 +446,7 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 							char temp[512];
 							sscanf(ptr, " %f", &(values[x]));
 							sscanf(ptr, " %s", temp);
-							ptr = strstr(ptr, temp) + strlen(temp);
+							ptr = move_str(ptr, temp, 0);
 						}
 						if (elems[j].props[k].n == n * 2)
 						{
@@ -513,7 +506,8 @@ static void get_properties(File_info *file, Elements *elem, int element_total)
 		while (strncmp(line, "element", 7) == 0)
 		{
 			--element_total;
-			sscanf(line, "element %s %d\n", elem[++i].name, &(elem[i]).total);
+			++i;
+			sscanf(line, "element %s %d\n", elem[i].name, &(elem[i]).total);
 			while (fgets(line, 512, file->ptr))
 			{
 				size += strlen(line);
@@ -537,15 +531,15 @@ static void get_properties(File_info *file, Elements *elem, int element_total)
 							++j;
 							sscanf(line, "property list %s %s %s ", str1, str2, str3);
 							if (strstr(str1, "char"))
-								elem[i].props[j].n_datatype = (strstr(str1, "uchar")) ? UCHAR : CHAR;
+								elem[i].props[j].n_datatype = (strstr(str1, "uchar")) ? Uchar : Char;
 							else if (strstr(str1, "short"))
-								elem[i].props[j].n_datatype = (strstr(str1, "ushort")) ? USHORT : SHORT;
+								elem[i].props[j].n_datatype = (strstr(str1, "ushort")) ? Ushort : Short;
 							else if (strstr(str1, "int"))
-								elem[i].props[j].n_datatype = (strstr(str1, "uint")) ? UINT : INT;
+								elem[i].props[j].n_datatype = (strstr(str1, "uint")) ? Uint : Int;
 							else if (strstr(str1, "float"))
-								elem[i].props[j].n_datatype = FLOAT;
+								elem[i].props[j].n_datatype = Float;
 							else if (strstr(str1, "double"))
-								elem[i].props[j].n_datatype = DOUBLE;
+								elem[i].props[j].n_datatype = Double;
 							else
 							{
 								printf("unknown data type\n");
@@ -557,15 +551,15 @@ static void get_properties(File_info *file, Elements *elem, int element_total)
 						else
 							elem[i].props[++j].n = 1;
 						if (strstr(str1, "char"))
-							elem[i].props[j].datatype = (strstr(str1, "uchar")) ? UCHAR : CHAR;
+							elem[i].props[j].datatype = (strstr(str1, "uchar")) ? Uchar : Char;
 						else if (strstr(str1, "short"))
-							elem[i].props[j].datatype = (strstr(str1, "ushort")) ? USHORT : SHORT;
+							elem[i].props[j].datatype = (strstr(str1, "ushort")) ? Ushort : Short;
 						else if (strstr(str1, "int"))
-							elem[i].props[j].datatype = (strstr(str1, "uint")) ? UINT : INT;
+							elem[i].props[j].datatype = (strstr(str1, "uint")) ? Uint : Int;
 						else if (strstr(str1, "float"))
-							elem[i].props[j].datatype = FLOAT;
+							elem[i].props[j].datatype = Float;
 						else if (strstr(str1, "double"))
-							elem[i].props[j].datatype = DOUBLE;
+							elem[i].props[j].datatype = Double;
 						else
 						{
 							printf("unknown data type\n");

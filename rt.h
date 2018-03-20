@@ -32,6 +32,8 @@
 
 #define ERROR 1e-4
 
+#define FREE 1
+
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
 #define RED (cl_float3){1.0, 0.2, 0.2}
 #define GREEN (cl_float3){0.2, 1.0, 0.2}
@@ -51,15 +53,6 @@
 
 #define MOVE_SPEED	10
 #define TURN_SPEED	M_PI / 30
-
-#define CHAR 1
-#define UCHAR 2
-#define SHORT 3
-#define USHORT 4
-#define INT 5
-#define UINT 6
-#define FLOAT 7
-#define DOUBLE 8
 
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
@@ -450,6 +443,7 @@ void	clr_avg(cl_double3 *a, cl_double3 *b, int samples, int size);
 
 //utility functions
 char *strtrim(char const *s);
+char *move_str(char *big, char *little, int flag);
 char *itoa(int n);
 cl_float3 get_vec(const char *line);
 void print_vec(const cl_float3 vec);

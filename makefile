@@ -12,14 +12,14 @@ SRC =	vec.c \
 		interactive.c \
 		key_command.c \
 		import.c \
-		strtrim.c \
-    itoa.c \
-    read.c \
+		str.c \
+		itoa.c \
+		read.c \
 		qdbmp/qdbmp.c \
 		camera.c \
-    composite.c \
-    bvh_util.c \
-    stl_import.c
+		composite.c \
+		bvh_util.c \
+		stl_import.c
 
 OBJ = $(SRC:.c=.o)
 

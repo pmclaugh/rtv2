@@ -10,8 +10,6 @@ Map *load_bmp_map(char *rel_path, char *filename)
 	strcat(bmp_file, filename);
 	BMP *bmp = BMP_ReadFile(bmp_file);
 
-	BMP_CHECK_ERROR( stdout, -1 );
-	
 	Map *map = calloc(1, sizeof(Map));
 	map->width = (int)BMP_GetWidth(bmp);
 	map->height = (int)BMP_GetHeight(bmp);
@@ -36,7 +34,6 @@ Map *load_bmp_map(char *rel_path, char *filename)
 		printf("%d %d\n", map->height, map->width);
 	}
 	free(bmp_file);
-	BMP_CHECK_ERROR( stdout, -1 );
 	BMP_Free(bmp);
 	return map;
 }
@@ -128,7 +125,7 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 				printf("new mtl friendly name %s\n", m.friendly_name);
 		}
 		else if (strncmp(str, "Ns", 2) == 0)
-			sscanf(str, "Ns %f", &m.Ns);
+			sscanf(str, "Ns %f", &m.Ns.x);
 		else if (strncmp(str, "Ni", 2) == 0)
 			sscanf(str, "Ni %f", &m.Ni);
 		else if (strncmp(str, "d ", 2) == 0)
