@@ -11,7 +11,7 @@ Scene	*scene_from_ply(char *rel_path, char *filename, File_edits edit_info)
 	free(file);
 	S->materials = calloc(1, sizeof(Material));
 	S->mat_count = 1;
-	S->materials[0].Ns = 10;
+	S->materials[0].Ns.x = 10;
 	S->materials[0].Ni = 1.5;
 	S->materials[0].d = 1;
 	S->materials[0].Tr = 0;

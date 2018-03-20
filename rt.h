@@ -78,7 +78,7 @@ typedef struct s_elements
 	char name[512];
 	int total;
 	int	property_total;
-	Property *props
+	Property *props;
 }				Elements;
 
 typedef struct s_file_info
@@ -102,19 +102,6 @@ typedef struct s_3x3
 	cl_float3 row2;
 	cl_float3 row3;
 }				t_3x3;
-
-typedef struct s_camera
-{
-	cl_float3 center;
-	cl_float3 normal;
-	cl_float width;
-	cl_float height;
-
-	cl_float3 focus;
-	cl_float3 origin;
-	cl_float3 d_x;
-	cl_float3 d_y;
-}				t_camera;
 
 typedef struct s_map
 {
@@ -431,7 +418,7 @@ Scene *scene_from_ply(char *rel_path, char *filename, File_edits edit_info);
 
 void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples);
 //cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples);
-Scene *scene_from_obj(char *rel_path, char *filename);
+//Scene *scene_from_obj(char *rel_path, char *filename);
 cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
 
 void old_bvh(Scene *S);
