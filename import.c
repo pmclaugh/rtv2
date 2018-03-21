@@ -69,6 +69,22 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 	}
 }
 
+static int	count_files(FILE *fp)
+{
+	char *line = calloc(512, 1);
+	int num_files = 0;
+	while (fgets(line, 512, fp))
+	{
+		if (line[0] == '#')
+			continue ;
+		if (strncmp(line, "import=", 7) == 0)
+			++num_files;
+	}
+	free(line);
+	fseek(fp, 0L, SEEK_SET);
+	return num_files;
+}
+
 void	load_config(t_env *env)
 {
 	FILE *fp = fopen("./config.ini", "r");
@@ -79,14 +95,16 @@ void	load_config(t_env *env)
 		exit(0);
 	}
 
+	int	num_files = count_files(fp);
+
 	char *line = calloc(512, 1);
-	char **file_path = calloc(4, sizeof(char*));
-	char **dir_path = calloc(4, sizeof(char*));
-	char **file = calloc(4, sizeof(char*));
-	File_edits *edit_info = calloc(4, sizeof(File_edits));
+	char **file_path = calloc(num_files, sizeof(char*));
+	char **dir_path = calloc(num_files, sizeof(char*));
+	char **file = calloc(num_files, sizeof(char*));
+	File_edits *edit_info = calloc(num_files, sizeof(File_edits));
 	
 	int i = 0;
-	for (; i < 4; i++)
+	for (; i < num_files; i++)
 	{
 		file_path[i] = calloc(512, sizeof(char));
 		dir_path[i] = calloc(512, sizeof(char));
@@ -96,7 +114,7 @@ void	load_config(t_env *env)
 	{
 		if (line[0] == '#')
 			continue ;
-		while (strncmp(line, "import=", 7) == 0 && i < 4)
+		while (strncmp(line, "import=", 7) == 0)
 		{
 			sscanf(line, "import=%s", file_path[i]);
 			file_edits(&line, fp, &edit_info[i++]);
@@ -115,8 +133,8 @@ void	load_config(t_env *env)
 	free(line);
 	fclose(fp);
 
-	Scene **S = calloc(4, sizeof(Scene*));
-	for (int j = 0; j < i; j++)
+	Scene **S = calloc(num_files, sizeof(Scene*));
+	for (int j = 0; j < num_files; j++)
 	{
 		if ((file[j] = strrchr(file_path[j], '/') + 1) == NULL)
 		{
@@ -135,13 +153,14 @@ void	load_config(t_env *env)
 			exit(0);
 		}
 	}
-	Scene *all = combine_scenes(S, i);
-	for (i = 0; i < 4; i++)
+	Scene *all = combine_scenes(S, num_files);
+	env->scene = all;
+	
+	for (i = 0; i < num_files; i++)
 		free(file_path[i]);
 	free(file);
 	free(file_path);
 	free(dir_path);
 	free(S);
 	free(edit_info);
-	env->scene = all;
 }
