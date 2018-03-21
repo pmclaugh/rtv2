@@ -76,18 +76,12 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 				for (int k = 0; k < elems[j].property_total; k++)
 				{
 					if (strncmp(elems[j].props[k].name, "x", 1) == 0)
-					{
-						for (int xyz = 0; xyz < 3; xyz++)
-						{
-							if (xyz == 0)
-								V[i].x = read_float(fp, file_endian, endian);
-							else if (xyz == 1)
-								V[i].y = read_float(fp, file_endian, endian);
-							else
-								V[i].z = read_float(fp, file_endian, endian);
-						}
-					}
-					else if (elems[j].props[k].name[0] != 'y' && elems[j].props[k].name[0] != 'z')
+						V[i].x = read_float(fp, file_endian, endian);
+					else if (strncmp(elems[j].props[k].name, "y", 1) == 0)
+						V[i].y = read_float(fp, file_endian, endian);
+					else if (strncmp(elems[j].props[k].name, "z", 1) == 0)
+						V[i].z = read_float(fp, file_endian, endian);
+					else
 					{
 						if (elems[j].props[k].n != 1)
 						{
