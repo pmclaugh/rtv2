@@ -1,7 +1,7 @@
 
 #define PI 3.14159265359f
-#define NORMAL_SHIFT 0.0001f
-#define COLLISION_ERROR 0.00001f
+#define NORMAL_SHIFT 0.0003f
+#define COLLISION_ERROR 0.0001f
 
 #define BLACK (float3)(0.0f, 0.0f, 0.0f)
 #define WHITE (float3)(1.0f, 1.0f, 1.0f)
@@ -261,10 +261,10 @@ __kernel void fetch(	__global Ray *rays,
 		return ;
 
 	float3 txcrd;
-	fetch_NT(V, N, T, ray.direction, ray.hit_ind, ray.u, ray.v, &ray.N, &txcrd);
-	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
 	Material mat = mats[M[ray.hit_ind / 3]];
 	fetch_all_tex(mat, tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
+	fetch_NT(V, N, T, ray.direction, ray.hit_ind, ray.u, ray.v, &ray.N, &txcrd);
+	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
 	ray.status = BOUNCE;
 
 	// if (ray.trans.x < 1.0f)
@@ -579,27 +579,26 @@ __kernel void traverse(	__global Ray *rays,
 			else
 			{
 				Box l, r;
-				int lind = b.lind;
 				if (b.lind < 2048)
 				{
-					l = boost[lind];
-					r = boost[lind + 1];
+					l = boost[b.lind];
+					r = boost[b.rind];
 				}
 				else
 				{
-					l = boxes[lind];
-					r = boxes[lind + 1];
+					l = boxes[b.lind];
+					r = boxes[b.rind];
 				}
                 float t_l = FLT_MAX;
                 float t_r = FLT_MAX;
                 int lhit = intersect_box(ray.origin, ray.inv_dir, l, t, &t_l);
                 int rhit = intersect_box(ray.origin, ray.inv_dir, r, t, &t_r);
                 if (lhit && t_l >= t_r)
-                    stack[s_i++] = lind;
+                    stack[s_i++] = b.lind;
                 if (rhit)
-                    stack[s_i++] = lind + 1;
+                    stack[s_i++] = b.rind;
                 if (lhit && t_l < t_r)
-                    stack[s_i++] = lind;
+                    stack[s_i++] = b.lind;
 			}
 		}
 	}
