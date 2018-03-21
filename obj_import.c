@@ -152,7 +152,7 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			sscanf(str, "map_Ka %s\n", m.map_Ka_path);
 			if (strstr(m.map_Ka_path, ".bmp"))
 				m.map_Ka = load_bmp_map(rel_path, m.map_Ka_path);
-			else
+			else if (strstr(m.map_Ka_path, ".tga"))
 				m.map_Ka = load_tga_map(rel_path, m.map_Ka_path);
 		}
 		else if (strncmp(str, "map_Kd", 6) == 0)
@@ -162,7 +162,7 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			sscanf(str, "map_Kd %s\n", m.map_Kd_path);
 			if (strstr(m.map_Kd_path, ".bmp"))
 				m.map_Kd = load_bmp_map(rel_path, m.map_Kd_path);
-			else
+			else if (strstr(m.map_Kd_path, ".tga"))
 				m.map_Kd = load_tga_map(rel_path, m.map_Kd_path);
 		}
 		else if (strncmp(str, "map_bump", 8) == 0)
@@ -172,7 +172,7 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			sscanf(str, "map_bump %s\n", m.map_bump_path);
 			if (strstr(m.map_bump_path, ".bmp"))
 				m.map_bump = load_bmp_map(rel_path, m.map_bump_path);
-			else
+			else if (strstr(m.map_bump_path, ".tga"))
 				m.map_bump = load_tga_map(rel_path, m.map_bump_path);
 		}
 		else if (strncmp(str, "map_d", 5) == 0)
@@ -182,7 +182,7 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			sscanf(str, "map_d %s\n", m.map_d_path);
 			if (strstr(m.map_d_path, ".bmp"))
 				m.map_d = load_bmp_map(rel_path, m.map_d_path);
-			else
+			else if (strstr(m.map_d_path, ".tga"))
 				m.map_d = load_tga_map(rel_path, m.map_d_path);
 		}
 		else if (strncmp(str, "map_Ks", 6) == 0)
@@ -192,7 +192,7 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			sscanf(str, "map_Ks %s\n", m.map_Ks_path);
 			if (strstr(m.map_Ks_path, ".bmp"))
 				m.map_Ks = load_bmp_map(rel_path, m.map_Ks_path);
-			else
+			else if (strstr(m.map_Ks_path, ".tga"))
 				m.map_Ks = load_tga_map(rel_path, m.map_Ks_path);
 		}
 		free(str);
