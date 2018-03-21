@@ -262,8 +262,9 @@ __kernel void fetch(	__global Ray *rays,
 
 	float3 txcrd;
 	Material mat = mats[M[ray.hit_ind / 3]];
-	fetch_all_tex(mat, tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
+	
 	fetch_NT(V, N, T, ray.direction, ray.hit_ind, ray.u, ray.v, &ray.N, &txcrd);
+	fetch_all_tex(mat, tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
 	ray.status = BOUNCE;
 
