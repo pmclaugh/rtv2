@@ -9,6 +9,8 @@ Map *load_bmp_map(char *rel_path, char *filename)
 	strcpy(bmp_file, rel_path);
 	strcat(bmp_file, filename);
 	BMP *bmp = BMP_ReadFile(bmp_file);
+	
+	BMP_CHECK_ERROR( stdout, NULL );
 
 	Map *map = calloc(1, sizeof(Map));
 	map->width = (int)BMP_GetWidth(bmp);
@@ -28,6 +30,7 @@ Map *load_bmp_map(char *rel_path, char *filename)
 			i++;
 		}
 	}
+	BMP_CHECK_ERROR( stdout, NULL );
 	if (VERBOSE)
 	{
 		printf("loaded texture %s\n", bmp_file);
@@ -230,12 +233,31 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 	int vt_count = 0;
 	int face_count = 0;
 	int obj_count = 0;
+	cl_float3 v;
+	cl_float3 min = (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX};
+	cl_float3 max = (cl_float3){FLT_MIN, FLT_MIN, FLT_MIN};
+	cl_float3 center;
 	while(fgets(line, 512, fp))
 	{
 		if (strncmp(line, "mtllib", 6) == 0)
 			sscanf(line, "mtllib %s\n", matpath);
 		else if (strncmp(line, "v ", 2) == 0)
+		{
 			v_count++;
+			sscanf(line, "v %f %f %f", &v.x, &v.y, &v.z);
+			if (v.x < min.x)
+				min.x = v.x;
+			if (v.y < min.y)
+				min.y = v.y;
+			if (v.z < min.z)
+				min.z = v.z;
+			if (v.x > max.x)
+				max.x = v.x;
+			if (v.y > max.y)
+				max.y = v.y;
+			if (v.z > max.z)
+				max.z = v.z;
+		}
 		else if (strncmp(line, "vn", 2) == 0)
 			vn_count++;
 		else if (strncmp(line, "vt", 2) == 0)
@@ -249,6 +271,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 		else if (strncmp(line, "g ", 2) == 0)
 			obj_count++;
 	}
+	center = vec_add(vec_scale(vec_sub(max, min), 0.5), min);
 
 	//load mats
 	load_mats(S, rel_path, matpath);
@@ -275,10 +298,13 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 	int smoothing = 0;
 	while(fgets(line, 512, fp))
 	{
-		cl_float3 v;
 		if (strncmp(line, "v ", 2) == 0)
 		{
 			sscanf(line, "v %f %f %f", &v.x, &v.y, &v.z);
+			v = vec_sub(v, center);
+			v = vec_scale(v, edit_info.scale);
+			vec_rot(edit_info.rotate, &v);
+			v = vec_add(v, edit_info.translate);
 			V[v_count++] = v;
 		}
 		else if (strncmp(line, "vn", 2) == 0)

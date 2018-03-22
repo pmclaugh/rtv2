@@ -67,6 +67,8 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 		else
 			break ;
 	}
+	if (edit_info->scale <= 0.0f)
+		edit_info->scale = 1.0f;
 }
 
 static int	count_files(FILE *fp)
