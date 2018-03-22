@@ -220,6 +220,7 @@ typedef struct s_gpu_context
 	cl_uint numPlatforms;
 	cl_uint numDevices;
 	cl_platform_id *platform;
+	cl_device_id *device_ids;
 }				gpu_context;
 
 typedef struct s_gpu_mat
