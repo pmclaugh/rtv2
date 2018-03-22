@@ -225,7 +225,6 @@ static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T,
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-	//*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
 	*N_out = sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
@@ -368,8 +367,8 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 	float3 z = n * native_cos(theta);
 
 	float3 m = normalize(x + y + z);
-	if (dot(m, i) * dot(n, i) < 0.0f)
-		m = normalize(z - x - y);
+	// if (dot(m, i) * dot(n, i) < 0.0f)
+	// 	m = normalize(z - x - y);
 	return m;
 }
 
@@ -403,7 +402,7 @@ __kernel void bounce( 	__global Ray *rays,
 
 	float3 n = ray.N;
 	float3 i = ray.direction * -1.0f;
-	float a = 0.01f;
+	float a = 0.1f;
 	a = (1.2f - 0.2f * sqrt(fabs(dot(i,n)))) * a; //softening approximation to reduce weight variance
 	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
 
@@ -425,28 +424,28 @@ __kernel void bounce( 	__global Ray *rays,
 	float3 weight = WHITE;
 	if (dot(ray.spec, ray.spec) > 0.0f) 
 	{
-		// if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
-		// {
+		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
+		{
 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-			weight *= GGX_weight(i, o, m, n, a) *ray.diff;
-		// }
-		// else
-		// {
-		// 	float index = ni / nt;
-		// 	float c = dot(i,m);
-		// 	float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
-		// 	if (coeff != coeff)
-		// 	{
-		// 		//if coeff is Nan, means total internal reflection
-		// 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-		// 		//weight *= GGX_weight(i, o, m, n, a);
-		// 	}
-		// 	else
-		// 	{
-		// 		o = normalize((coeff * m) - (index * i));
-		// 		weight = GGX_weight(i, o, m, n, a) * ray.diff;
-		// 	}
-		// }
+			weight *= GGX_weight(i, o, m, n, a);
+		}
+		else
+		{
+			float index = ni / nt;
+			float c = dot(i,m);
+			float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
+			if (coeff != coeff)
+			{
+				//if coeff is Nan, means total internal reflection
+				o = normalize(2.0f * fabs(dot(i, m)) * m - i);
+				weight *= GGX_weight(i, o, m, n, a);
+			}
+			else
+			{
+				o = normalize((coeff * m) - (index * i));
+				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
+			}
+		}
 	}
 	else
 	{
@@ -508,7 +507,7 @@ __kernel void collect(	__global Ray *rays,
 		if (ray.hit_ind == -1)
 		{
 			if (ray.bounce_count > 0)
-				output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(dot(ray.direction, UNIT_Y), 6.0f);
+				output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * fabs(pow(dot(ray.direction, UNIT_Y), 1.0f));
 			else
 				output[ray.pixel_id] += 0.1f * SUN_BRIGHTNESS;
 		}

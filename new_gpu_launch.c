@@ -320,7 +320,7 @@ typedef struct s_gpu_camera {
 	cl_int width;
 }				gpu_camera;
 
-cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples)
+cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples, int first)
 {
 	//jank!
 	samples *= 12;
@@ -328,7 +328,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	static gpu_context *CL;
 	if (!CL)
 		CL = prep_gpu();
-	else
+	else if (first)
 		recompile(CL);
 	static gpu_scene *scene;
 	if (!scene)
@@ -524,8 +524,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_TRUE, 0, worksize * sizeof(cl_float3), outputs[i], 0, NULL, NULL);
 		clEnqueueReadBuffer(CL->commands[i], d_counts[i], CL_TRUE, 0, worksize * sizeof(cl_int), counts[i], 0, NULL, NULL);
 	}
+	printf("read complete\n");
 
-	//tons of stuff to free and need to make this output multi-device capable
 	clReleaseMemObject(d_vertexes);
 	clReleaseMemObject(d_tex_coords);
 	clReleaseMemObject(d_normal);
@@ -562,6 +562,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	free(d_rays);
 	free(d_counts);
 
-	printf("read complete\n");
+	//remember to fix this, leaks and is bad
 	return *outputs;
 }
