@@ -114,7 +114,7 @@ void	load_config(t_env *env)
 	{
 		if (line[0] == '#')
 			continue ;
-		while (strncmp(line, "import=", 7) == 0)
+		while (strncmp(line, "import=", 7) == 0 && i < num_files)
 		{
 			sscanf(line, "import=%s", file_path[i]);
 			file_edits(&line, fp, &edit_info[i++]);
