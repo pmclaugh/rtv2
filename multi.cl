@@ -130,7 +130,7 @@ static inline int intersect_box(const float3 origin, const float3 inv_dir, Box b
 	float tymax = fmax(ty0, ty1);
 
 
-	if ((tmin > tymax) || (tymin > tmax))
+	if ((tmin >= tymax) || (tymin >= tmax))
 		return (0);
 
 	tmin = fmax(tymin, tmin);
@@ -141,13 +141,13 @@ static inline int intersect_box(const float3 origin, const float3 inv_dir, Box b
 	float tzmin = fmin(tz0, tz1);
 	float tzmax = fmax(tz0, tz1);
 
-	if ((tmin > tzmax) || (tzmin > tmax))
+	if ((tmin >= tzmax) || (tzmin >= tmax))
 		return (0);
 
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
 
-	if (tmin >= t)
+	if (tmin > t)
 		return (0);
 	if (tmin <= 0.0f && tmax <= 0.0f)
 		return (0);
@@ -210,7 +210,7 @@ static void fetch_all_tex(const Material mat, __global uchar *tex, float3 txcrd,
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : mat.Ns;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
 	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : GREY;
-	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : BLUE;
+	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : RED;
 }
 
 static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)

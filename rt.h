@@ -324,6 +324,13 @@ typedef struct s_split
 	float ratio;
 }				Split;
 
+typedef struct s_render_token {
+	cl_event *done;
+	int device_count;
+	cl_float3 **outputs;
+	int **counts;
+}				render_token;
+
 //bvh_util.c
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
