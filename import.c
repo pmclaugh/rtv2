@@ -67,8 +67,6 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 		else
 			break ;
 	}
-	if (edit_info->scale <= 0.0f)
-		edit_info->scale = 1.0f;
 }
 
 static int	count_files(FILE *fp)
@@ -116,7 +114,7 @@ void	load_config(t_env *env)
 	{
 		if (line[0] == '#')
 			continue ;
-		while (strncmp(line, "import=", 7) == 0 && i < num_files)
+		while (strncmp(line, "import=", 7) == 0)
 		{
 			sscanf(line, "import=%s", file_path[i]);
 			file_edits(&line, fp, &edit_info[i++]);
