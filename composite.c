@@ -56,9 +56,9 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_in
 
 	for (int j = 0; j < resolution; j++)
 	{
-		output_sum[j].x = output_sum[j].x * 0.64 / Lw;
-		output_sum[j].y = output_sum[j].y * 0.64 / Lw;
-		output_sum[j].z = output_sum[j].z * 0.64 / Lw;
+		output_sum[j].x = output_sum[j].x * 0.36 / Lw;
+		output_sum[j].y = output_sum[j].y * 0.36 / Lw;
+		output_sum[j].z = output_sum[j].z * 0.36 / Lw;
 
 		output_sum[j].x = output_sum[j].x / (output_sum[j].x + 1.0);
 		output_sum[j].y = output_sum[j].y / (output_sum[j].y + 1.0);

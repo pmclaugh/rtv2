@@ -17,13 +17,6 @@ void	sum_color(cl_double3 *a, cl_float3 *b, int size)
 
 void		path_tracer(t_env *env)
 {
-	int first;
-
-	if (env->samples == 0)
-		first = 1;
-	else
-		first = 0;
-
 	env->samples += 1;
 	if (env->samples > env->spp)
 	{
@@ -38,7 +31,7 @@ void		path_tracer(t_env *env)
 		return ;
 	}
 	set_camera(&env->cam, DIM_PT);
-	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, first);
+	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1);
 	sum_color(env->pt->total_clr, pix, DIM_PT * DIM_PT);
 	alt_composite(env->pt, DIM_PT * DIM_PT, env->samples);
 	draw_pixels(env->pt, DIM_PT, DIM_PT);
