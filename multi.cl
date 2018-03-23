@@ -5,6 +5,9 @@
 
 #define BLACK (float3)(0.0f, 0.0f, 0.0f)
 #define WHITE (float3)(1.0f, 1.0f, 1.0f)
+#define RED (float3)(0.8f, 0.2f, 0.2f)
+#define GREEN (float3)(0.2f, 0.8f, 0.2f)
+#define BLUE (float3)(0.2f, 0.2f, 0.8f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
 #define LUMA (float3)(0.2126f, 0.7152f, 0.0722f)
@@ -127,7 +130,7 @@ static inline int intersect_box(const float3 origin, const float3 inv_dir, Box b
 	float tymax = fmax(ty0, ty1);
 
 
-	if ((tmin > tymax) || (tymin > tmax))
+	if ((tmin >= tymax) || (tymin >= tmax))
 		return (0);
 
 	tmin = fmax(tymin, tmin);
@@ -138,13 +141,13 @@ static inline int intersect_box(const float3 origin, const float3 inv_dir, Box b
 	float tzmin = fmin(tz0, tz1);
 	float tzmax = fmax(tz0, tz1);
 
-	if ((tmin > tzmax) || (tzmin > tmax))
+	if ((tmin >= tzmax) || (tzmin >= tmax))
 		return (0);
 
     tmin = fmax(tzmin, tmin);
 	tmax = fmin(tzmax, tmax);
 
-	if (tmin >= t)
+	if (tmin > t)
 		return (0);
 	if (tmin <= 0.0f && tmax <= 0.0f)
 		return (0);
@@ -206,8 +209,8 @@ static void fetch_all_tex(const Material mat, __global uchar *tex, float3 txcrd,
 {
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : mat.Ns;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
-	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : mat.Ka;
-	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
+	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : GREY;
+	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : RED;
 }
 
 static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
@@ -222,8 +225,7 @@ static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T,
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-	*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
-	// *N_out = sample_N;
+	*N_out = sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
 	txcrd.x -= floor(txcrd.x);
@@ -262,7 +264,6 @@ __kernel void fetch(	__global Ray *rays,
 
 	float3 txcrd;
 	Material mat = mats[M[ray.hit_ind / 3]];
-	
 	fetch_NT(V, N, T, ray.direction, ray.hit_ind, ray.u, ray.v, &ray.N, &txcrd);
 	fetch_all_tex(mat, tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
@@ -366,8 +367,8 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 	float3 z = n * native_cos(theta);
 
 	float3 m = normalize(x + y + z);
-	if (dot(m, i) * dot(n, i) < 0.0f)
-		m = normalize(z - x - y);
+	// if (dot(m, i) * dot(n, i) < 0.0f)
+	// 	m = normalize(z - x - y);
 	return m;
 }
 
@@ -397,12 +398,11 @@ __kernel void bounce( 	__global Ray *rays,
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
 
-	float3 weight = BLACK;
 	
 
 	float3 n = ray.N;
 	float3 i = ray.direction * -1.0f;
-	float a = 0.01f;
+	float a = 0.1f;
 	a = (1.2f - 0.2f * sqrt(fabs(dot(i,n)))) * a; //softening approximation to reduce weight variance
 	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
 
@@ -421,40 +421,34 @@ __kernel void bounce( 	__global Ray *rays,
 	}
 	
 	float3 o;
-
-	// if (dot(ray.spec, ray.spec) > 0.0f) 
-	// {
-	// 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
-	// 	{
-	// 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-	// 		weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
-	// 		if (dot(weight, weight) == 0.0f)
-	// 		{
-	// 			//if microfacet reflection fails, fall back to macro-normal
-	// 			o = normalize(2.0f * fabs(dot(i, n)) * n - i);
-	// 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
-	// 		}
-	// 	}
-	// 	else
-	// 	{
-	// 		float index = ni / nt;
-	// 		float c = dot(i,m);
-	// 		float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
-	// 		if (coeff != coeff)
-	// 		{
-	// 			//if coeff is Nan, means total internal reflection
-	// 			o = normalize(2.0f * fabs(dot(i, n)) * n - i);
-	// 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : WHITE * pow(0.001f, ray.t);
-	// 		}
-	// 		else
-	// 		{
-	// 			o = normalize((coeff * m) - (index * i));
-	// 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE * pow(0.001f, ray.t);
-	// 		}
-	// 	}
-	// }
-	// else
-	// {
+	float3 weight = WHITE;
+	if (dot(ray.spec, ray.spec) > 0.0f) 
+	{
+		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
+		{
+			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
+			weight *= GGX_weight(i, o, m, n, a);
+		}
+		else
+		{
+			float index = ni / nt;
+			float c = dot(i,m);
+			float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
+			if (coeff != coeff)
+			{
+				//if coeff is Nan, means total internal reflection
+				o = normalize(2.0f * fabs(dot(i, m)) * m - i);
+				weight *= GGX_weight(i, o, m, n, a);
+			}
+			else
+			{
+				o = normalize((coeff * m) - (index * i));
+				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
+			}
+		}
+	}
+	else
+	{
 		//Cosine-weighted pure diffuse reflection
 		//local orthonormal system
 		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -468,7 +462,7 @@ __kernel void bounce( 	__global Ray *rays,
 		//combine for new direction
 		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
-	// }
+	}
 
 	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
@@ -511,7 +505,12 @@ __kernel void collect(	__global Ray *rays,
 	if (ray.status == DEAD)
 	{
 		if (ray.hit_ind == -1)
-			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS;
+		{
+			if (ray.bounce_count > 0)
+				output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * fabs(pow(dot(ray.direction, UNIT_Y), 1.0f));
+			else
+				output[ray.pixel_id] += 0.1f * SUN_BRIGHTNESS;
+		}
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
 	}

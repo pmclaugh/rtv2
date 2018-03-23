@@ -24,7 +24,6 @@ SRC =	vec.c \
 OBJ = $(SRC:.c=.o)
 
 
-INC = libjpeg
 FLAGS = -O3 -m64 -march=native -funroll-loops -flto
 MACLIBS = mac-mlx/libmlx.a -framework OpenCL -framework OpenGL -framework AppKit
 LINUXLIBS = -fopenmp linux-mlx/libmlx.a -lOpenCL -lm -lXext -lX11 
@@ -41,9 +40,9 @@ endif
 all: $(NAME)
 
 $(NAME): $(OBJ)
-	gcc -o $(NAME) $(FLAGS) -I $(INC) $(OBJ) $(LIBS) -L libjpeg -ljpeg
+	gcc -o $(NAME) $(FLAGS) $(OBJ) $(LIBS)
 %.o: %.c rt.h
-	gcc $(FLAGS) -I $(INC) -c -o $@ $<
+	gcc $(FLAGS) -c -o $@ $<
 mac-mlx/libmlx.a:
 	make -C mac-mlx
 linux-mlx/libmlx.a:
