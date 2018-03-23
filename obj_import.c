@@ -1,5 +1,12 @@
 #include "rt.h"
 #include <string.h>
+#include "libjpeg/jpeglib.h"
+#include "libjpeg/jerror.h"
+#include "libjpeg/jconfig.h"
+#include "libjpeg/jinclude.h"
+#include "libjpeg/jpegint.h"
+#include "libjpeg/jmemsys.h"
+#include "libjpeg/jversion.h"
 
 #define VERBOSE 0
 
@@ -38,6 +45,57 @@ Map *load_bmp_map(char *rel_path, char *filename)
 	}
 	free(bmp_file);
 	BMP_Free(bmp);
+	return map;
+}
+
+Map *load_jpg_map(char *rel_path, char *filename)
+{
+	char *jpg_file = malloc(strlen(rel_path) + strlen(filename) + 1);
+	strcpy(jpg_file, rel_path);
+	strcat(jpg_file, filename);
+	FILE *fp = fopen(jpg_file, "rb");
+	
+	if (fp == NULL)
+	{
+		if (VERBOSE)
+			printf("cannot find file %s\n", jpg_file);
+		free(jpg_file);
+		return NULL;
+	}
+	
+	struct jpeg_decompress_struct cinfo;
+	struct jpeg_error_mgr jerr;
+	cinfo.err = jpeg_std_error(&jerr);
+	jpeg_create_decompress(&cinfo);
+	jpeg_stdio_src(&cinfo, fp);
+
+	jpeg_read_header(&cinfo, TRUE);
+	jpeg_start_decompress(&cinfo);
+	
+	int row_stride;
+	row_stride = cinfo.output_width * cinfo.output_components;
+	
+	Map *map = calloc(1, sizeof(Map));
+	map->width = (int)cinfo.output_width;
+	map->height = (int)cinfo.output_height;
+
+	map->pixels = calloc(map->height * map->width * 3, sizeof(cl_uchar));
+	unsigned char *raw_pixels;
+
+	while (cinfo.output_scanline < cinfo.output_height)
+	{
+		raw_pixels = map->pixels + row_stride * cinfo.output_scanline;
+		jpeg_read_scanlines(&cinfo, &raw_pixels, 1);
+	}
+	if (VERBOSE)
+	{
+		printf("loaded texture %s\n", jpg_file);
+		printf("%d %d\n", map->height, map->width);
+	}
+	free(jpg_file);
+	jpeg_finish_decompress(&cinfo);
+	jpeg_destroy_decompress(&cinfo);
+	fclose(fp);
 	return map;
 }
 
@@ -157,6 +215,8 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 				m.map_Ka = load_bmp_map(rel_path, m.map_Ka_path);
 			else if (strstr(m.map_Ka_path, ".tga"))
 				m.map_Ka = load_tga_map(rel_path, m.map_Ka_path);
+			else if (strstr(m.map_Ka_path, ".jpg") || strstr(m.map_Ka_path, ".jpeg"))
+				m.map_Ka = load_jpg_map(rel_path, m.map_Ka_path);
 		}
 		else if (strncmp(str, "map_Kd", 6) == 0)
 		{
@@ -167,6 +227,8 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 				m.map_Kd = load_bmp_map(rel_path, m.map_Kd_path);
 			else if (strstr(m.map_Kd_path, ".tga"))
 				m.map_Kd = load_tga_map(rel_path, m.map_Kd_path);
+			else if (strstr(m.map_Kd_path, ".jpg") || strstr(m.map_Kd_path, ".jpeg"))
+				m.map_Kd = load_jpg_map(rel_path, m.map_Kd_path);
 		}
 		else if (strncmp(str, "map_bump", 8) == 0)
 		{
@@ -177,6 +239,8 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 				m.map_bump = load_bmp_map(rel_path, m.map_bump_path);
 			else if (strstr(m.map_bump_path, ".tga"))
 				m.map_bump = load_tga_map(rel_path, m.map_bump_path);
+			else if (strstr(m.map_bump_path, ".jpg") || strstr(m.map_bump_path, ".jpeg"))
+				m.map_bump = load_jpg_map(rel_path, m.map_bump_path);
 		}
 		else if (strncmp(str, "map_d", 5) == 0)
 		{
@@ -187,6 +251,8 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 				m.map_d = load_bmp_map(rel_path, m.map_d_path);
 			else if (strstr(m.map_d_path, ".tga"))
 				m.map_d = load_tga_map(rel_path, m.map_d_path);
+			else if (strstr(m.map_d_path, ".jpg") || strstr(m.map_d_path, ".jpeg"))
+				m.map_d = load_jpg_map(rel_path, m.map_d_path);
 		}
 		else if (strncmp(str, "map_Ks", 6) == 0)
 		{
@@ -197,6 +263,8 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 				m.map_Ks = load_bmp_map(rel_path, m.map_Ks_path);
 			else if (strstr(m.map_Ks_path, ".tga"))
 				m.map_Ks = load_tga_map(rel_path, m.map_Ks_path);
+			else if (strstr(m.map_Ks_path, ".jpg") || strstr(m.map_Ks_path, ".jpeg"))
+				m.map_Ks = load_jpg_map(rel_path, m.map_Ks_path);
 		}
 		free(str);
 	}
