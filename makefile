@@ -7,7 +7,7 @@ SRC =	vec.c \
 		ply_import.c \
 		scene.c \
 		new_gpu_launch.c \
-		true_sbvh.c \
+		bvh.c \
 		bvh_lab.c \
 		interactive.c \
 		key_command.c \
