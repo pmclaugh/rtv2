@@ -324,7 +324,7 @@ typedef struct s_split
 	float ratio;
 }				Split;
 
-typedef struct s_render_token {
+typedef struct	s_render_token {
 	cl_event *done;
 	int device_count;
 	cl_float3 **outputs;

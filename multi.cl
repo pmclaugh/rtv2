@@ -264,6 +264,7 @@ __kernel void fetch(	__global Ray *rays,
 
 	float3 txcrd;
 	Material mat = mats[M[ray.hit_ind / 3]];
+	
 	fetch_NT(V, N, T, ray.direction, ray.hit_ind, ray.u, ray.v, &ray.N, &txcrd);
 	fetch_all_tex(mat, tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
@@ -367,8 +368,8 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 	float3 z = n * native_cos(theta);
 
 	float3 m = normalize(x + y + z);
-	// if (dot(m, i) * dot(n, i) < 0.0f)
-	// 	m = normalize(z - x - y);
+	//if (dot(m, i) * dot(n, i) < 0.0f)
+	//	m = normalize(z - x - y);
 	return m;
 }
 
@@ -398,8 +399,6 @@ __kernel void bounce( 	__global Ray *rays,
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
 
-	
-
 	float3 n = ray.N;
 	float3 i = ray.direction * -1.0f;
 	float a = 0.1f;
@@ -424,27 +423,27 @@ __kernel void bounce( 	__global Ray *rays,
 	float3 weight = WHITE;
 	if (dot(ray.spec, ray.spec) > 0.0f) 
 	{
-		if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
-		{
-			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-			weight *= GGX_weight(i, o, m, n, a);
-		}
-		else
-		{
-			float index = ni / nt;
-			float c = dot(i,m);
-			float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
-			if (coeff != coeff)
-			{
-				//if coeff is Nan, means total internal reflection
-				o = normalize(2.0f * fabs(dot(i, m)) * m - i);
+	 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
+	 	{
+	 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
+	 		weight *= GGX_weight(i, o, m, n, a);
+	 	}
+	 	else
+	 	{
+	 		float index = ni / nt;
+	 		float c = dot(i,m);
+	 		float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
+	 		if (coeff != coeff)
+	 		{
+	 			//if coeff is Nan, means total internal reflection
+	 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
 				weight *= GGX_weight(i, o, m, n, a);
 			}
-			else
-			{
-				o = normalize((coeff * m) - (index * i));
-				weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
-			}
+	 		else
+	 		{
+	 			o = normalize((coeff * m) - (index * i));
+	 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
+	 		}
 		}
 	}
 	else

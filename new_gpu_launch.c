@@ -171,8 +171,8 @@ gpu_context *prep_gpu(void)
     printf("%u devices, %u platforms\n", gpu->numDevices, gpu->numPlatforms);
 
     //get ids for devices and create (platforms) compute contexts, (devices) command queues
-    cl_device_id *device_ids = calloc(gpu->numDevices, sizeof(cl_device_id));
-    gpu->device_ids = device_ids;
+	cl_device_id *device_ids = calloc(gpu->numDevices, sizeof(cl_device_id));
+	gpu->device_ids = device_ids;
     cl_uint offset = 0;
     gpu->contexts = calloc(gpu->numPlatforms, sizeof(cl_context));
     gpu->commands = calloc(gpu->numDevices, sizeof(cl_command_queue));
@@ -231,18 +231,18 @@ void recompile(gpu_context *gpu)
 		clReleaseProgram(gpu->programs[i]);
 
 	char *source = load_cl_file("multi.cl");
-    printf("loaded kernel source\n");
+	printf("loaded kernel source\n");
 
     //create (platforms) programs and build them
     gpu->programs = calloc(gpu->numPlatforms, sizeof(cl_program));
-    for (int i = 0; i < gpu->numPlatforms; i++)
-    {
-    	gpu->programs[i] = clCreateProgramWithSource(gpu->contexts[i], 1, (const char **) &source, NULL, &err);
-    	err = clBuildProgram(gpu->programs[i], 0, NULL, NULL, NULL, NULL);
-    	if (err != CL_SUCCESS)
-    	{
-    	 	printf("bad compile\n");
-    	 	char *build_log;
+	for (int i = 0; i < gpu->numPlatforms; i++)
+	{
+		gpu->programs[i] = clCreateProgramWithSource(gpu->contexts[i], 1, (const char **) &source, NULL, &err);
+		err = clBuildProgram(gpu->programs[i], 0, NULL, NULL, NULL, NULL);
+		if (err != CL_SUCCESS)
+		{
+			printf("bad compile\n");
+			char *build_log;
 			size_t ret_val_size = 0;
 			clGetProgramBuildInfo(gpu->programs[i], gpu->device_ids[i], CL_PROGRAM_BUILD_LOG, 0, NULL, &ret_val_size);
 			printf("ret val %lu\n", ret_val_size);
@@ -250,11 +250,11 @@ void recompile(gpu_context *gpu)
 			clGetProgramBuildInfo(gpu->programs[i], gpu->device_ids[i], CL_PROGRAM_BUILD_LOG, ret_val_size, build_log, NULL);
 			printf("%s\n", build_log);
 			free(build_log);
-    	 	exit(0);
-    	}
-	    free(source);
-    }
-    printf("good compile\n");
+			exit(0);
+		}
+		free(source);
+	}
+	printf("good compile\n");
 }
 
 void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples)
@@ -510,7 +510,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	printf("took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
 	clReleaseEvent(begin);
 	clReleaseEvent(finish);
-	
+
 	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
 	for (int i = 0; i < CL->numDevices; i++)
 		outputs[i] = calloc(worksize, sizeof(cl_float3));
@@ -552,7 +552,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		clReleaseMemObject(d_rays[i]);
 		clReleaseMemObject(d_counts[i]);
 	}
-	
+
 	free(collect);
 	free(traverse);
 	free(fetch);

@@ -23,7 +23,6 @@ void		path_tracer(t_env *env)
 		first = 1;
 	else
 		first = 0;
-
 	env->samples += 1;
 	if (env->samples > env->spp)
 	{
