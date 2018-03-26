@@ -289,61 +289,6 @@ void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples)
 	}
 }
 
-// cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, unsigned int samples)
-// {
-// 	cl_double3 *output_sum = calloc(resolution, sizeof(cl_double3));
-// 	for (int i = 0; i < numDevices; i++)
-// 	{
-// 		for (int j = 0; j < resolution; j++)
-// 		{
-// 			output_sum[j].x += (double)outputs[i][j].x;
-// 			output_sum[j].y += (double)outputs[i][j].y;
-// 			output_sum[j].z += (double)outputs[i][j].z;
-// 		}
-// 		free(outputs[i]);
-// 	}
-
-// 	free(outputs);
-// 	// for (int i = 0; i < 10; i++)
-// 	// 	printf("%lf %lf %lf\n", output_sum[i].x, output_sum[i].y, output_sum[i].z);
-
-// 	//average samples and apply tone mapping
-// 	double Lw = 0.0;
-// 	for (int j = 0;j < resolution; j++)
-// 	{
-// 		double scale = 1.0 / (double)(samples * numDevices);
-// 		output_sum[j].x *= scale;
-// 		output_sum[j].y *= scale;
-// 		output_sum[j].z *= scale;
-
-// 		double this_lw = log(0.1 + 0.2126 * output_sum[j].x + 0.7152 * output_sum[j].y + 0.0722 * output_sum[j].z);
-// 		if (this_lw == this_lw)
-// 			Lw += this_lw;
-// 		else
-// 			printf("NaN alert\n");
-// 	}
-// 	// printf("Lw is %lf\n", Lw);
-	
-
-// 	Lw /= (double)resolution;
-// 	// printf("Lw is %lf\n", Lw);
-
-// 	Lw = exp(Lw);
-// 	// printf("Lw is %lf\n", Lw);
-
-// 	for (int j = 0; j < resolution; j++)
-// 	{
-// 		output_sum[j].x = output_sum[j].x * 0.36 / Lw;
-// 		output_sum[j].y = output_sum[j].y * 0.36 / Lw;
-// 		output_sum[j].z = output_sum[j].z * 0.36 / Lw;
-
-// 		output_sum[j].x = output_sum[j].x / (output_sum[j].x + 1.0);
-// 		output_sum[j].y = output_sum[j].y / (output_sum[j].y + 1.0);
-// 		output_sum[j].z = output_sum[j].z / (output_sum[j].z + 1.0);
-// 	}
-// 	return output_sum;
-// }
-
 typedef struct s_gpu_ray {
 	cl_float3 origin;
 	cl_float3 direction;
@@ -581,20 +526,18 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	}
 	printf("read complete\n");
 
-	printf("test0\n");
-	//clReleaseMemObject(d_vertexes);
-	//clReleaseMemObject(d_tex_coords);
-	//clReleaseMemObject(d_normal);
-	//clReleaseMemObject(d_tangent);
-	//clReleaseMemObject(d_bitangent);
-	//clReleaseMemObject(d_boxes);
-	//clReleaseMemObject(d_materials);
-	//clReleaseMemObject(d_tex);
-	//clReleaseMemObject(d_TN);
-	//clReleaseMemObject(d_BTN);
-	//clReleaseMemObject(d_material_indices);
-	//clReleaseMemObject(d_boost);
-	printf("test1\n");
+	clReleaseMemObject(d_vertexes);
+	clReleaseMemObject(d_tex_coords);
+	clReleaseMemObject(d_normal);
+	clReleaseMemObject(d_tangent);
+	clReleaseMemObject(d_bitangent);
+	clReleaseMemObject(d_boxes);
+	clReleaseMemObject(d_materials);
+	clReleaseMemObject(d_tex);
+	clReleaseMemObject(d_TN);
+	clReleaseMemObject(d_BTN);
+	clReleaseMemObject(d_material_indices);
+	clReleaseMemObject(d_boost);
 	for (int i = 0; i < d; i++)
 	{
 		//kernels
@@ -609,7 +552,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		clReleaseMemObject(d_rays[i]);
 		clReleaseMemObject(d_counts[i]);
 	}
-	printf("test2\n");
 
 	free(collect);
 	free(traverse);
@@ -620,7 +562,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	free(d_rays);
 	free(d_counts);
 
-	printf("test3\n");
 	//remember to fix this, leaks and is bad
 	return *outputs;
 }
