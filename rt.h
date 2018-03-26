@@ -220,6 +220,7 @@ typedef struct s_gpu_context
 	cl_uint numPlatforms;
 	cl_uint numDevices;
 	cl_platform_id *platform;
+	cl_device_id *device_ids;
 }				gpu_context;
 
 typedef struct s_gpu_mat
@@ -323,6 +324,13 @@ typedef struct s_split
 	float ratio;
 }				Split;
 
+typedef struct	s_render_token {
+	cl_event *done;
+	int device_count;
+	cl_float3 **outputs;
+	int **counts;
+}				render_token;
+
 //bvh_util.c
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
@@ -410,7 +418,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info);
 Scene *scene_from_ply(char *rel_path, char *filename, File_edits edit_info);
 
 void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples);
-cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples);
+cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples, int first);
 //Scene *scene_from_obj(char *rel_path, char *filename);
 //cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
 

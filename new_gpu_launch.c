@@ -171,7 +171,8 @@ gpu_context *prep_gpu(void)
     printf("%u devices, %u platforms\n", gpu->numDevices, gpu->numPlatforms);
 
     //get ids for devices and create (platforms) compute contexts, (devices) command queues
-    cl_device_id device_ids[gpu->numDevices];
+	cl_device_id *device_ids = calloc(gpu->numDevices, sizeof(cl_device_id));
+	gpu->device_ids = device_ids;
     cl_uint offset = 0;
     gpu->contexts = calloc(gpu->numPlatforms, sizeof(cl_context));
     gpu->commands = calloc(gpu->numDevices, sizeof(cl_command_queue));
@@ -220,6 +221,40 @@ gpu_context *prep_gpu(void)
     printf("good compile\n");
     //getchar();
     return gpu;
+}
+
+void recompile(gpu_context *gpu)
+{
+	cl_int err;
+	//release old program(s)
+	for (int i = 0; i < gpu->numPlatforms; i++)
+		clReleaseProgram(gpu->programs[i]);
+
+	char *source = load_cl_file("multi.cl");
+	printf("loaded kernel source\n");
+
+    //create (platforms) programs and build them
+    gpu->programs = calloc(gpu->numPlatforms, sizeof(cl_program));
+	for (int i = 0; i < gpu->numPlatforms; i++)
+	{
+		gpu->programs[i] = clCreateProgramWithSource(gpu->contexts[i], 1, (const char **) &source, NULL, &err);
+		err = clBuildProgram(gpu->programs[i], 0, NULL, NULL, NULL, NULL);
+		if (err != CL_SUCCESS)
+		{
+			printf("bad compile\n");
+			char *build_log;
+			size_t ret_val_size = 0;
+			clGetProgramBuildInfo(gpu->programs[i], gpu->device_ids[i], CL_PROGRAM_BUILD_LOG, 0, NULL, &ret_val_size);
+			printf("ret val %lu\n", ret_val_size);
+			build_log = malloc(ret_val_size + 1);
+			clGetProgramBuildInfo(gpu->programs[i], gpu->device_ids[i], CL_PROGRAM_BUILD_LOG, ret_val_size, build_log, NULL);
+			printf("%s\n", build_log);
+			free(build_log);
+			exit(0);
+		}
+		free(source);
+	}
+	printf("good compile\n");
 }
 
 void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples)
@@ -340,7 +375,7 @@ typedef struct s_gpu_camera {
 	cl_int width;
 }				gpu_camera;
 
-cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples)
+cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples, int first)
 {
 	//jank!
 	samples *= 12;
@@ -348,6 +383,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	static gpu_context *CL;
 	if (!CL)
 		CL = prep_gpu();
+	else if (first)
+		recompile(CL);
 	static gpu_scene *scene;
 	if (!scene)
 		scene = prep_scene(S, CL, xdim, ydim);
@@ -414,6 +451,10 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		d_rays[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(gpu_ray) * worksize, empty_rays, NULL);
 		d_counts[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * worksize, zero_counts, NULL);
 	}
+
+	free(blank_output);
+	free(empty_rays);
+	free(zero_counts);
 
 	for (int i = 0; i < d; i++)
 		clFinish(CL->commands[i]);
@@ -522,7 +563,9 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	clGetEventProfilingInfo(begin, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
 	clGetEventProfilingInfo(finish, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 	printf("took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
-	
+	clReleaseEvent(begin);
+	clReleaseEvent(finish);
+
 	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
 	for (int i = 0; i < CL->numDevices; i++)
 		outputs[i] = calloc(worksize, sizeof(cl_float3));
@@ -536,7 +579,48 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_TRUE, 0, worksize * sizeof(cl_float3), outputs[i], 0, NULL, NULL);
 		clEnqueueReadBuffer(CL->commands[i], d_counts[i], CL_TRUE, 0, worksize * sizeof(cl_int), counts[i], 0, NULL, NULL);
 	}
-
 	printf("read complete\n");
+
+	printf("test0\n");
+	//clReleaseMemObject(d_vertexes);
+	//clReleaseMemObject(d_tex_coords);
+	//clReleaseMemObject(d_normal);
+	//clReleaseMemObject(d_tangent);
+	//clReleaseMemObject(d_bitangent);
+	//clReleaseMemObject(d_boxes);
+	//clReleaseMemObject(d_materials);
+	//clReleaseMemObject(d_tex);
+	//clReleaseMemObject(d_TN);
+	//clReleaseMemObject(d_BTN);
+	//clReleaseMemObject(d_material_indices);
+	//clReleaseMemObject(d_boost);
+	printf("test1\n");
+	for (int i = 0; i < d; i++)
+	{
+		//kernels
+		clReleaseKernel(collect[i]);
+		clReleaseKernel(traverse[i]);
+		clReleaseKernel(fetch[i]);
+		clReleaseKernel(bounce[i]);
+
+		//per-device buffers
+		clReleaseMemObject(d_outputs[i]);
+		clReleaseMemObject(d_seeds[i]);
+		clReleaseMemObject(d_rays[i]);
+		clReleaseMemObject(d_counts[i]);
+	}
+	printf("test2\n");
+
+	free(collect);
+	free(traverse);
+	free(fetch);
+	free(bounce);
+	free(d_outputs);
+	free(d_seeds);
+	free(d_rays);
+	free(d_counts);
+
+	printf("test3\n");
+	//remember to fix this, leaks and is bad
 	return *outputs;
 }
