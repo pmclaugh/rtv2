@@ -333,7 +333,12 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 		else if (strncmp(line, "f ", 2) == 0)
 		{
 			int va, vna, vta, vb, vnb, vtb, vc, vnc, vtc, vd, vnd, vtd;
+			va = vna = vta = vb = vnb = vtb = vc = vnc = vtc = vd = vnd = vtd = -1;
 			int count = sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d %d/%d/%d", &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc, &vd, &vtd, &vnd);
+			if (count != 9 && count != 12)
+			{
+				printf("%d\n", count);
+			}
 			face_count += count == 9 ? 1 : 2;
 		}
 		else if (strncmp(line, "g ", 2) == 0)
