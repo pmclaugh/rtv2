@@ -117,7 +117,6 @@ int		key_release(int key, t_env *env)
 
 int		forever_loop(t_env *env)
 {
-	clock_t	frame_start = clock();
 	if (env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.shift || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
 	{
 		if (env->key.w || env->key.a || env->key.s || env->key.d)
@@ -194,18 +193,9 @@ int		forever_loop(t_env *env)
 				env->cam.angle_y -= 2 * M_PI;
 		}
 	}
-	set_camera(&env->cam, (float)DIM_IA);
-	interactive(env);
-	draw_pixels(env->ia, DIM_IA, DIM_IA);
-	mlx_put_image_to_window(env->mlx, env->ia->win, env->ia->img, 0, 0);
-	if (env->show_fps)
-	{
-		float frames = 1.0f / (((float)clock() - (float)frame_start) / (float)CLOCKS_PER_SEC);
-		char *fps = NULL;
-		asprintf(&fps, "%lf", frames);
-		mlx_string_put(env->mlx, env->ia->win, 0, 0, 0x00ff00, fps);
-	}
-	if (env->render && env->samples <= env->spp)
+	if (env->render && env->samples < env->spp)
 		path_tracer(env);
+	else
+		interactive(env);
 	return 0;
 }

@@ -24,7 +24,14 @@ void		path_tracer(t_env *env)
 	else
 		first = 0;
 	env->samples += 1;
-	if (env->samples > env->spp)
+	set_camera(&env->cam, DIM_PT);
+	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, first);
+	sum_color(env->pt->total_clr, pix, DIM_PT * DIM_PT);
+	alt_composite(env->pt, DIM_PT * DIM_PT, env->samples);
+	draw_pixels(env->pt, DIM_PT, DIM_PT);
+	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
+	mlx_key_hook(env->pt->win, exit_hook, env);
+	if (env->samples >= env->spp)
 	{
 		env->samples = 0;
 		env->render = 0;
@@ -34,15 +41,7 @@ void		path_tracer(t_env *env)
 			env->pt->total_clr[i].y = 0;
 			env->pt->total_clr[i].z = 0;
 		}
-		return ;
 	}
-	set_camera(&env->cam, DIM_PT);
-	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, first);
-	sum_color(env->pt->total_clr, pix, DIM_PT * DIM_PT);
-	alt_composite(env->pt, DIM_PT * DIM_PT, env->samples);
-	draw_pixels(env->pt, DIM_PT, DIM_PT);
-	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
-	mlx_key_hook(env->pt->win, exit_hook, env);
 }
 
 void		init_mlx_data(t_env *env)
