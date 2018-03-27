@@ -15,20 +15,21 @@
 #define KEY_F		3
 #define KEY_ENTER	36
 
-#define MOVE_KEYS	(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
-#define ARR_KEYS	(key >= KEY_LARR  && key <= KEY_UARR)
+#define MOVE_KEYS		(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
+#define ARR_KEYS		(key >= KEY_LARR  && key <= KEY_UARR)
+#define PRESSED_KEYS	(env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.shift || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
 
 int		exit_hook(int key, t_env *env)
 {
 	if (key == KEY_ESC)
 	{
-		mlx_destroy_image(env->mlx, env->ia->img);
-		mlx_destroy_window(env->mlx, env->ia->win);
-		if (env->pt->win)
+		if (!env->mode)
 		{
-			mlx_destroy_image(env->mlx, env->pt->img);
-			mlx_destroy_window(env->mlx, env->pt->win);
+			mlx_destroy_image(env->mlx, env->ia->img);
+			mlx_destroy_window(env->mlx, env->ia->win);
 		}
+		mlx_destroy_image(env->mlx, env->pt->img);
+		mlx_destroy_window(env->mlx, env->pt->win);
 		exit(0);
 	}
 	return 0;
@@ -43,9 +44,9 @@ int		key_press(int key, t_env *env)
 		env->render = 1;
 	else if (key == KEY_TAB)
 	{
-		env->mode++;
-		if (env->mode > 4)
-			env->mode = 1;
+		env->view++;
+		if (env->view > 4)
+			env->view = 1;
 	}
 	else if (key == KEY_F)
 		env->show_fps = (!env->show_fps) ? 1 : 0;
@@ -117,7 +118,7 @@ int		key_release(int key, t_env *env)
 
 int		forever_loop(t_env *env)
 {
-	if (env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.shift || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
+	if (!env->mode && !env->render && PRESSED_KEYS)
 	{
 		if (env->key.w || env->key.a || env->key.s || env->key.d)
 		{
@@ -195,7 +196,7 @@ int		forever_loop(t_env *env)
 	}
 	if (env->render && env->samples < env->spp)
 		path_tracer(env);
-	else
+	else if (!env->mode)
 		interactive(env);
 	return 0;
 }

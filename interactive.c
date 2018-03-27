@@ -234,11 +234,11 @@ void	interactive(t_env *env)
 		{
 			//find world co-ordinates from camera and pixel plane (generate ray)
 			t_ray ray = generate_ray(env->cam, x, y);
-			if (env->mode == 1 || env->mode == 2)
-				trace_scene(env->scene->bins, &ray, env->mode);
-			else if (env->mode == 3)
+			if (env->view == 1 || env->view == 2)
+				trace_scene(env->scene->bins, &ray, env->view);
+			else if (env->view == 3)
 				trace_bvh(env->scene->bins, &ray);
-			else if (env->mode == 4)
+			else if (env->view == 4)
 				trace_bvh_heatmap(env->scene->bins, &ray);
 			//upscaling the resolution by 2x
 			env->ia->pixels[x + (y * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};

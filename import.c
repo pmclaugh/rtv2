@@ -116,12 +116,18 @@ void	load_config(t_env *env)
 	{
 		if (line[0] == '#')
 			continue ;
+		
 		while (strncmp(line, "import=", 7) == 0 && i < num_files)
 		{
 			sscanf(line, "import=%s", file_path[i]);
 			file_edits(&line, fp, &edit_info[i++]);
 		}
-		if (strncmp(line, "camera.position=", 16) == 0)
+		if (strncmp(line, "mode=ia", 7) == 0)
+		{
+			env->mode = 0;
+			env->render = 0;
+		}
+		else if (strncmp(line, "camera.position=", 16) == 0)
 			env->cam.pos = get_vec(line);
 		else if (strncmp(line, "camera.normal=", 14) == 0)
 			env->cam.dir = unit_vec(get_vec(line));
