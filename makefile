@@ -19,7 +19,8 @@ SRC =	vec.c \
 		camera.c \
 		composite.c \
 		bvh_util.c \
-		stl_import.c
+		stl_import.c \
+		get_face.c
 
 OBJ = $(SRC:.c=.o)
 

@@ -453,6 +453,7 @@ void	clr_avg(cl_double3 *a, cl_double3 *b, int samples, int size);
 char *strtrim(char const *s);
 char *move_str(char *big, char *little, int flag);
 char *itoa(int n);
+int countwords(const char *str, char c);
 cl_float3 get_vec(const char *line);
 void print_vec(const cl_float3 vec);
 void print_3x3(const t_3x3 mat);
@@ -476,6 +477,9 @@ int				read_int(FILE *fp, const int file_endian, const int machine_endian);
 unsigned int	read_uint(FILE *fp, const int file_endian, const int machine_endian);
 float			read_float(FILE *fp, const int file_endian, const int machine_endian);
 double			read_double(FILE *fp, const int file_endian, const int machine_endian);
+
+//get_face.c
+int get_face_elements(char *line, int *va, int *vta, int *vna, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc, int *vd, int *vtd, int *vnd);
 
 //interactive.c
 void	interactive(t_env *env);

@@ -332,14 +332,9 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 			vt_count++;
 		else if (strncmp(line, "f ", 2) == 0)
 		{
-			int va, vna, vta, vb, vnb, vtb, vc, vnc, vtc, vd, vnd, vtd;
-			va = vna = vta = vb = vnb = vtb = vc = vnc = vtc = vd = vnd = vtd = -1;
-			int count = sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d %d/%d/%d", &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc, &vd, &vtd, &vnd);
-			if (count != 9 && count != 12)
-			{
-				printf("%d\n", count);
-			}
-			face_count += count == 9 ? 1 : 2;
+			char temp[256];
+			int count = sscanf(line, "f %s %s %s %s", temp, temp, temp, temp);
+			face_count += count == 3 ? 1 : 2;
 		}
 		else if (strncmp(line, "g ", 2) == 0)
 			obj_count++;
@@ -415,7 +410,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 		{
 			Face f;
 			int va, vna, vta, vb, vnb, vtb, vc, vnc, vtc, vd, vnd, vtd;
-			int count = sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d %d/%d/%d", &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc, &vd, &vtd, &vnd);
+			int count = get_face_elements(line, &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc, &vd, &vtd, &vnd);
 			f.shape = 3;
 			f.center = ORIGIN;
 			f.verts[0] = V[va - 1];
@@ -431,9 +426,9 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 			f.norms[1] = VN[vnb - 1]; 
 			f.norms[2] = VN[vnc - 1]; 
 
-			f.tex[0] = VT[vta - 1];
-			f.tex[1] = VT[vtb - 1];
-			f.tex[2] = VT[vtc - 1];
+			f.tex[0] = (vta == 0) ? (cl_float3){1, 1, 0} : VT[vta - 1];
+			f.tex[1] = (vtb == 0) ? (cl_float3){1, 1, 0} : VT[vtb - 1];
+			f.tex[2] = (vtc == 0) ? (cl_float3){1, 1, 0} : VT[vtc - 1];
 
 			f.N = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
 			if (dot(f.N, f.norms[0]) < 0)
@@ -444,7 +439,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 			f.next = NULL;
 			faces[face_count++] = f;
 
-			if (count == 12)
+			if (count == 4)
 			{
 				f.center = ORIGIN;
 				f.verts[0] = V[va - 1];
@@ -460,9 +455,9 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 				f.norms[1] = VN[vnc - 1]; 
 				f.norms[2] = VN[vnd - 1]; 
 
-				f.tex[0] = VT[vta - 1];
-				f.tex[1] = VT[vtc - 1];
-				f.tex[2] = VT[vtd - 1];
+				f.tex[0] = (vta == 0) ? (cl_float3){1, 1, 0} : VT[vta - 1];
+				f.tex[1] = (vtc == 0) ? (cl_float3){1, 1, 0} : VT[vtc - 1];
+				f.tex[2] = (vtd == 0) ? (cl_float3){1, 1, 0} : VT[vtd - 1];
 
 				f.N = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
 				if (dot(f.N, f.norms[0]) < 0)

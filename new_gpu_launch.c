@@ -359,8 +359,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	cl_mem d_boxes;
 	cl_mem d_materials;
 	cl_mem d_tex;
-	cl_mem d_TN;
-	cl_mem d_BTN;
 	cl_mem d_material_indices;
 	cl_mem d_boost;
 	
@@ -526,7 +524,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	}
 	printf("read complete\n");
 
-/*	clReleaseMemObject(d_vertexes);
+	clReleaseMemObject(d_vertexes);
 	clReleaseMemObject(d_tex_coords);
 	clReleaseMemObject(d_normal);
 	clReleaseMemObject(d_tangent);
@@ -534,10 +532,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	clReleaseMemObject(d_boxes);
 	clReleaseMemObject(d_materials);
 	clReleaseMemObject(d_tex);
-	clReleaseMemObject(d_TN);
-	clReleaseMemObject(d_BTN);
 	clReleaseMemObject(d_material_indices);
-	clReleaseMemObject(d_boost);*/
+	clReleaseMemObject(d_boost);
 	for (int i = 0; i < d; i++)
 	{
 		//kernels
