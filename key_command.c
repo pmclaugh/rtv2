@@ -15,20 +15,21 @@
 #define KEY_F		3
 #define KEY_ENTER	36
 
-#define MOVE_KEYS	(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
-#define ARR_KEYS	(key >= KEY_LARR  && key <= KEY_UARR)
+#define MOVE_KEYS		(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
+#define ARR_KEYS		(key >= KEY_LARR  && key <= KEY_UARR)
+#define PRESSED_KEYS	(env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.shift || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
 
 int		exit_hook(int key, t_env *env)
 {
 	if (key == KEY_ESC)
 	{
-		mlx_destroy_image(env->mlx, env->ia->img);
-		mlx_destroy_window(env->mlx, env->ia->win);
-		if (env->pt->win)
+		if (!env->mode)
 		{
-			mlx_destroy_image(env->mlx, env->pt->img);
-			mlx_destroy_window(env->mlx, env->pt->win);
+			mlx_destroy_image(env->mlx, env->ia->img);
+			mlx_destroy_window(env->mlx, env->ia->win);
 		}
+		mlx_destroy_image(env->mlx, env->pt->img);
+		mlx_destroy_window(env->mlx, env->pt->win);
 		for (int i = 0; i < env->scene->mat_count; i++)
 		{
 			if (env->scene->materials[i].friendly_name != NULL)
@@ -94,9 +95,9 @@ int		key_press(int key, t_env *env)
 		env->render = 1;
 	else if (key == KEY_TAB)
 	{
-		env->mode++;
-		if (env->mode > 4)
-			env->mode = 1;
+		env->view++;
+		if (env->view > 4)
+			env->view = 1;
 	}
 	else if (key == KEY_F)
 		env->show_fps = (!env->show_fps) ? 1 : 0;
@@ -168,8 +169,7 @@ int		key_release(int key, t_env *env)
 
 int		forever_loop(t_env *env)
 {
-	clock_t	frame_start = clock();
-	if (env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.shift || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
+	if (!env->mode && !env->render && PRESSED_KEYS)
 	{
 		if (env->key.w || env->key.a || env->key.s || env->key.d)
 		{
@@ -245,18 +245,9 @@ int		forever_loop(t_env *env)
 				env->cam.angle_y -= 2 * M_PI;
 		}
 	}
-	set_camera(&env->cam, (float)DIM_IA);
-	interactive(env);
-	draw_pixels(env->ia, DIM_IA, DIM_IA);
-	mlx_put_image_to_window(env->mlx, env->ia->win, env->ia->img, 0, 0);
-	if (env->show_fps)
-	{
-		float frames = 1.0f / (((float)clock() - (float)frame_start) / (float)CLOCKS_PER_SEC);
-		char *fps = NULL;
-		asprintf(&fps, "%lf", frames);
-		mlx_string_put(env->mlx, env->ia->win, 0, 0, 0x00ff00, fps);
-	}
-	if (env->render && env->samples <= env->spp)
+	if (env->render && env->samples < env->spp)
 		path_tracer(env);
+	else if (!env->mode)
+		interactive(env);
 	return 0;
 }

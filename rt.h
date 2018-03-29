@@ -392,6 +392,7 @@ typedef struct s_env
 	t_key		key;
 	
 	int			mode;
+	int			view;
 	_Bool		show_fps;
 	int			spp;
 	int			samples;

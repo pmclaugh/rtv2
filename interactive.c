@@ -226,17 +226,19 @@ t_ray	generate_ray(t_camera cam, float x, float y)
 
 void	interactive(t_env *env)
 {
+	clock_t	frame_start = clock();
+	set_camera(&env->cam, (float)DIM_IA);
 	for (int y = 0; y < DIM_IA; y += 2)
 	{
 		for (int x = 0; x < DIM_IA; x += 2)
 		{
 			//find world co-ordinates from camera and pixel plane (generate ray)
 			t_ray ray = generate_ray(env->cam, x, y);
-			if (env->mode == 1 || env->mode == 2)
-				trace_scene(env->scene->bins, &ray, env->mode);
-			else if (env->mode == 3)
+			if (env->view == 1 || env->view == 2)
+				trace_scene(env->scene->bins, &ray, env->view);
+			else if (env->view == 3)
 				trace_bvh(env->scene->bins, &ray);
-			else if (env->mode == 4)
+			else if (env->view == 4)
 				trace_bvh_heatmap(env->scene->bins, &ray);
 			//upscaling the resolution by 2x
 			env->ia->pixels[x + (y * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
@@ -244,5 +246,14 @@ void	interactive(t_env *env)
 			env->ia->pixels[x + ((y + 1) * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
 			env->ia->pixels[(x + 1) + ((y + 1) * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
 		}
+	}
+	draw_pixels(env->ia, DIM_IA, DIM_IA);
+	mlx_put_image_to_window(env->mlx, env->ia->win, env->ia->img, 0, 0);
+	if (env->show_fps)
+	{
+		float frames = 1.0f / (((float)clock() - (float)frame_start) / (float)CLOCKS_PER_SEC);
+		char *fps = NULL;
+		asprintf(&fps, "%lf", frames);
+		mlx_string_put(env->mlx, env->ia->win, 0, 0, 0x00ff00, fps);
 	}
 }
