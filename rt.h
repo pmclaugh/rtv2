@@ -34,6 +34,9 @@
 
 #define FREE 1
 
+#define IA 0
+#define PT 1
+
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
 #define RED (cl_float3){1.0, 0.2, 0.2}
 #define GREEN (cl_float3){0.2, 1.0, 0.2}

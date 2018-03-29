@@ -23,7 +23,7 @@ int		exit_hook(int key, t_env *env)
 {
 	if (key == KEY_ESC)
 	{
-		if (!env->mode)
+		if (env->mode == IA)
 		{
 			mlx_destroy_image(env->mlx, env->ia->img);
 			mlx_destroy_window(env->mlx, env->ia->win);
@@ -169,7 +169,7 @@ int		key_release(int key, t_env *env)
 
 int		forever_loop(t_env *env)
 {
-	if (!env->mode && !env->render && PRESSED_KEYS)
+	if (env->mode == IA && !env->render && PRESSED_KEYS)
 	{
 		if (env->key.w || env->key.a || env->key.s || env->key.d)
 		{
@@ -247,7 +247,7 @@ int		forever_loop(t_env *env)
 	}
 	if (env->render && env->samples < env->spp)
 		path_tracer(env);
-	else if (!env->mode)
+	else if (env->mode == IA)
 		interactive(env);
 	return 0;
 }

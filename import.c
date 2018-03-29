@@ -115,7 +115,7 @@ void	load_config(t_env *env)
 		}
 		if (strncmp(line, "mode=ia", 7) == 0)
 		{
-			env->mode = 0;
+			env->mode = IA;
 			env->render = 0;
 		}
 		else if (strncmp(line, "camera.position=", 16) == 0)
