@@ -13,6 +13,17 @@ Scene	*scene_from_ply(char *rel_path, char *filename, File_edits edit_info)
 	free(file);
 	S->materials = calloc(1, sizeof(Material));
 	S->mat_count = 1;
+	S->materials[0].friendly_name = NULL;
+	S->materials[0].map_Ka_path = NULL;
+	S->materials[0].map_Ka = NULL;
+	S->materials[0].map_Kd_path = NULL;
+	S->materials[0].map_Kd = NULL;
+	S->materials[0].map_bump_path = NULL;
+	S->materials[0].map_bump = NULL;
+	S->materials[0].map_d_path = NULL;
+	S->materials[0].map_d = NULL;
+	S->materials[0].map_Ks_path = NULL;
+	S->materials[0].map_Ks = NULL;
 	S->materials[0].Ns.x = 10;
 	S->materials[0].Ni = 1.5;
 	S->materials[0].d = 1;
@@ -23,32 +34,6 @@ Scene	*scene_from_ply(char *rel_path, char *filename, File_edits edit_info)
     S->materials[0].Kd = (cl_float3){0.58, 0.58, 0.58}; //diffuse mask
     S->materials[0].Ks = (cl_float3){0, 0, 0};
     S->materials[0].Ke = (cl_float3){0, 0, 0};
-	S->materials[0].friendly_name = calloc(1, sizeof(char));
-	S->materials[0].map_Ka_path = calloc(1, sizeof(char));
-	S->materials[0].map_Kd_path = calloc(1, sizeof(char));
-	S->materials[0].map_bump_path = calloc(1, sizeof(char));
-	S->materials[0].map_d_path = calloc(1, sizeof(char));
-	S->materials[0].map_Ks_path = calloc(1, sizeof(char));
-	S->materials[0].map_Ka = calloc(1, sizeof(Map));
-	S->materials[0].map_Kd = calloc(1, sizeof(Map));
-	S->materials[0].map_bump = calloc(1, sizeof(Map));
-	S->materials[0].map_d = calloc(1, sizeof(Map));
-	S->materials[0].map_Ks = calloc(1, sizeof(Map));
-	S->materials[0].map_Ka->pixels = calloc(1, sizeof(1));
-	S->materials[0].map_Kd->pixels = calloc(1, sizeof(1));
-	S->materials[0].map_bump->pixels = calloc(1, sizeof(1));
-	S->materials[0].map_d->pixels = calloc(1, sizeof(1));
-	S->materials[0].map_Ks->pixels = calloc(1, sizeof(1));
-	S->materials[0].map_Ka->height = 0;
-	S->materials[0].map_Ka->width = 0;
-	S->materials[0].map_Kd->height = 0;
-	S->materials[0].map_Kd->width = 0;
-	S->materials[0].map_bump->height = 0;
-	S->materials[0].map_bump->width = 0;
-	S->materials[0].map_d->height = 0;
-	S->materials[0].map_d->width = 0;
-	S->materials[0].map_Ks->height = 0;
-	S->materials[0].map_Ks->width = 0;
 	return S;
 }
 
@@ -298,7 +283,7 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 				{
 					if (strncmp(elems[j].props[k].name, "x", 1) == 0)
 					{
-						char temp[512];
+						char temp[256];
 						sscanf(ptr, " %f %f %f", &V[i].x, &V[i].y, &V[i].z);
 						sscanf(ptr, " %s", temp);
 						ptr = strstr(ptr, temp) + strlen(temp);
@@ -336,7 +321,6 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 			{
 				fgets(line, 512, fp);
 				char *ptr = line;
-				char *tmp;
 				int n = 0;
 				//now faces
 				// k is not initialized
@@ -437,7 +421,7 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 						float *values = calloc(elems[j].props[k].n, sizeof(float));
 						for (int x = 0; x < elems[j].props[k].n; x++)
 						{
-							char temp[512];
+							char temp[256];
 							sscanf(ptr, " %f", &(values[x]));
 							sscanf(ptr, " %s", temp);
 							ptr = move_str(ptr, temp, 0);
@@ -641,6 +625,8 @@ Face *ply_import(char *ply_file, File_edits edit_info, int *face_count)
 		list = read_ascii_file(file.ptr, elems, element_total, f_total, v_total, edit_info);
 	else
 		list = read_binary_file(file.ptr, elems, element_total, f_total, v_total, edit_info, file_type);
+	for (int i = 0; i < element_total; i++)
+		free(elems[i].props);
 	free(elems);
 	return list;
 }

@@ -30,6 +30,57 @@ int		exit_hook(int key, t_env *env)
 		}
 		mlx_destroy_image(env->mlx, env->pt->img);
 		mlx_destroy_window(env->mlx, env->pt->win);
+		for (int i = 0; i < env->scene->mat_count; i++)
+		{
+			if (env->scene->materials[i].friendly_name != NULL)
+				free(env->scene->materials[i].friendly_name);
+			if (env->scene->materials[i].map_Ka_path != NULL)
+				free(env->scene->materials[i].map_Ka_path);
+			if (env->scene->materials[i].map_Ka != NULL)
+			{
+				free(env->scene->materials[i].map_Ka->pixels);
+				free(env->scene->materials[i].map_Ka);
+			}
+			if (env->scene->materials[i].map_Kd_path != NULL)
+				free(env->scene->materials[i].map_Kd_path);
+			if (env->scene->materials[i].map_Kd != NULL)
+			{
+				free(env->scene->materials[i].map_Kd->pixels);
+				free(env->scene->materials[i].map_Kd);
+			}
+			if (env->scene->materials[i].map_bump_path != NULL)
+				free(env->scene->materials[i].map_bump_path);
+			if (env->scene->materials[i].map_bump != NULL)
+			{
+				free(env->scene->materials[i].map_bump->pixels);
+				free(env->scene->materials[i].map_bump);
+			}
+			if (env->scene->materials[i].map_d_path != NULL)
+				free(env->scene->materials[i].map_d_path);
+			if (env->scene->materials[i].map_d != NULL)
+			{
+				free(env->scene->materials[i].map_d->pixels);
+				free(env->scene->materials[i].map_d);
+			}
+			if (env->scene->materials[i].map_Ks_path != NULL)
+				free(env->scene->materials[i].map_Ks_path);
+			if (env->scene->materials[i].map_Ks != NULL)
+			{
+				free(env->scene->materials[i].map_Ks->pixels);
+				free(env->scene->materials[i].map_Ks);
+			}
+		}
+		free(env->scene->materials);
+		free(env->scene->faces);
+		free(env->scene);
+		free(env->pt->pixels);
+		free(env->pt->total_clr);
+		free(env->ia->pixels);
+		if (env->ia->total_clr != NULL)
+			free(env->ia->total_clr);
+		free(env->ia);
+		free(env->pt);
+		free(env);
 		exit(0);
 	}
 	return 0;

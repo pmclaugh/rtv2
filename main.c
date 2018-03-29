@@ -129,6 +129,13 @@ int 		main(int ac, char **av)
 	env->scene->face_count = ref_count;
 	flatten_faces(env->scene);
 
+	for (int i = 0; i < env->scene->face_count; i++)
+	{
+		Face *tmp = face_list->next;
+		free(face_list);
+		face_list = tmp;
+	}
+
 	init_mlx_data(env);
 	
 	return 0;
