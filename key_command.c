@@ -27,6 +27,10 @@ int		exit_hook(int key, t_env *env)
 		{
 			mlx_destroy_image(env->mlx, env->ia->img);
 			mlx_destroy_window(env->mlx, env->ia->win);
+			free(env->ia->pixels);
+			if (env->ia->total_clr != NULL)
+				free(env->ia->total_clr);
+			free(env->ia);
 		}
 		mlx_destroy_image(env->mlx, env->pt->img);
 		mlx_destroy_window(env->mlx, env->pt->win);
@@ -75,10 +79,6 @@ int		exit_hook(int key, t_env *env)
 		free(env->scene);
 		free(env->pt->pixels);
 		free(env->pt->total_clr);
-		free(env->ia->pixels);
-		if (env->ia->total_clr != NULL)
-			free(env->ia->total_clr);
-		free(env->ia);
 		free(env->pt);
 		free(env);
 		exit(0);
