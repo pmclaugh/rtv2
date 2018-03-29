@@ -28,17 +28,6 @@ static Scene	*combine_scenes(Scene **S, int num_files)
 	{
 		for (int k = 0; k < S[j]->mat_count; k++)
 		{
-			all->materials[mat_i].friendly_name = calloc(256, sizeof(char));
-			all->materials[mat_i].map_Ka_path = calloc(512, sizeof(char));
-			all->materials[mat_i].map_Kd_path = calloc(512, sizeof(char));
-			all->materials[mat_i].map_bump_path = calloc(512, sizeof(char));
-			all->materials[mat_i].map_d_path = calloc(512, sizeof(char));
-			all->materials[mat_i].map_Ks_path = calloc(512, sizeof(char));
-			all->materials[mat_i].map_Ka = calloc(1, sizeof(Map));
-			all->materials[mat_i].map_Kd = calloc(1, sizeof(Map));
-			all->materials[mat_i].map_bump = calloc(1, sizeof(Map));
-			all->materials[mat_i].map_d = calloc(1, sizeof(Map));
-			all->materials[mat_i].map_Ks = calloc(1, sizeof(Map));
 			memcpy((void*)&all->materials[mat_i++], (void*)&S[j]->materials[k], sizeof(Material));
 		}
 		for (int k = 0; k < S[j]->face_count; k++)
@@ -47,6 +36,8 @@ static Scene	*combine_scenes(Scene **S, int num_files)
 			all->faces[face_i++].mat_ind += new_mat_ind;
 		}
 		new_mat_ind += S[j]->mat_count;
+		free(S[j]->faces);
+		free(S[j]->materials);
 	}
 	return all;
 }
@@ -165,7 +156,11 @@ void	load_config(t_env *env)
 	env->scene = all;
 	
 	for (i = 0; i < num_files; i++)
+	{
 		free(file_path[i]);
+		free(dir_path[i]);
+		free(S[i]);
+	}
 	free(file);
 	free(file_path);
 	free(dir_path);
