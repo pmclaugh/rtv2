@@ -438,9 +438,9 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 			f.norms[1] = VN[vnb - 1]; 
 			f.norms[2] = VN[vnc - 1]; 
 
-			f.tex[0] = (vta == 0) ? (cl_float3){1, 1, 0} : VT[vta - 1];
-			f.tex[1] = (vtb == 0) ? (cl_float3){1, 1, 0} : VT[vtb - 1];
-			f.tex[2] = (vtc == 0) ? (cl_float3){1, 1, 0} : VT[vtc - 1];
+			f.tex[0] = (vta == 0) ? (cl_float3){0, 0, 0} : VT[vta - 1];
+			f.tex[1] = (vtb == 0) ? (cl_float3){0, 0, 0} : VT[vtb - 1];
+			f.tex[2] = (vtc == 0) ? (cl_float3){0, 0, 0} : VT[vtc - 1];
 
 			f.N = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
 			if (dot(f.N, f.norms[0]) < 0)
@@ -467,9 +467,9 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 				f.norms[1] = VN[vnc - 1]; 
 				f.norms[2] = VN[vnd - 1]; 
 
-				f.tex[0] = (vta == 0) ? (cl_float3){1, 1, 0} : VT[vta - 1];
-				f.tex[1] = (vtc == 0) ? (cl_float3){1, 1, 0} : VT[vtc - 1];
-				f.tex[2] = (vtd == 0) ? (cl_float3){1, 1, 0} : VT[vtd - 1];
+				f.tex[0] = (vta == 0) ? (cl_float3){0, 0, 0} : VT[vta - 1];
+				f.tex[1] = (vtc == 0) ? (cl_float3){0, 0, 0} : VT[vtc - 1];
+				f.tex[2] = (vtd == 0) ? (cl_float3){0, 0, 0} : VT[vtd - 1];
 
 				f.N = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
 				if (dot(f.N, f.norms[0]) < 0)
