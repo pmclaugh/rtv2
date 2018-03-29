@@ -123,6 +123,7 @@ Map *load_tga_map(char *rel_path, char *filename)
 	//14-15 height
 	map->height = (unsigned char)header[14] + (unsigned char)header[15] * 256;
 
+	free(header);
 	map->pixels = calloc(map->height * map->width, sizeof(cl_uchar) * 3);
 	unsigned char *raw_pixels = calloc(map->height * map->width, sizeof(unsigned char) * 3);
 	fread(raw_pixels, map->height * map->width, sizeof(unsigned char) * 3, fp);
@@ -178,9 +179,19 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 				if (VERBOSE)
 					printf("loaded material %s\n", m.friendly_name);
 			}
-			bzero(&m, sizeof(Material));
 			mat_ind++;
+			bzero(&m, sizeof(Material));
 			m.friendly_name = malloc(256);
+			m.map_Ka_path = NULL;
+			m.map_Ka = NULL;
+			m.map_Kd_path = NULL;
+			m.map_Kd = NULL;
+			m.map_bump_path = NULL;
+			m.map_bump = NULL;
+			m.map_d_path = NULL;
+			m.map_d = NULL;
+			m.map_Ks_path = NULL;
+			m.map_Ks = NULL;
 			sscanf(str, "newmtl %s\n", m.friendly_name);
 			if (VERBOSE)
 				printf("new mtl friendly name %s\n", m.friendly_name);
@@ -271,7 +282,7 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 	S->materials[mat_ind] = m;
 
 	fclose(fp);
-
+	free(line);
 }
 
 Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
@@ -290,7 +301,6 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 	free(obj_file);
 
 	char *line = calloc(512, 1);
-
 	char *matpath = calloc(512, 1);
 
 	Scene *S = calloc(1, sizeof(Scene));
@@ -343,6 +353,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 
 	//load mats
 	load_mats(S, rel_path, matpath);
+	free(matpath);
 	printf("basics counted\n");
 
 	//back to top of file, alloc objects, count faces, load v, vt, vn
@@ -400,6 +411,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 				if (i == S->mat_count - 1)
 					printf("failed to match material\n");
 			}
+			free(matstring);
 		}
 		else if (strncmp(line, "g ", 2) == 0)
 		{
@@ -469,13 +481,14 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 				faces[face_count++] = f;
 			}
 		}
-
 	}
 
 	S->faces = faces;
 	S->face_count = face_count;
 
 	fclose(fp);
+	free(obj_indices);
+	free(line);
 	free(V);
 	free(VN);
 	free(VT);

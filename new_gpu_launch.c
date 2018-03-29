@@ -557,7 +557,15 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	free(d_seeds);
 	free(d_rays);
 	free(d_counts);
+	cl_float3 *output = calloc(worksize, sizeof(cl_float3));
+	memcpy(output, outputs[0], sizeof(cl_float3) * worksize);
+	for (int i = 0; i < CL->numDevices; i++)
+	{
+		free(counts[i]);
+		free(outputs[i]);
+	}
+	free(counts);
+	free(outputs);
 
-	//remember to fix this, leaks and is bad
-	return *outputs;
+	return output;
 }
