@@ -5,7 +5,6 @@ SRC =	vec.c \
 		main.c \
 		mlx_stuff.c \
 		ply_import.c \
-		scene.c \
 		new_gpu_launch.c \
 		bvh.c \
 		bvh_lab.c \
