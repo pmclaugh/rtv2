@@ -16,24 +16,36 @@ Scene	*scene_from_ply(char *rel_path, char *filename, File_edits edit_info)
 	S->materials[0].friendly_name = NULL;
 	S->materials[0].map_Ka_path = NULL;
 	S->materials[0].map_Ka = NULL;
-	S->materials[0].map_Kd_path = NULL;
-	S->materials[0].map_Kd = NULL;
 	S->materials[0].map_bump_path = NULL;
 	S->materials[0].map_bump = NULL;
 	S->materials[0].map_d_path = NULL;
 	S->materials[0].map_d = NULL;
-	S->materials[0].map_Ks_path = NULL;
+	S->materials[0].map_Kd = NULL;
+	if ((S->materials[0].map_Kd_path = edit_info.map_Kd_path) != NULL)
+	{
+		;
+	}
 	S->materials[0].map_Ks = NULL;
+	if ((S->materials[0].map_Ks_path = edit_info.map_Ks_path) != NULL)
+	{
+		;
+	}
+    S->materials[0].map_Ke = NULL;
+    if ((S->materials[0].map_Ke_path = edit_info.map_Ke_path) != NULL)
+	{
+		;
+	}
 	S->materials[0].Ns.x = 10;
-	S->materials[0].Ni = 1.5;
-	S->materials[0].d = 1;
-	S->materials[0].Tr = 0;
+	S->materials[0].Ni = edit_info.ior;
+	S->materials[0].roughness = edit_info.roughness;
+	S->materials[0].Tr = edit_info.transparency;
+	S->materials[0].d = 1 - edit_info.transparency;
 	S->materials[0].Tf = (cl_float3){1, 1, 1};
 	S->materials[0].illum = 2;
     S->materials[0].Ka = (cl_float3){0.58, 0.58, 0.58}; //ambient mask
-    S->materials[0].Kd = (cl_float3){0.58, 0.58, 0.58}; //diffuse mask
-    S->materials[0].Ks = (cl_float3){0, 0, 0};
-    S->materials[0].Ke = (cl_float3){0, 0, 0};
+    S->materials[0].Kd = edit_info.Kd; //diffuse mask
+    S->materials[0].Ks = edit_info.Ks;
+    S->materials[0].Ke = edit_info.Ke;
 	return S;
 }
 

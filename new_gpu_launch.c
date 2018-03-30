@@ -35,6 +35,8 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 			tex_size += s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3;
 		if (s->materials[i].map_Ks)
 			tex_size += s->materials[i].map_Ks->height * s->materials[i].map_Ks->width * 3;
+		if (s->materials[i].map_Ke)
+			tex_size += s->materials[i].map_Ke->height * s->materials[i].map_Ke->width * 3;
 		if (s->materials[i].map_bump)
 			tex_size += s->materials[i].map_bump->height * s->materials[i].map_bump->width * 3;
 		if (s->materials[i].map_d)
@@ -50,7 +52,11 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 		simple_mats[i].Ka = s->materials[i].Ka;
 		simple_mats[i].Kd = s->materials[i].Kd;
 		simple_mats[i].Ns = s->materials[i].Ns;
+		simple_mats[i].Ks = s->materials[i].Ks;
 		simple_mats[i].Ke = s->materials[i].Ke;
+		simple_mats[i].Ni = s->materials[i].Ni;
+		simple_mats[i].Tr = s->materials[i].Tr;
+		simple_mats[i].roughness = s->materials[i].roughness;
 
 		if (s->materials[i].map_Kd)
 		{
@@ -68,6 +74,15 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 			simple_mats[i].spec_h = s->materials[i].map_Ks->height;
 			simple_mats[i].spec_w = s->materials[i].map_Ks->width;
 			tex_size += s->materials[i].map_Ks->height * s->materials[i].map_Ks->width * 3;
+		}
+
+		if (s->materials[i].map_Ke)
+		{
+			memcpy(&h_tex[tex_size], s->materials[i].map_Ke->pixels, s->materials[i].map_Ke->height * s->materials[i].map_Ke->width * 3);
+			simple_mats[i].emiss_ind = tex_size;
+			simple_mats[i].emiss_h = s->materials[i].map_Ke->height;
+			simple_mats[i].emiss_w = s->materials[i].map_Ke->width;
+			tex_size += s->materials[i].map_Ke->height * s->materials[i].map_Ke->width * 3;
 		}
 
 		if (s->materials[i].map_bump)

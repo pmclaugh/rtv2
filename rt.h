@@ -113,6 +113,7 @@ typedef struct s_material
 	float Ni; //index of refraction
 	float d; //opacity
 	float Tr; //transparency (1 - d)
+	float roughness;
 	cl_float3 Tf; //transmission filter (ie color)
 	int illum; //flag for illumination model, raster only
 	cl_float3 Ka; //ambient mask
@@ -134,6 +135,9 @@ typedef struct s_material
 
 	char *map_Ks_path;
 	Map *map_Ks;
+
+	char *map_Ke_path;
+	Map *map_Ke;
 }				Material;
 
 typedef struct s_face
@@ -231,7 +235,12 @@ typedef struct s_gpu_mat
 	cl_float3 Ka;
 	cl_float3 Kd;
 	cl_float3 Ns;
+	cl_float3 Ks;
 	cl_float3 Ke;
+	
+	cl_float Ni;
+	cl_float Tr;
+	cl_float roughness;
 
 	cl_int diff_ind;
 	cl_int diff_h;
@@ -240,6 +249,10 @@ typedef struct s_gpu_mat
 	cl_int spec_ind;
 	cl_int spec_h;
 	cl_int spec_w;
+
+	cl_int emiss_ind;
+	cl_int emiss_h;
+	cl_int emiss_w;
 
 	cl_int bump_ind;
 	cl_int bump_h;
@@ -281,6 +294,15 @@ typedef struct s_file_edits
 	float scale;
 	cl_float3 translate;
 	cl_float3 rotate;
+	cl_float3 Kd;		//default diffuse constant (used if no map)
+	cl_float3 Ks;		//default spec constant
+	cl_float3 Ke;		//default emission constant
+	char *map_Kd_path;	//diffuse map (ie texture)
+	char *map_Ks_path;	//spec map
+	char *map_Ke_path;	//emit map
+	float ior;			//index of refraction
+	float roughness;	//between 0 and 1
+	float transparency;	//between 0 and 1, 1 fully transparent
 }				File_edits;
 
 typedef struct	s_key

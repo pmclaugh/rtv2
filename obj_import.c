@@ -192,6 +192,8 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			m.map_d = NULL;
 			m.map_Ks_path = NULL;
 			m.map_Ks = NULL;
+			m.map_Ke_path = NULL;
+			m.map_Ke = NULL;
 			sscanf(str, "newmtl %s\n", m.friendly_name);
 			if (VERBOSE)
 				printf("new mtl friendly name %s\n", m.friendly_name);

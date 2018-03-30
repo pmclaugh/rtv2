@@ -45,6 +45,11 @@ static Scene	*combine_scenes(Scene **S, int num_files)
 static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 {
 	edit_info->scale = 1.0f;
+	edit_info->ior = 1.0f;
+	edit_info->map_Kd_path = NULL;
+	edit_info->map_Ks_path = NULL;
+	edit_info->map_Ke_path = NULL;
+	edit_info->Kd = (cl_float3){0.8, 0.2, 0.2};
 	while (fgets(*line, 512, fp))
 	{
 		if (*line[0] == '#')
@@ -55,11 +60,44 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 			edit_info->translate = get_vec(*line);
 		else if (strstr(*line, "rotate"))
 			edit_info->rotate = get_vec(*line);
+		else if (strstr(*line, "map_Kd"))
+		{
+			edit_info->map_Kd_path = calloc(512, sizeof(char));
+			sscanf(strstr(*line, "map_Kd"), "map_Kd= %s\n", edit_info->map_Kd_path);
+		}
+		else if (strstr(*line, "map_Ks"))
+		{
+			edit_info->map_Ks_path = calloc(512, sizeof(char));
+			sscanf(strstr(*line, "map_Ks"), "map_Ks= %s\n", edit_info->map_Ks_path);
+		}
+		else if (strstr(*line, "map_Ke"))
+		{
+			edit_info->map_Ke_path = calloc(512, sizeof(char));
+			sscanf(strstr(*line, "map_Ke"), "map_Ke= %s\n", edit_info->map_Ke_path);
+		}
+		else if (strstr(*line, "Kd"))
+			edit_info->Kd = get_vec(*line);
+		else if (strstr(*line, "Ks"))
+			edit_info->Ks = get_vec(*line);
+		else if (strstr(*line, "Ke"))
+			edit_info->Ke = get_vec(*line);
+		else if (strstr(*line, "refraction"))
+			edit_info->ior = strtof(strchr(*line, '=') + 1, NULL);
+		else if (strstr(*line, "roughness"))
+			edit_info->roughness = strtof(strchr(*line, '=') + 1, NULL);
+		else if (strstr(*line, "transparency"))
+			edit_info->transparency = strtof(strchr(*line, '=') + 1, NULL);
 		else
 			break ;
 	}
 	if (edit_info->scale <= 0.0f)
 		edit_info->scale = 1.0f;
+	if (edit_info->ior <= 0.0f)
+		edit_info->ior = 1.0f;
+	if (edit_info->roughness < 0.0f || edit_info->roughness > 1.0f)
+		edit_info->roughness = 0.5;
+	if (edit_info->transparency < 0.0f || edit_info->transparency > 1.0f)
+		edit_info->transparency = 0.1f;
 }
 
 static int	count_files(FILE *fp)
@@ -110,7 +148,7 @@ void	load_config(t_env *env)
 		
 		while (strncmp(line, "import=", 7) == 0 && i < num_files)
 		{
-			sscanf(line, "import=%s", file_path[i]);
+			sscanf(line, "import= %s\n", file_path[i]);
 			file_edits(&line, fp, &edit_info[i++]);
 		}
 		if (strncmp(line, "mode=ia", 7) == 0)

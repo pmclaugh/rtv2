@@ -73,6 +73,13 @@ int		exit_hook(int key, t_env *env)
 				free(env->scene->materials[i].map_Ks->pixels);
 				free(env->scene->materials[i].map_Ks);
 			}
+			if (env->scene->materials[i].map_Ke_path != NULL)
+				free(env->scene->materials[i].map_Ke_path);
+			if (env->scene->materials[i].map_Ke != NULL)
+			{
+				free(env->scene->materials[i].map_Ke->pixels);
+				free(env->scene->materials[i].map_Ke);
+			}
 		}
 		free(env->scene->materials);
 		free(env->scene->faces);
