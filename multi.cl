@@ -57,7 +57,12 @@ typedef struct s_material
 	float3 Ka;
 	float3 Kd;
 	float3 Ns;
+	float3 Ks;
 	float3 Ke;
+
+	float Ni;
+	float Tr;
+	float roughness;
 
 	//here's where texture and stuff goes
 	int d_index;
@@ -67,6 +72,10 @@ typedef struct s_material
 	int s_index;
 	int s_height;
 	int s_width;
+
+	int e_index;
+	int e_height;
+	int e_width;
 
 	int b_index;
 	int b_height;
@@ -210,7 +219,7 @@ static void fetch_all_tex(const Material mat, __global uchar *tex, float3 txcrd,
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : mat.Ns;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
 	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : GREY;
-	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : RED;
+	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 }
 
 static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)

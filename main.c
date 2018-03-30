@@ -55,7 +55,7 @@ void		init_mlx_data(t_env *env)
 	env->pt->pixels = calloc(DIM_PT * DIM_PT, sizeof(cl_double3));
 	env->pt->total_clr = calloc(DIM_PT * DIM_PT, sizeof(cl_double3));
 	
-	if (!env->mode)
+	if (env->mode == IA)
 	{
 		env->ia = malloc(sizeof(t_mlx_data));
 		env->ia->bpp = 0;
@@ -81,7 +81,7 @@ t_env		*init_env(void)
 	t_env	*env = malloc(sizeof(t_env));
 	env->cam = init_camera();
 	//load camera settings from config file and import scene
-	env->mode = 1;
+	env->mode = PT;
 	env->view = 1;
 	env->show_fps = 0;
 	env->key.w = 0;
