@@ -51,9 +51,6 @@
 #define GPU_TRIANGLE 3
 #define GPU_QUAD 4
 
-#define MOVE_SPEED	10
-#define TURN_SPEED	M_PI / 30
-
 enum type {SPHERE, PLANE, CYLINDER, TRIANGLE};
 enum mat {MAT_DIFFUSE, MAT_SPECULAR, MAT_REFRACTIVE, MAT_NULL};
 
@@ -151,7 +148,7 @@ typedef struct s_face
 typedef struct s_Box
 {
 	cl_float3 min; //spatial bounds of box
-	cl_float3 max; 
+	cl_float3 max;
 	cl_int start; //indices in Faces[] that this box contains
 	cl_int end;
 	cl_int children[8];
@@ -292,6 +289,8 @@ typedef struct	s_key
 	_Bool		uarr;
 	_Bool		space;
 	_Bool		shift;
+	_Bool		plus;
+	_Bool		minus;
 }				t_key;
 
 typedef struct	s_camera
@@ -397,6 +396,7 @@ typedef struct s_env
 	int			spp;
 	int			samples;
 	_Bool		render;
+	float		eps;
 }				t_env;
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);

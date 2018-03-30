@@ -25,6 +25,8 @@ void		set_camera(t_camera *cam, float win_dim)
 	//start at bottom corner (the plane's "origin")
 	cam->origin = vec_sub(cam->pos, vec_scale(camera_x, cam->width / 2.0));
 	cam->origin = vec_sub(cam->origin, vec_scale(camera_y, cam->height / 2.0));
+
+	cam->angle_x = atan2(cam->dir.z, cam->dir.x);
 }
 
 t_camera	init_camera(void)
@@ -40,7 +42,7 @@ t_camera	init_camera(void)
 	cam.dir = unit_vec((cl_float3){-1.0, 0.0, 0.0});
 	cam.width = 1.0;
 	cam.height = 1.0;
-	cam.angle_x = atan2(cam.dir.z, cam.dir.x);
+	cam.angle_x = 0;
 	cam.angle_y = 0;
 	//determine a focus point in front of the view-plane
 	//such that the edge-focus-edge vertex has angle H_FOV

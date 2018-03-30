@@ -14,10 +14,15 @@
 #define KEY_TAB		48
 #define KEY_F		3
 #define KEY_ENTER	36
+#define KEY_PLUS	24
+#define KEY_MINUS	27
 
 #define MOVE_KEYS		(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
 #define ARR_KEYS		(key >= KEY_LARR  && key <= KEY_UARR)
-#define PRESSED_KEYS	(env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.shift || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
+#define PRESSED_KEYS	(env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.shift || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr || env->key.plus || env->key.minus)
+
+#define MOVE_SPEED	1
+#define TURN_SPEED	M_PI / 30
 
 int		exit_hook(int key, t_env *env)
 {
@@ -79,6 +84,13 @@ int		key_press(int key, t_env *env)
 				env->key.uarr = 1;
 		}
 	}
+	else if (key == KEY_PLUS || key == KEY_MINUS)
+	{
+		if (key == KEY_PLUS)
+			env->key.plus = 1;
+		if (key == KEY_MINUS)
+			env->key.minus = 1;
+	}
 	return 0;
 }
 
@@ -112,6 +124,13 @@ int		key_release(int key, t_env *env)
 			if (key == KEY_UARR)
 				env->key.uarr = 0;
 		}
+	}
+	else if (key == KEY_PLUS || key == KEY_MINUS)
+	{
+		if (key == KEY_PLUS)
+			env->key.plus = 0;
+		if (key == KEY_MINUS)
+			env->key.minus = 0;
 	}
 	return 0;
 }
@@ -148,12 +167,12 @@ int		forever_loop(t_env *env)
 				move_z = sin(env->cam.angle_x - (M_PI / 2)) * MOVE_SPEED;
 				if (env->key.a)
 				{
-					env->cam.pos.x += move_x;
+					env->cam.pos.x -= move_x;
 					env->cam.pos.z -= move_z;
 				}
 				if (env->key.d)
 				{
-					env->cam.pos.x -= move_x;
+					env->cam.pos.x += move_x;
 					env->cam.pos.z += move_z;
 				}
 			}
@@ -165,15 +184,9 @@ int		forever_loop(t_env *env)
 		if (env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
 		{
 			if (env->key.larr)
-			{
 				env->cam.dir = vec_rotate_xz(env->cam.dir, -TURN_SPEED);
-				env->cam.angle_x -= TURN_SPEED;
-			}
 			if (env->key.rarr)
-			{
 				env->cam.dir = vec_rotate_xz(env->cam.dir, TURN_SPEED);
-				env->cam.angle_x += TURN_SPEED;
-			}
 			if (env->key.uarr && env->cam.dir.y < 1)
 			{
 				env->cam.dir.y += .1;
@@ -192,6 +205,13 @@ int		forever_loop(t_env *env)
 				env->cam.angle_y += 2 * M_PI;
 			while (env->cam.angle_y > 2 * M_PI)
 				env->cam.angle_y -= 2 * M_PI;
+		}
+		if (env->key.plus || env->key.minus)
+		{
+			if (env->key.plus)
+				env->eps *= 1.1;
+			if (env->key.minus)
+				env->eps /= 1.1;
 		}
 	}
 	if (env->render && env->samples < env->spp)

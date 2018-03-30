@@ -95,6 +95,7 @@ t_env		*init_env(void)
 	env->key.shift = 0;
 	env->samples = 0;
 	env->render = 1;
+	env->eps = 0.00005;
 	load_config(env);
 	return env;
 }
