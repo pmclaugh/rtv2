@@ -22,6 +22,7 @@ void		path_tracer(t_env *env)
 	set_camera(&env->cam, DIM_PT);
 	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, first);
 	sum_color(env->pt->total_clr, pix, DIM_PT * DIM_PT);
+	free(pix);
 	alt_composite(env->pt, DIM_PT * DIM_PT, env->samples);
 	draw_pixels(env->pt, DIM_PT, DIM_PT);
 	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
@@ -54,7 +55,7 @@ void		init_mlx_data(t_env *env)
 	env->pt->pixels = calloc(DIM_PT * DIM_PT, sizeof(cl_double3));
 	env->pt->total_clr = calloc(DIM_PT * DIM_PT, sizeof(cl_double3));
 	
-	if (!env->mode)
+	if (env->mode == IA)
 	{
 		env->ia = malloc(sizeof(t_mlx_data));
 		env->ia->bpp = 0;
@@ -80,7 +81,7 @@ t_env		*init_env(void)
 	t_env	*env = malloc(sizeof(t_env));
 	env->cam = init_camera();
 	//load camera settings from config file and import scene
-	env->mode = 1;
+	env->mode = PT;
 	env->view = 1;
 	env->show_fps = 0;
 	env->key.w = 0;
@@ -129,6 +130,13 @@ int 		main(int ac, char **av)
 	env->scene->bin_count = box_count;
 	env->scene->face_count = ref_count;
 	flatten_faces(env->scene);
+
+	// for (int i = 0; i < env->scene->face_count; i++)
+	// {
+	// 	Face *tmp = face_list->next;
+	// 	free(face_list);
+	// 	face_list = tmp;
+	// }
 
 	init_mlx_data(env);
 	

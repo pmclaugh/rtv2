@@ -1,6 +1,6 @@
 #include "rt.h"
 
-#define SPATIAL_ENABLE 1
+#define SPATIAL_ENABLE 0
 #define VERBOSE 0
 
 Split **new_allocate_splits(AABB *box)
@@ -276,7 +276,7 @@ void partition(AABB *box)
 
 AABB *sbvh(Face *faces, int *box_count, int *refs)
 {
-	Split *test = calloc(1, sizeof(Split));
+	//Split *test = calloc(1, sizeof(Split));
 
 	//put all faces in AABBs
 	AABB *boxes = NULL;

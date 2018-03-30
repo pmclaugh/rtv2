@@ -35,6 +35,8 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 			tex_size += s->materials[i].map_Kd->height * s->materials[i].map_Kd->width * 3;
 		if (s->materials[i].map_Ks)
 			tex_size += s->materials[i].map_Ks->height * s->materials[i].map_Ks->width * 3;
+		if (s->materials[i].map_Ke)
+			tex_size += s->materials[i].map_Ke->height * s->materials[i].map_Ke->width * 3;
 		if (s->materials[i].map_bump)
 			tex_size += s->materials[i].map_bump->height * s->materials[i].map_bump->width * 3;
 		if (s->materials[i].map_d)
@@ -50,7 +52,11 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 		simple_mats[i].Ka = s->materials[i].Ka;
 		simple_mats[i].Kd = s->materials[i].Kd;
 		simple_mats[i].Ns = s->materials[i].Ns;
+		simple_mats[i].Ks = s->materials[i].Ks;
 		simple_mats[i].Ke = s->materials[i].Ke;
+		simple_mats[i].Ni = s->materials[i].Ni;
+		simple_mats[i].Tr = s->materials[i].Tr;
+		simple_mats[i].roughness = s->materials[i].roughness;
 
 		if (s->materials[i].map_Kd)
 		{
@@ -68,6 +74,15 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 			simple_mats[i].spec_h = s->materials[i].map_Ks->height;
 			simple_mats[i].spec_w = s->materials[i].map_Ks->width;
 			tex_size += s->materials[i].map_Ks->height * s->materials[i].map_Ks->width * 3;
+		}
+
+		if (s->materials[i].map_Ke)
+		{
+			memcpy(&h_tex[tex_size], s->materials[i].map_Ke->pixels, s->materials[i].map_Ke->height * s->materials[i].map_Ke->width * 3);
+			simple_mats[i].emiss_ind = tex_size;
+			simple_mats[i].emiss_h = s->materials[i].map_Ke->height;
+			simple_mats[i].emiss_w = s->materials[i].map_Ke->width;
+			tex_size += s->materials[i].map_Ke->height * s->materials[i].map_Ke->width * 3;
 		}
 
 		if (s->materials[i].map_bump)
@@ -231,7 +246,7 @@ void recompile(gpu_context *gpu)
 		clReleaseProgram(gpu->programs[i]);
 
 	char *source = load_cl_file("multi.cl");
-	printf("loaded kernel source\n");
+	//printf("loaded kernel source\n");
 
     //create (platforms) programs and build them
     gpu->programs = calloc(gpu->numPlatforms, sizeof(cl_program));
@@ -402,7 +417,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	for (int i = 0; i < d; i++)
 		clFinish(CL->commands[i]);
 
-	printf("everything should be alloced and copied??\n");
+	//printf("everything should be alloced and copied??\n");
 
 	cl_int err;
 
@@ -419,7 +434,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		bounce[i] = clCreateKernel(CL->programs[0], "bounce", &err);
 	}
 
-	printf("made kernels!\n");
+	//printf("made kernels!\n");
 
 
 	//connect arguments
@@ -482,7 +497,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	}
 
 
-	printf("any key to launch\n");
+	//printf("any key to launch\n");
 	//getchar();
 	//ACTUAL LAUNCH TIME
 	cl_event begin, finish;
@@ -522,7 +537,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_TRUE, 0, worksize * sizeof(cl_float3), outputs[i], 0, NULL, NULL);
 		clEnqueueReadBuffer(CL->commands[i], d_counts[i], CL_TRUE, 0, worksize * sizeof(cl_int), counts[i], 0, NULL, NULL);
 	}
-	printf("read complete\n");
+	//printf("read complete\n");
 
 	clReleaseMemObject(d_vertexes);
 	clReleaseMemObject(d_tex_coords);
@@ -557,7 +572,24 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	free(d_seeds);
 	free(d_rays);
 	free(d_counts);
+	cl_float3 *output = calloc(worksize, sizeof(cl_float3));
+	cl_int *count = calloc(worksize, sizeof(cl_int));
+	for (int i = 0; i < d; i++)
+		for (int j = 0; j < worksize; j++)
+		{
+			output[j] = vec_add(output[j], outputs[i][j]);
+			count[j] += counts[i][j];
+			if (i == d - 1 && count[j] != 0)
+				output[j] = vec_scale(output[j], 1.0f / (float)count[j]);
+		}
+	for (int i = 0; i < CL->numDevices; i++)
+	{
+		free(counts[i]);
+		free(outputs[i]);
+	}
+	free(count);
+	free(counts);
+	free(outputs);
 
-	//remember to fix this, leaks and is bad
-	return *outputs;
+	return output;
 }

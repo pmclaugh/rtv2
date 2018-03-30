@@ -34,6 +34,9 @@
 
 #define FREE 1
 
+#define IA 0
+#define PT 1
+
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
 #define RED (cl_float3){1.0, 0.2, 0.2}
 #define GREEN (cl_float3){0.2, 1.0, 0.2}
@@ -107,6 +110,7 @@ typedef struct s_material
 	float Ni; //index of refraction
 	float d; //opacity
 	float Tr; //transparency (1 - d)
+	float roughness;
 	cl_float3 Tf; //transmission filter (ie color)
 	int illum; //flag for illumination model, raster only
 	cl_float3 Ka; //ambient mask
@@ -128,6 +132,9 @@ typedef struct s_material
 
 	char *map_Ks_path;
 	Map *map_Ks;
+
+	char *map_Ke_path;
+	Map *map_Ke;
 }				Material;
 
 typedef struct s_face
@@ -225,7 +232,12 @@ typedef struct s_gpu_mat
 	cl_float3 Ka;
 	cl_float3 Kd;
 	cl_float3 Ns;
+	cl_float3 Ks;
 	cl_float3 Ke;
+	
+	cl_float Ni;
+	cl_float Tr;
+	cl_float roughness;
 
 	cl_int diff_ind;
 	cl_int diff_h;
@@ -234,6 +246,10 @@ typedef struct s_gpu_mat
 	cl_int spec_ind;
 	cl_int spec_h;
 	cl_int spec_w;
+
+	cl_int emiss_ind;
+	cl_int emiss_h;
+	cl_int emiss_w;
 
 	cl_int bump_ind;
 	cl_int bump_h;
@@ -275,6 +291,15 @@ typedef struct s_file_edits
 	float scale;
 	cl_float3 translate;
 	cl_float3 rotate;
+	cl_float3 Kd;		//default diffuse constant (used if no map)
+	cl_float3 Ks;		//default spec constant
+	cl_float3 Ke;		//default emission constant
+	char *map_Kd_path;	//diffuse map (ie texture)
+	char *map_Ks_path;	//spec map
+	char *map_Ke_path;	//emit map
+	float ior;			//index of refraction
+	float roughness;	//between 0 and 1
+	float transparency;	//between 0 and 1, 1 fully transparent
 }				File_edits;
 
 typedef struct	s_key
@@ -454,6 +479,7 @@ void	clr_avg(cl_double3 *a, cl_double3 *b, int samples, int size);
 char *strtrim(char const *s);
 char *move_str(char *big, char *little, int flag);
 char *itoa(int n);
+int countwords(const char *str, char c);
 cl_float3 get_vec(const char *line);
 void print_vec(const cl_float3 vec);
 void print_3x3(const t_3x3 mat);
@@ -477,6 +503,9 @@ int				read_int(FILE *fp, const int file_endian, const int machine_endian);
 unsigned int	read_uint(FILE *fp, const int file_endian, const int machine_endian);
 float			read_float(FILE *fp, const int file_endian, const int machine_endian);
 double			read_double(FILE *fp, const int file_endian, const int machine_endian);
+
+//get_face.c
+int get_face_elements(char *line, int *va, int *vta, int *vna, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc, int *vd, int *vtd, int *vnd);
 
 //interactive.c
 void	interactive(t_env *env);

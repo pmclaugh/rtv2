@@ -123,6 +123,7 @@ Map *load_tga_map(char *rel_path, char *filename)
 	//14-15 height
 	map->height = (unsigned char)header[14] + (unsigned char)header[15] * 256;
 
+	free(header);
 	map->pixels = calloc(map->height * map->width, sizeof(cl_uchar) * 3);
 	unsigned char *raw_pixels = calloc(map->height * map->width, sizeof(unsigned char) * 3);
 	fread(raw_pixels, map->height * map->width, sizeof(unsigned char) * 3, fp);
@@ -178,9 +179,21 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 				if (VERBOSE)
 					printf("loaded material %s\n", m.friendly_name);
 			}
-			bzero(&m, sizeof(Material));
 			mat_ind++;
+			bzero(&m, sizeof(Material));
 			m.friendly_name = malloc(256);
+			m.map_Ka_path = NULL;
+			m.map_Ka = NULL;
+			m.map_Kd_path = NULL;
+			m.map_Kd = NULL;
+			m.map_bump_path = NULL;
+			m.map_bump = NULL;
+			m.map_d_path = NULL;
+			m.map_d = NULL;
+			m.map_Ks_path = NULL;
+			m.map_Ks = NULL;
+			m.map_Ke_path = NULL;
+			m.map_Ke = NULL;
 			sscanf(str, "newmtl %s\n", m.friendly_name);
 			if (VERBOSE)
 				printf("new mtl friendly name %s\n", m.friendly_name);
@@ -271,7 +284,7 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 	S->materials[mat_ind] = m;
 
 	fclose(fp);
-
+	free(line);
 }
 
 Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
@@ -290,7 +303,6 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 	free(obj_file);
 
 	char *line = calloc(512, 1);
-
 	char *matpath = calloc(512, 1);
 
 	Scene *S = calloc(1, sizeof(Scene));
@@ -332,9 +344,9 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 			vt_count++;
 		else if (strncmp(line, "f ", 2) == 0)
 		{
-			int va, vna, vta, vb, vnb, vtb, vc, vnc, vtc, vd, vnd, vtd;
-			int count = sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d %d/%d/%d", &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc, &vd, &vtd, &vnd);
-			face_count += count == 9 ? 1 : 2;
+			char temp[256];
+			int count = sscanf(line, "f %s %s %s %s", temp, temp, temp, temp);
+			face_count += count == 3 ? 1 : 2;
 		}
 		else if (strncmp(line, "g ", 2) == 0)
 			obj_count++;
@@ -343,6 +355,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 
 	//load mats
 	load_mats(S, rel_path, matpath);
+	free(matpath);
 	printf("basics counted\n");
 
 	//back to top of file, alloc objects, count faces, load v, vt, vn
@@ -400,6 +413,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 				if (i == S->mat_count - 1)
 					printf("failed to match material\n");
 			}
+			free(matstring);
 		}
 		else if (strncmp(line, "g ", 2) == 0)
 		{
@@ -410,7 +424,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 		{
 			Face f;
 			int va, vna, vta, vb, vnb, vtb, vc, vnc, vtc, vd, vnd, vtd;
-			int count = sscanf(line, "f %d/%d/%d %d/%d/%d %d/%d/%d %d/%d/%d", &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc, &vd, &vtd, &vnd);
+			int count = get_face_elements(line, &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc, &vd, &vtd, &vnd);
 			f.shape = 3;
 			f.center = ORIGIN;
 			f.verts[0] = V[va - 1];
@@ -426,9 +440,9 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 			f.norms[1] = VN[vnb - 1]; 
 			f.norms[2] = VN[vnc - 1]; 
 
-			f.tex[0] = VT[vta - 1];
-			f.tex[1] = VT[vtb - 1];
-			f.tex[2] = VT[vtc - 1];
+			f.tex[0] = (vta == 0) ? (cl_float3){0, 0, 0} : VT[vta - 1];
+			f.tex[1] = (vtb == 0) ? (cl_float3){0, 0, 0} : VT[vtb - 1];
+			f.tex[2] = (vtc == 0) ? (cl_float3){0, 0, 0} : VT[vtc - 1];
 
 			f.N = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
 			if (dot(f.N, f.norms[0]) < 0)
@@ -439,7 +453,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 			f.next = NULL;
 			faces[face_count++] = f;
 
-			if (count == 12)
+			if (count == 4)
 			{
 				f.center = ORIGIN;
 				f.verts[0] = V[va - 1];
@@ -455,9 +469,9 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 				f.norms[1] = VN[vnc - 1]; 
 				f.norms[2] = VN[vnd - 1]; 
 
-				f.tex[0] = VT[vta - 1];
-				f.tex[1] = VT[vtc - 1];
-				f.tex[2] = VT[vtd - 1];
+				f.tex[0] = (vta == 0) ? (cl_float3){0, 0, 0} : VT[vta - 1];
+				f.tex[1] = (vtc == 0) ? (cl_float3){0, 0, 0} : VT[vtc - 1];
+				f.tex[2] = (vtd == 0) ? (cl_float3){0, 0, 0} : VT[vtd - 1];
 
 				f.N = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
 				if (dot(f.N, f.norms[0]) < 0)
@@ -469,13 +483,14 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 				faces[face_count++] = f;
 			}
 		}
-
 	}
 
 	S->faces = faces;
 	S->face_count = face_count;
 
 	fclose(fp);
+	free(obj_indices);
+	free(line);
 	free(V);
 	free(VN);
 	free(VT);

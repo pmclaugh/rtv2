@@ -5,7 +5,6 @@ SRC =	vec.c \
 		main.c \
 		mlx_stuff.c \
 		ply_import.c \
-		scene.c \
 		new_gpu_launch.c \
 		bvh.c \
 		bvh_lab.c \
@@ -19,7 +18,8 @@ SRC =	vec.c \
 		camera.c \
 		composite.c \
 		bvh_util.c \
-		stl_import.c
+		stl_import.c \
+		get_face.c
 
 OBJ = $(SRC:.c=.o)
 

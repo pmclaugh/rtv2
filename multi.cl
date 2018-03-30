@@ -57,7 +57,12 @@ typedef struct s_material
 	float3 Ka;
 	float3 Kd;
 	float3 Ns;
+	float3 Ks;
 	float3 Ke;
+
+	float Ni;
+	float Tr;
+	float roughness;
 
 	//here's where texture and stuff goes
 	int d_index;
@@ -67,6 +72,10 @@ typedef struct s_material
 	int s_index;
 	int s_height;
 	int s_width;
+
+	int e_index;
+	int e_height;
+	int e_width;
 
 	int b_index;
 	int b_height;
@@ -210,7 +219,7 @@ static void fetch_all_tex(const Material mat, __global uchar *tex, float3 txcrd,
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : mat.Ns;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
 	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : GREY;
-	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : RED;
+	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 }
 
 static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
@@ -225,7 +234,8 @@ static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T,
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-	*N_out = sample_N;
+	*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
+//	*N_out = sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
 	txcrd.x -= floor(txcrd.x);
@@ -421,33 +431,33 @@ __kernel void bounce( 	__global Ray *rays,
 	
 	float3 o;
 	float3 weight = WHITE;
-	if (dot(ray.spec, ray.spec) > 0.0f) 
-	{
-	 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
-	 	{
-	 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-	 		weight *= GGX_weight(i, o, m, n, a);
-	 	}
-	 	else
-	 	{
-	 		float index = ni / nt;
-	 		float c = dot(i,m);
-	 		float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
-	 		if (coeff != coeff)
-	 		{
-	 			//if coeff is Nan, means total internal reflection
-	 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-				weight *= GGX_weight(i, o, m, n, a);
-			}
-	 		else
-	 		{
-	 			o = normalize((coeff * m) - (index * i));
-	 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
-	 		}
-		}
-	}
-	else
-	{
+//	if (dot(ray.spec, ray.spec) > 0.0f) 
+//	{
+//	 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
+//	 	{
+//	 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
+//	 		weight *= GGX_weight(i, o, m, n, a);
+//	 	}
+//	 	else
+//	 	{
+//	 		float index = ni / nt;
+//	 		float c = dot(i,m);
+//	 		float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
+//	 		if (coeff != coeff)
+//	 		{
+//	 			//if coeff is Nan, means total internal reflection
+//	 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
+//				weight *= GGX_weight(i, o, m, n, a);
+//			}
+//	 		else
+//	 		{
+//	 			o = normalize((coeff * m) - (index * i));
+//	 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
+//	 		}
+//		}
+//	}
+//	else
+//	{
 		//Cosine-weighted pure diffuse reflection
 		//local orthonormal system
 		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -461,7 +471,7 @@ __kernel void bounce( 	__global Ray *rays,
 		//combine for new direction
 		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
-	}
+//	}
 
 	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
