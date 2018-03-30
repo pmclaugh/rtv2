@@ -230,6 +230,8 @@ t_ray	generate_ray(t_env *env, float x, float y)
 
 void	plot_line(t_env *env, int x1, int y1, int x2, int y2)
 {
+	// printf("------------------\n");
+	// printf("x1 = %d\ty1 = %d\nx2 = %d\ty2 = %d\n", x1, y1, x2, y2);
 	int		dx, dy, sx, sy, err, err2;
 
 	dx = abs(x2 - x1);
@@ -240,8 +242,7 @@ void	plot_line(t_env *env, int x1, int y1, int x2, int y2)
 	while (x1 != x2)
 	{
 		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = (cl_double3){0, 1, 0}; //is the image being flipped horizontally in draw_pixels?
-			// mlx_pixel_put(env->mlx, env->ia->win, x1, y1, 0x0000ff);
+			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = (cl_double3){0, 1, 0}; //is the image being flipped horizontally?
 		err2 = err;
 		if (err2 > -dx)
 		{
@@ -254,6 +255,12 @@ void	plot_line(t_env *env, int x1, int y1, int x2, int y2)
 			y1 += sy;
 		}
 	}
+	while (y1 != y2)
+	{
+		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
+			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = (cl_double3){0, 1, 0};
+		y1 += sy;
+	}
 }
 
 void	draw_line(t_env *env, cl_float3 p1, cl_float3 p2)
@@ -265,13 +272,13 @@ void	draw_line(t_env *env, cl_float3 p1, cl_float3 p2)
 
 	dir1 = unit_vec(vec_sub(p1, env->cam.pos));
 	dir1 = mat_vec_mult(rot, dir1);
-	ratio = dist / dir1.z;
+	ratio = (dir1.z > 0) ? dist / dir1.z : 100;
 	pix_x1 = ((dir1.x * ratio) * DIM_IA) + (DIM_IA / 2);
 	pix_y1 = ((dir1.y * -ratio) * DIM_IA) + (DIM_IA / 2);
 
 	dir2 = unit_vec(vec_sub(p2, env->cam.pos));
 	dir2 = mat_vec_mult(rot, dir2);
-	ratio = dist / dir2.z;
+	ratio = (dir2.z > 0) ? dist / dir2.z : 100;
 	pix_x2 = ((dir2.x * ratio) * DIM_IA) + (DIM_IA / 2);
 	pix_y2 = ((dir2.y * -ratio) * DIM_IA) + (DIM_IA / 2);
 
@@ -301,7 +308,8 @@ void	interactive(t_env *env)
 			env->ia->pixels[(x + 1) + ((y + 1) * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
 		}
 	}
-	// draw_line(env, (cl_float3){-5, 0, 0}, (cl_float3){5, 0, 0});
+	draw_line(env, (cl_float3){0, 200, 100}, (cl_float3){-100, -100, 0});
+	draw_line(env, (cl_float3){-100, -100, 0}, (cl_float3){100, -100, 0});
 	draw_pixels(env->ia, DIM_IA, DIM_IA);
 	mlx_put_image_to_window(env->mlx, env->ia->win, env->ia->img, 0, 0);
 	if (env->show_fps)
