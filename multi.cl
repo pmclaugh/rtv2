@@ -442,7 +442,7 @@ __kernel void bounce( 	__global Ray *rays,
 	 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
 	 	{
 	 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-	 		weight *= GGX_weight(i, o, m, n, a);
+	 		weight = GGX_weight(i, o, m, n, a) * ray.spec;
 	 	}
 	 	else
 	 	{
@@ -458,7 +458,7 @@ __kernel void bounce( 	__global Ray *rays,
 	 		else
 	 		{
 	 			o = normalize((coeff * m) - (index * i));
-	 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
+	 			weight = GGX_weight(i, o, m, n, a) * ray.spec;
 	 		}
 		}
 	}
