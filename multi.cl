@@ -216,9 +216,9 @@ static float3 fetch_tex(	float3 txcrd,
 
 static void fetch_all_tex(const Material mat, __global uchar *tex, float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
 {
-	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : mat.Ns;
+	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : BLACK;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
-	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : GREY;
+	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : mat.Ks;
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 }
 
@@ -287,11 +287,11 @@ __kernel void fetch(	__global Ray *rays,
 	// 	ray.status = TRAVERSE;
 	// }
 
-	// if (dot(mat.Ke, mat.Ke) > 0.0f)
-	// {
-	// 	ray.color += SUN_BRIGHTNESS * ray.mask;
-	// 	ray.status = DEAD;
-	// }
+	if (dot(mat.Ke, mat.Ke) > 0.0f)
+	{
+		ray.color += SUN_BRIGHTNESS * ray.mask;
+		ray.status = DEAD;
+	}
 
 	rays[gid] = ray;
 }
@@ -301,8 +301,14 @@ __kernel void fetch(	__global Ray *rays,
 static float GGX_D(float a, float cost)
 {
 	float a2 = a * a;
+	printf("hi");
 
 	float theta = acos(cost);
+	if (theta != theta)
+	{
+		printf("it happened\n");
+		theta = 0.0f; //acos(1.0f) is nan for some reason.
+	}
 	float cos4 = cost * cost * cost * cost;
 	float tsq = a2 + tan(theta) * tan(theta);
 	tsq *= tsq;
@@ -311,7 +317,7 @@ static float GGX_D(float a, float cost)
 	return a2 / denom;
 }
 
-static float GGX_G1(float3 v, float3 n, float a)
+static float GGX_G1(float3 v, float3 n, float3 m, float a)
 {
 	float theta = acos(fabs(dot(v, n))); //still not sure if this should be n or m.
 	//I think it has to be n, because dot(i,m) == dot(o,m) and then they'd just say g1^2
@@ -330,8 +336,8 @@ static float GGX_G(float3 i, float3 o, float3 m, float3 n, float a)
 	if (dot(o, m) * dot(o,n) <= 0.0f)
 		return 0.0f;
 
-	float g1 = GGX_G1(i, n, a);
-	float g2 = GGX_G1(o, n, a);
+	float g1 = GGX_G1(i, n, m, a);
+	float g2 = GGX_G1(o, n, m, a);
 	return g1 * g2;
 }
 
@@ -431,33 +437,33 @@ __kernel void bounce( 	__global Ray *rays,
 	
 	float3 o;
 	float3 weight = WHITE;
-//	if (dot(ray.spec, ray.spec) > 0.0f) 
-//	{
-//	 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
-//	 	{
-//	 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-//	 		weight *= GGX_weight(i, o, m, n, a);
-//	 	}
-//	 	else
-//	 	{
-//	 		float index = ni / nt;
-//	 		float c = dot(i,m);
-//	 		float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
-//	 		if (coeff != coeff)
-//	 		{
-//	 			//if coeff is Nan, means total internal reflection
-//	 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-//				weight *= GGX_weight(i, o, m, n, a);
-//			}
-//	 		else
-//	 		{
-//	 			o = normalize((coeff * m) - (index * i));
-//	 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
-//	 		}
-//		}
-//	}
-//	else
-//	{
+	if (dot(ray.spec, ray.spec) > 0.0f) 
+	{
+	 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
+	 	{
+	 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
+	 		weight *= GGX_weight(i, o, m, n, a);
+	 	}
+	 	else
+	 	{
+	 		float index = ni / nt;
+	 		float c = dot(i,m);
+	 		float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
+	 		if (coeff != coeff)
+	 		{
+	 			//if coeff is Nan, means total internal reflection
+	 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
+				weight *= GGX_weight(i, o, m, n, a);
+			}
+	 		else
+	 		{
+	 			o = normalize((coeff * m) - (index * i));
+	 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
+	 		}
+		}
+	}
+	else
+	{
 		//Cosine-weighted pure diffuse reflection
 		//local orthonormal system
 		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -471,7 +477,7 @@ __kernel void bounce( 	__global Ray *rays,
 		//combine for new direction
 		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
-//	}
+	}
 
 	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
@@ -513,13 +519,14 @@ __kernel void collect(	__global Ray *rays,
 	}
 	if (ray.status == DEAD)
 	{
-		if (ray.hit_ind == -1)
-		{
-			if (ray.bounce_count > 0)
-				output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * fabs(pow(dot(ray.direction, UNIT_Y), 1.0f));
-			else
-				output[ray.pixel_id] += 0.1f * SUN_BRIGHTNESS;
-		}
+		output[ray.pixel_id] += ray.color;
+		// if (ray.hit_ind == -1)
+		// {
+		// 	if (ray.bounce_count > 0)
+		// 		output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * fabs(pow(dot(ray.direction, UNIT_Y), 1.0f));
+		// 	else
+		// 		output[ray.pixel_id] += 0.1f * SUN_BRIGHTNESS;
+		// }
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
 	}
