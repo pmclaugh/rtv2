@@ -20,7 +20,7 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define MIN_BOUNCES 10
+#define MIN_BOUNCES 5
 #define RR_PROB 0.3f
 
 #define NEW 0
@@ -54,9 +54,7 @@ typedef struct s_ray {
 
 typedef struct s_material
 {
-	float3 Ka;
 	float3 Kd;
-	float3 Ns;
 	float3 Ks;
 	float3 Ke;
 
@@ -234,8 +232,8 @@ static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T,
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-//	*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
-	*N_out = sample_N;
+	*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
+	// *N_out = sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
 	txcrd.x -= floor(txcrd.x);
@@ -475,13 +473,13 @@ __kernel void bounce( 	__global Ray *rays,
 		float theta = 2.0f * PI * r2;
 
 		//combine for new direction
-		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
+		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N *norm_sign * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
 	}
 
 	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
-	ray.origin = ray.origin + ray.direction * ray.t + n * o_sign * NORMAL_SHIFT;
+	ray.origin = ray.origin + ray.direction * ray.t + n * NORMAL_SHIFT;
 	ray.direction = o;
 	ray.inv_dir = 1.0f / o;
 	ray.status = TRAVERSE;
@@ -520,13 +518,6 @@ __kernel void collect(	__global Ray *rays,
 	if (ray.status == DEAD)
 	{
 		output[ray.pixel_id] += ray.color;
-		// if (ray.hit_ind == -1)
-		// {
-		// 	if (ray.bounce_count > 0)
-		// 		output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * fabs(pow(dot(ray.direction, UNIT_Y), 1.0f));
-		// 	else
-		// 		output[ray.pixel_id] += 0.1f * SUN_BRIGHTNESS;
-		// }
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
 	}
@@ -554,9 +545,7 @@ __kernel void collect(	__global Ray *rays,
 
 __kernel void traverse(	__global Ray *rays,
 						__global Box *boxes,
-						__global float3 *V,
-						__constant Box *boost,
-						const int boost_count)
+						__global float3 *V)
 {
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];
@@ -576,11 +565,7 @@ __kernel void traverse(	__global Ray *rays,
 	{
 		int b_i = stack[--s_i];
 		Box b;
-
-		if (b_i < 2048)
-			b = boost[b_i];
-		else
-			b = boxes[b_i];
+		b = boxes[b_i];
 
 		//check
 		if (intersect_box(ray.origin, ray.inv_dir, b, t, 0))
@@ -595,16 +580,8 @@ __kernel void traverse(	__global Ray *rays,
 			else
 			{
 				Box l, r;
-				if (b.lind < 2048)
-				{
-					l = boost[b.lind];
-					r = boost[b.rind];
-				}
-				else
-				{
-					l = boxes[b.lind];
-					r = boxes[b.rind];
-				}
+				l = boxes[b.lind];
+				r = boxes[b.rind];
                 float t_l = FLT_MAX;
                 float t_r = FLT_MAX;
                 int lhit = intersect_box(ray.origin, ray.inv_dir, l, t, &t_l);

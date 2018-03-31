@@ -232,9 +232,7 @@ typedef struct s_gpu_context
 
 typedef struct s_gpu_mat
 {
-	cl_float3 Ka;
 	cl_float3 Kd;
-	cl_float3 Ns;
 	cl_float3 Ks;
 	cl_float3 Ke;
 	
@@ -275,9 +273,6 @@ typedef struct s_gpu_scene
 
 	gpu_bin *bins;
 	cl_uint bin_count;
-
-	gpu_bin *boost;
-	cl_uint boost_count;
 
 	cl_uchar *tex;
 	cl_uint tex_size;
@@ -427,7 +422,7 @@ typedef struct s_env
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
 void study_tree(AABB *tree, int ray_count);
 void flatten_faces(Scene *scene);
-gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count);
+gpu_bin *flatten_bvh(Scene *scene);
 float area(AABB *box);
 cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_int **counts);
 cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution, int **counts);

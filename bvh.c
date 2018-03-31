@@ -21,7 +21,6 @@ Split **new_allocate_splits(AABB *box)
 		splits[s] = new_split(box, Z_AXIS, (float)(i + 1) / (float)(z_splits + 1));
 
 	return splits;
-
 }
 
 Split *best_spatial_split(AABB *box)
@@ -362,9 +361,7 @@ void flatten_faces(Scene *scene)
 			for (AABB *node = box->members; node; node = node->next)
 				memcpy(&faces[face_ind++], node->f, sizeof(Face));
 		}
-			
 	}
-
 	scene->faces = faces;
 }
 
@@ -394,7 +391,7 @@ gpu_bin bin_from_box(AABB *box)
 	return bin;
 }
 
-gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count)
+gpu_bin *flatten_bvh(Scene *scene)
 {
 	gpu_bin *bins = calloc(scene->bin_count, sizeof(gpu_bin));
 	int bin_ind = 0;
@@ -437,62 +434,6 @@ gpu_bin *flatten_bvh(Scene *scene, gpu_bin **boost, int *boost_count)
 
 		queue_head = queue_head->next;
 	}
-
-	*boost = bins;
-	*boost_count = 2048 > scene->bin_count ? scene->bin_count : 2048;
-
-	return bins;
-}
-
-gpu_bin *flatten_bvh_depth_first(Scene *scene, gpu_bin **boost, int *boost_count)
-{
-	gpu_bin *bins = calloc(scene->bin_count, sizeof(gpu_bin));
-	int bin_ind = 0;
-	int boost_ind = 0;
-
-	//do a "dummy" traversal and fill in flat_ind for each AABB
-
-	AABB *stack = scene->bins;
-	scene->bins->next = NULL;
-
-	while (stack)
-	{
-		stack->flat_ind = bin_ind++;
-		AABB *popped = stack;
-		stack = stack->next;
-		if (popped->left)
-		{
-			AABB *l = popped->left;
-			AABB *r = popped->right;
-			r->next = stack;
-			stack = r;
-			l->next = stack;
-			stack = l;
-		}
-	}
-
-	//second pass to actually populate the gpu_bins
-	stack = scene->bins;
-	scene->bins->next = NULL;
-
-	while (stack)
-	{
-		AABB *popped = stack;
-		stack = stack->next;
-		bins[stack->flat_ind] = bin_from_box(popped);
-		if (popped->left)
-		{
-			AABB *l = popped->left;
-			AABB *r = popped->right;
-			r->next = stack;
-			stack = r;
-			l->next = stack;
-			stack = l;
-		}
-	}
-
-	*boost = bins;
-	*boost_count = 2048 > scene->bin_count ? scene->bin_count : 2048;
 
 	return bins;
 }
