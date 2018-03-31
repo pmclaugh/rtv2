@@ -20,7 +20,7 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define MIN_BOUNCES 5
+#define MIN_BOUNCES 10
 #define RR_PROB 0.3f
 
 #define NEW 0
@@ -234,8 +234,8 @@ static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T,
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-	*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
-//	*N_out = sample_N;
+//	*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
+	*N_out = sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
 	txcrd.x -= floor(txcrd.x);
@@ -442,7 +442,7 @@ __kernel void bounce( 	__global Ray *rays,
 	 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
 	 	{
 	 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-	 		weight = GGX_weight(i, o, m, n, a) * ray.spec;
+	 		weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE;
 	 	}
 	 	else
 	 	{
@@ -458,7 +458,7 @@ __kernel void bounce( 	__global Ray *rays,
 	 		else
 	 		{
 	 			o = normalize((coeff * m) - (index * i));
-	 			weight = GGX_weight(i, o, m, n, a) * ray.spec;
+	 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE;
 	 		}
 		}
 	}
