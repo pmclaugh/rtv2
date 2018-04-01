@@ -110,10 +110,6 @@ Split *new_object_split(AABB *box)
 	int y_splits = (int)((float)SPLIT_TEST_NUM * span.y / total);
 	int z_splits = SPLIT_TEST_NUM - x_splits - y_splits;
 
-	
-
-	//printf("%d %d %d\n", x_splits, y_splits, z_splits);
-
 	Split **splits = calloc(SPLIT_TEST_NUM, sizeof(Split *));
 
 	int s = 0;

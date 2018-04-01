@@ -418,8 +418,6 @@ Split *pick_best(Split **splits, AABB *parent)
 		else
 			free_split(splits[i]);
 	free(splits);
-	if (winner->both_count)
-			printf("parent had %d, left %d right %d both %d\n", parent->member_count, winner->left_count, winner->right_count, winner->both_count);
 	return winner;
 }
 

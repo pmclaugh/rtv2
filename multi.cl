@@ -232,8 +232,8 @@ static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T,
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-	*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
-	// *N_out = sample_N;
+	// *N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
+	*N_out = sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
 	txcrd.x -= floor(txcrd.x);
@@ -403,10 +403,10 @@ __kernel void bounce( 	__global Ray *rays,
 	if (ray.status != BOUNCE)
 		return;
 
-	// ray.status = DEAD;
-	// ray.color = (1.0f + ray.N) / 2.0f;
-	// rays[gid] = ray;
-	// return;
+	ray.status = DEAD;
+	ray.color = (1.0f + ray.N) / 2.0f;
+	rays[gid] = ray;
+	return;
 
 	uint seed0 = seeds[2 * gid];
 	uint seed1 = seeds[2 * gid + 1];
