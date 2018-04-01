@@ -211,13 +211,13 @@ int edge_clip(cl_float3 A, cl_float3 B, AABB *clipping, cl_float3 *points, int *
 
 	//need to make sure we're not updating with a point that goes past far vertex
 
-	if (tmin > 0 && tmin <= edge_t)
+	if (tmin >= 0 && tmin <= edge_t)
 	{
 		points[*pt_count] = vec_add(A, vec_scale(direction, tmin));
 		*pt_count = *pt_count + 1;
 		*res_a = *res_a + 1;
 	}
-	if (tmax > 0 && tmax <= edge_t)
+	if (tmax >= 0 && tmax <= edge_t)
 	{
 		points[*pt_count] = vec_add(A, vec_scale(direction, tmax));
 		*pt_count = *pt_count + 1;
@@ -418,6 +418,8 @@ Split *pick_best(Split **splits, AABB *parent)
 		else
 			free_split(splits[i]);
 	free(splits);
+	if (winner->both_count)
+			printf("parent had %d, left %d right %d both %d\n", parent->member_count, winner->left_count, winner->right_count, winner->both_count);
 	return winner;
 }
 

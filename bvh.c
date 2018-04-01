@@ -1,6 +1,6 @@
 #include "rt.h"
 
-#define SPATIAL_ENABLE 0
+#define SPATIAL_ENABLE 1
 #define VERBOSE 0
 
 Split **new_allocate_splits(AABB *box)
@@ -8,8 +8,9 @@ Split **new_allocate_splits(AABB *box)
 	cl_float3 span = vec_sub(box->max, box->min);
 	float total = span.x + span.y + span.z;
 	int x_splits = (int)ceil((float)SPLIT_TEST_NUM * span.x / total);
-	int y_splits = (int)ceil((float)SPLIT_TEST_NUM * span.y / total);
+	int y_splits = (int)((float)SPLIT_TEST_NUM * span.y / total);
 	int z_splits = SPLIT_TEST_NUM - x_splits - y_splits;
+	// printf("%d %d %d\n", x_splits, y_splits, z_splits);
 
 	Split **splits = calloc(SPLIT_TEST_NUM, sizeof(Split));
 	int s = 0;
@@ -104,9 +105,12 @@ Split *new_object_split(AABB *box)
 	//distribute splits
 	cl_float3 span = vec_sub(box->max, box->min);
 	float total = span.x + span.y + span.z;
+
 	int x_splits = (int)ceil((float)SPLIT_TEST_NUM * span.x / total);
 	int y_splits = (int)((float)SPLIT_TEST_NUM * span.y / total);
 	int z_splits = SPLIT_TEST_NUM - x_splits - y_splits;
+
+	
 
 	//printf("%d %d %d\n", x_splits, y_splits, z_splits);
 
