@@ -38,6 +38,9 @@ typedef struct s_ray {
 	float3 spec;
 	float3 trans;
 	float3 bump;
+	float Ni;
+	float roughness;
+	float transparency;
 	float3 N;
 	float t;
 	float u;
@@ -272,7 +275,9 @@ __kernel void fetch(	__global Ray *rays,
 
 	float3 txcrd;
 	Material mat = mats[M[ray.hit_ind / 3]];
-	
+	ray.Ni = mat.Ni;
+	ray.transparency = mat.Tr;
+	ray.roughness = mat.roughness;
 	fetch_NT(V, N, T, ray.direction, ray.hit_ind, ray.u, ray.v, &ray.N, &txcrd);
 	fetch_all_tex(mat, tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
@@ -317,8 +322,7 @@ static float GGX_D(float a, float cost)
 
 static float GGX_G1(float3 v, float3 n, float3 m, float a)
 {
-	float theta = acos(fabs(dot(v, n))); //still not sure if this should be n or m.
-	//I think it has to be n, because dot(i,m) == dot(o,m) and then they'd just say g1^2
+	float theta = acos(fabs(dot(v, n)));
 	if (theta != theta)
 		theta = 0.0f; //acos(1.0f) is nan for some reason.
 	float radicand = 1.0f + a * a * tan(theta) * tan(theta);
@@ -344,26 +348,8 @@ static float GGX_F(float3 i, float3 m, float n1, float n2)
 	float num = n1 - n2;
 	float denom = n1 + n2;
 	float r0 = (num * num) / (denom * denom);
-	float cos_term = pow(1.0f - fabs(dot(i, m)), 5.0f);
+	float cos_term = pow(1.0f - dot(i, m), 5.0f);
 	return r0 + (1.0f - r0) * cos_term;
-}
-
-static float GGX_eval(float3 i, float3 o, float3 m, float3 n, float a, float n1, float n2)
-{
-	// == F * G * D / 4 |i dot n| |o dot n|
-
-	float f = GGX_F(i, n, n1, n2);
-	float g = GGX_G(i, o, m, n, a);
-	float d = GGX_D(a, dot(m,n));
-	//currently overriding f
-	f = 1.0f;
-
-	if (f * g * d <= 0.0f)
-		return 0.0f;
-
-	float denom = 4.0f * dot(i, n) * dot(o, n);
-	float eval = (f * g * d) / denom;
-	return eval;
 }
 
 static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
@@ -382,8 +368,6 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 	float3 z = n * native_cos(theta);
 
 	float3 m = normalize(x + y + z);
-	//if (dot(m, i) * dot(n, i) < 0.0f)
-	//	m = normalize(z - x - y);
 	return m;
 }
 
@@ -415,31 +399,30 @@ __kernel void bounce( 	__global Ray *rays,
 
 	float3 n = ray.N;
 	float3 i = ray.direction * -1.0f;
-	float a = 0.1f;
-	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
-
-	//inside or outside the glass?
-	float norm_sign = dot(n, i) > 0.0f ? 1.0f : -1.0f;  
+	float a = ray.roughness;
+	float norm_sign = dot(n, i) > 0.0f ? 1.0f : -1.0f;
 	float ni, nt;
 	if (norm_sign > 0.0f)
 	{
 		ni = 1.0f;
-		nt = 1.5f;
+		nt = ray.Ni;
 	}
 	else
 	{
-		ni = 1.5f;
+		ni = ray.Ni;
 		nt = 1.0f;
 	}
-	
 	float3 o;
 	float3 weight = WHITE;
+
+	float3 m = GGX_NDF(i, norm_sign * n, r1, r2, a); //sampling microfacet normal
+
 	if (dot(ray.spec, ray.spec) > 0.0f) 
 	{
 	 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
 	 	{
-	 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-	 		weight = GGX_weight(i, o, m, n, a);
+	 		o = normalize(2.0f * dot(i, m) * m - i);
+	 		weight = GGX_weight(i, o, m, norm_sign * n, a);
 	 	}
 	 	else
 	 	{

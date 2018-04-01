@@ -308,6 +308,9 @@ typedef struct s_gpu_ray {
 	cl_float3 spec;
 	cl_float3 trans;
 	cl_float3 bump;
+	cl_float Ni;
+	cl_float roughness;
+	cl_float transparency;
 	cl_float3 N;
 	cl_float t;
 	cl_float u;
