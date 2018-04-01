@@ -403,10 +403,10 @@ __kernel void bounce( 	__global Ray *rays,
 	if (ray.status != BOUNCE)
 		return;
 
-	ray.status = DEAD;
-	ray.color = (1.0f + ray.N) / 2.0f;
-	rays[gid] = ray;
-	return;
+	// ray.status = DEAD;
+	// ray.color = (1.0f + ray.N) / 2.0f;
+	// rays[gid] = ray;
+	// return;
 
 	uint seed0 = seeds[2 * gid];
 	uint seed1 = seeds[2 * gid + 1];
@@ -416,7 +416,6 @@ __kernel void bounce( 	__global Ray *rays,
 	float3 n = ray.N;
 	float3 i = ray.direction * -1.0f;
 	float a = 0.1f;
-	a = (1.2f - 0.2f * sqrt(fabs(dot(i,n)))) * a; //softening approximation to reduce weight variance
 	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
 
 	//inside or outside the glass?
@@ -440,7 +439,7 @@ __kernel void bounce( 	__global Ray *rays,
 	 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
 	 	{
 	 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-	 		weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE;
+	 		weight = GGX_weight(i, o, m, n, a);
 	 	}
 	 	else
 	 	{
