@@ -315,6 +315,7 @@ static float GGX_G(float3 i, float3 o, float3 m, float3 n, float a)
 
 	float g1 = GGX_G1(i, n, m, a);
 	float g2 = GGX_G1(o, n, m, a);
+	//printf("G %.2f\n", g1 * g2);
 	return g1 * g2;
 }
 
@@ -348,9 +349,15 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
 {
+	if (fabs(dot(i,m)) > 1.0f)
+	{
+		printf("dot > 1.0f!\n");
+		printf("length of i: %.2f m:%.2f\n", sqrt(dot(i, i)), sqrt(dot(m, m)));
+	}
 	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a);
 	float denom = fabs(dot(i, n)) * fabs(dot(m, n));
 	float weight = denom > 0.0f ? num / denom : 0.0f;
+
 	return weight;
 }
 
@@ -408,7 +415,7 @@ __kernel void bounce( 	__global Ray *rays,
 	else if (get_random(&seed0, &seed1) < fresnel)
 	{
 		//reflect
-		o = 2 * dot(i,m) * m - i;
+		o = normalize(2.0f * dot(i,m) * m - i);
 		weight = GGX_weight(i, o, m, n, a) * ray.spec;
 	}
 	else
@@ -419,13 +426,13 @@ __kernel void bounce( 	__global Ray *rays,
 		float radicand = 1.0f + index * (c * c - 1.0f);
 		if (radicand < 0.0f)
 		{
-			o = 2 * dot(i,m) * m - i;
+			o = normalize(2.0f * dot(i,m) * m - i);
 			weight = GGX_weight(i, o, m, n, a) * ray.spec;
 		}
 		else
 		{
 			float coeff = index * c - sqrt(radicand);
-			o = coeff * m - index * i;
+			o = normalize(coeff * m - index * i);
 			weight = GGX_weight(i, o, m, n, a) * ray.spec;
 		}
 	}
