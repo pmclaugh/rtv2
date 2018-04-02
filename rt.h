@@ -330,6 +330,8 @@ typedef struct	s_camera
 
 	cl_float3	focus;
 	cl_float3	origin;
+	cl_float3	hor_ref;
+	cl_float3	vert_ref;
 	cl_float3	d_x;
 	cl_float3	d_y;
 }				t_camera;

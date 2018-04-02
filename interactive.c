@@ -228,7 +228,7 @@ t_ray	generate_ray(t_env *env, float x, float y)
 	return ray;
 }
 
-void	plot_line(t_env *env, int x1, int y1, int x2, int y2)
+void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_double3 clr)
 {
 	// printf("------------------\n");
 	// printf("x1 = %d\ty1 = %d\nx2 = %d\ty2 = %d\n", x1, y1, x2, y2);
@@ -242,7 +242,7 @@ void	plot_line(t_env *env, int x1, int y1, int x2, int y2)
 	while (x1 != x2)
 	{
 		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = (cl_double3){0, 1, 0}; //is the image being flipped horizontally?
+			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr; //is the image being flipped horizontally?
 		err2 = err;
 		if (err2 > -dx)
 		{
@@ -258,31 +258,45 @@ void	plot_line(t_env *env, int x1, int y1, int x2, int y2)
 	while (y1 != y2)
 	{
 		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = (cl_double3){0, 1, 0};
+			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr;
 		y1 += sy;
 	}
 }
 
-void	draw_line(t_env *env, cl_float3 p1, cl_float3 p2)
+void	draw_line(t_env *env, cl_float3 p1, cl_float3 p2, cl_double3 clr)
 {
-	float 		dist = (env->cam.width / 2) / tan(H_FOV / 2);
-	t_3x3 		rot = rotation_matrix(env->cam.dir, UNIT_Z); //still not working perfectly
 	float		pix_x1, pix_y1, pix_x2, pix_y2, ratio;
 	cl_float3	dir1, dir2;
+	float 		dist = (env->cam.width / 2) / tan(H_FOV / 2);
+	// t_3x3		rot = rotation_matrix(env->cam.dir, UNIT_Z);
+	t_3x3 		rot_hor = rotation_matrix(env->cam.hor_ref, UNIT_X);
+	t_3x3 		rot_vert = rotation_matrix(env->cam.vert_ref, UNIT_Y);
+	// float		angle = acos(dot(env->cam.dir, UNIT_Z));
+
+	printf("-------------------------\n");
+	print_vec(mat_vec_mult(rot_hor, env->cam.hor_ref));
+	print_vec(mat_vec_mult(rot_vert, env->cam.vert_ref));
+	print_vec(mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, env->cam.dir)));
 
 	dir1 = unit_vec(vec_sub(p1, env->cam.pos));
-	dir1 = mat_vec_mult(rot, dir1);
-	ratio = (dir1.z > 0) ? dist / dir1.z : 100;
+	// dir1 = mat_vec_mult(rot, dir1);
+	dir1 = mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir1));
+	// dir1 = vec_rotate_xz(dir1, angle);
+	// vec_rot(env->cam.dir, &dir1);
+	ratio = (dir1.z > 0) ? dist / dir1.z : 100; //protection against inf when dir1.z is 0
 	pix_x1 = ((dir1.x * ratio) * DIM_IA) + (DIM_IA / 2);
 	pix_y1 = ((dir1.y * -ratio) * DIM_IA) + (DIM_IA / 2);
 
 	dir2 = unit_vec(vec_sub(p2, env->cam.pos));
-	dir2 = mat_vec_mult(rot, dir2);
+	// dir2 = mat_vec_mult(rot, dir2);
+	dir2 = mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir2));
+	// dir2 = vec_rotate_xz(dir2, angle);
+	// vec_rot(env->cam.dir, &dir2);
 	ratio = (dir2.z > 0) ? dist / dir2.z : 100;
 	pix_x2 = ((dir2.x * ratio) * DIM_IA) + (DIM_IA / 2);
 	pix_y2 = ((dir2.y * -ratio) * DIM_IA) + (DIM_IA / 2);
 
-	plot_line(env, pix_x1, pix_y1, pix_x2, pix_y2);
+	plot_line(env, pix_x1, pix_y1, pix_x2, pix_y2, clr);
 }
 
 void	interactive(t_env *env)
@@ -308,8 +322,11 @@ void	interactive(t_env *env)
 			env->ia->pixels[(x + 1) + ((y + 1) * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
 		}
 	}
-	draw_line(env, (cl_float3){0, 200, 100}, (cl_float3){-100, -100, 0});
-	draw_line(env, (cl_float3){-100, -100, 0}, (cl_float3){100, -100, 0});
+	draw_line(env, (cl_float3){0, 0, 0}, (cl_float3){100, 0, 0}, (cl_double3){1, 0, 0});
+	draw_line(env, (cl_float3){0, 0, 0}, (cl_float3){0, 100, 0}, (cl_double3){0, 1, 0});
+	draw_line(env, (cl_float3){0, 0, 0}, (cl_float3){0, 0, 100}, (cl_double3){0, 0, 1});
+	// draw_line(env, (cl_float3){0, 200, 100}, (cl_float3){-100, -100, 0}, (cl_double3){1, 0, 1});
+	// draw_line(env, (cl_float3){-100, -100, 0}, (cl_float3){100, -100, 0}, (cl_double3){1, 0, 1});
 	draw_pixels(env->ia, DIM_IA, DIM_IA);
 	mlx_put_image_to_window(env->mlx, env->ia->win, env->ia->img, 0, 0);
 	if (env->show_fps)
