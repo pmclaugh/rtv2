@@ -19,7 +19,34 @@ SRC =	vec.c \
 		composite.c \
 		bvh_util.c \
 		stl_import.c \
-		get_face.c
+		get_face.c \
+		libjpeg/jerror.c \
+		libjpeg/jdapimin.c \
+		libjpeg/jdatasrc.c \
+		libjpeg/jdapistd.c \
+		libjpeg/jdmaster.c \
+		libjpeg/jmemmgr.c \
+		libjpeg/jdmarker.c \
+		libjpeg/jdinput.c \
+		libjpeg/jcomapi.c \
+		libjpeg/jutils.c \
+		libjpeg/jmemansi.c \
+		libjpeg/jquant1.c \
+		libjpeg/jquant2.c \
+		libjpeg/jdcolor.c \
+		libjpeg/jdsample.c \
+		libjpeg/jddctmgr.c \
+		libjpeg/jidctint.c \
+		libjpeg/jidctfst.c \
+		libjpeg/jidctflt.c \
+		libjpeg/jdmerge.c \
+		libjpeg/jdmainct.c \
+		libjpeg/jdpostct.c \
+		libjpeg/jdarith.c \
+		libjpeg/jdhuff.c \
+		libjpeg/jdcoefct.c \
+		libjpeg/jaricom.c
+
 
 OBJ = $(SRC:.c=.o)
 
@@ -41,8 +68,10 @@ endif
 all: $(NAME)
 
 $(NAME): $(OBJ)
-	gcc -o $(NAME) $(FLAGS) -I $(INC) $(OBJ) $(LIBS) -L libjpeg -ljpeg
+	gcc -o $(NAME) $(FLAGS) -I $(INC) $(OBJ) $(LIBS)
 %.o: %.c rt.h
+	gcc $(FLAGS) -I $(INC) -c -o $@ $<
+libjpeg/%.o: %.c rt.h
 	gcc $(FLAGS) -I $(INC) -c -o $@ $<
 mac-mlx/libmlx.a:
 	make -C mac-mlx
