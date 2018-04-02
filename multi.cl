@@ -305,16 +305,16 @@ static float GGX_G1(float3 v, float3 n, float3 m, float a)
 	return ret;
 }
 
-static float GGX_G(float3 i, float3 o, float3 m, float3 n, float a)
+static float GGX_G(float3 i, float3 o, float3 m, float3 n, float a, float norm_sign)
 {
 	//G is zero under these conditions, fail early to avoid nans
 	if (dot(i, m) * dot(i, n) <= 0.0f)
 		return 0.0f;
-	if (dot(o, m) * dot(o,n) <= 0.0f)
+	if (dot(o, norm_sign * m) * dot(o, norm_sign * n) <= 0.0f)
 		return 0.0f;
 
 	float g1 = GGX_G1(i, n, m, a);
-	float g2 = GGX_G1(o, n, m, a);
+	float g2 = GGX_G1(o, norm_sign * n, norm_sign * m, a);
 	//printf("G %.2f\n", g1 * g2);
 	return g1 * g2;
 }
@@ -347,14 +347,14 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 	return m;
 }
 
-static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
+static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a, float norm_sign)
 {
 	if (fabs(dot(i,m)) > 1.0f)
 	{
 		printf("dot > 1.0f!\n");
 		printf("length of i: %.2f m:%.2f\n", sqrt(dot(i, i)), sqrt(dot(m, m)));
 	}
-	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a);
+	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a, norm_sign);
 	float denom = fabs(dot(i, n)) * fabs(dot(m, n));
 	float weight = denom > 0.0f ? num / denom : 0.0f;
 
@@ -416,7 +416,7 @@ __kernel void bounce( 	__global Ray *rays,
 	{
 		//reflect
 		o = normalize(2.0f * dot(i,m) * m - i);
-		weight = GGX_weight(i, o, m, n, a) * ray.spec;
+		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
 	}
 	else
 	{
@@ -427,13 +427,16 @@ __kernel void bounce( 	__global Ray *rays,
 		if (radicand < 0.0f)
 		{
 			o = normalize(2.0f * dot(i,m) * m - i);
-			weight = GGX_weight(i, o, m, n, a) * ray.spec;
+			weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
 		}
 		else
 		{
 			float coeff = index * c - sqrt(radicand);
 			o = normalize(coeff * m - index * i);
-			weight = GGX_weight(i, o, m, n, a) * ray.spec;
+			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.spec;
+			float w = GGX_weight(i, o, m, n, a, -1.0f);
+			if (w > 10.0f)
+				printf("high weight in xmit, dot im %.2f G %.2f / dot in %.2f dot mn %.2f\n", dot(i,m), GGX_G(i, o, m, n, a, -1.0f), dot(i, n), dot(m, n));
 		}
 	}
 
