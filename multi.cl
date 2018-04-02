@@ -349,13 +349,13 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a, float norm_sign)
 {
-	if (fabs(dot(i,m)) > 1.0f)
-	{
-		printf("dot > 1.0f!\n");
-		printf("length of i: %.2f m:%.2f\n", sqrt(dot(i, i)), sqrt(dot(m, m)));
-	}
+	// if (fabs(dot(i,m)) > 1.0f)
+	// {
+	// 	printf("dot > 1.0f!\n");
+	// 	printf("length of i: %.2f m:%.2f\n", sqrt(dot(i, i)), sqrt(dot(m, m)));
+	// }
 	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a, norm_sign);
-	float denom = fabs(dot(i, n)) * fabs(dot(m, n));
+	float denom = fabs(dot(i, n));// * fabs(dot(m, n));
 	float weight = denom > 0.0f ? num / denom : 0.0f;
 
 	return weight;
@@ -393,6 +393,7 @@ __kernel void bounce( 	__global Ray *rays,
 	}
 
 	float a = ray.roughness;
+	//a *= pow(dot(i,n), 10.0f);
 	float3 m = GGX_NDF(i, n, r1, r2, a);
 	//reflect or transmit?
 	float fresnel = GGX_F(i, m, ni, nt);
@@ -434,9 +435,9 @@ __kernel void bounce( 	__global Ray *rays,
 			float coeff = index * c - sqrt(radicand);
 			o = normalize(coeff * m - index * i);
 			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.spec;
-			float w = GGX_weight(i, o, m, n, a, -1.0f);
-			if (w > 10.0f)
-				printf("high weight in xmit, dot im %.2f G %.2f / dot in %.2f dot mn %.2f\n", dot(i,m), GGX_G(i, o, m, n, a, -1.0f), dot(i, n), dot(m, n));
+			// float w = GGX_weight(i, o, m, n, a, -1.0f);
+			// if (w > 10.0f)
+			// 	printf("high weight in xmit, dot im %.2f G %.2f / dot in %.2f dot mn %.2f\n", dot(i,m), GGX_G(i, o, m, n, a, -1.0f), dot(i, n), dot(m, n));
 		}
 	}
 
@@ -446,6 +447,8 @@ __kernel void bounce( 	__global Ray *rays,
 	ray.direction = o;
 	ray.inv_dir = 1.0f / o;
 	ray.status = TRAVERSE;
+	if (dot(ray.mask, ray.mask) == 0.0f)
+		ray.status = DEAD;
 
 	rays[gid] = ray;
 	seeds[2 * gid] = seed0;
