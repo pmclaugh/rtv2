@@ -20,7 +20,7 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define MIN_BOUNCES 5
+#define MIN_BOUNCES 10
 #define RR_PROB 0.3f
 
 #define NEW 0
@@ -235,7 +235,6 @@ static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T,
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-	// *N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
 	*N_out = sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
@@ -283,13 +282,6 @@ __kernel void fetch(	__global Ray *rays,
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
 	ray.status = BOUNCE;
 
-	// if (ray.trans.x < 1.0f)
-	// {
-	// 	ray.origin = ray.origin + ray.direction * (ray.t + NORMAL_SHIFT);
-	// 	ray.bounce_count--;
-	// 	ray.status = TRAVERSE;
-	// }
-
 	if (dot(mat.Ke, mat.Ke) > 0.0f)
 	{
 		ray.color += SUN_BRIGHTNESS * ray.mask;
@@ -301,28 +293,11 @@ __kernel void fetch(	__global Ray *rays,
 
 /////Bounce stuff
 
-static float GGX_D(float a, float cost)
-{
-	float a2 = a * a;
-	printf("hi");
-
-	float theta = acos(cost);
-	if (theta != theta)
-	{
-		printf("it happened\n");
-		theta = 0.0f; //acos(1.0f) is nan for some reason.
-	}
-	float cos4 = cost * cost * cost * cost;
-	float tsq = a2 + tan(theta) * tan(theta);
-	tsq *= tsq;
-	float denom = PI * cos4 * tsq;
-
-	return a2 / denom;
-}
-
 static float GGX_G1(float3 v, float3 n, float3 m, float a)
 {
-	float theta = acos(fabs(dot(v, n)));
+	if (dot(v,n) == 0.0f || dot(v,m) / dot(v,n) <= 0.0f)
+		return 0.0f;
+	float theta = acos(dot(v, n));
 	if (theta != theta)
 		theta = 0.0f; //acos(1.0f) is nan for some reason.
 	float radicand = 1.0f + a * a * tan(theta) * tan(theta);
@@ -387,62 +362,34 @@ __kernel void bounce( 	__global Ray *rays,
 	if (ray.status != BOUNCE)
 		return;
 
-	// ray.status = DEAD;
-	// ray.color = (1.0f + ray.N) / 2.0f;
-	// rays[gid] = ray;
-	// return;
-
 	uint seed0 = seeds[2 * gid];
 	uint seed1 = seeds[2 * gid + 1];
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
+	float3 weight = WHITE;
 
-	float3 n = ray.N;
 	float3 i = ray.direction * -1.0f;
-	float a = ray.roughness;
-	float norm_sign = dot(n, i) > 0.0f ? 1.0f : -1.0f;
+	float3 o = WHITE;
+	float3 n = ray.N; //this is the N that points OUTSIDE the object.
+	int inside = dot(i, n) < 0.0f ? 1 : 0;
 	float ni, nt;
-	if (norm_sign > 0.0f)
+	if (inside)
+	{
+		n *= -1.0f;
+		ni = ray.Ni;
+		nt = 1.0f;
+	}
+	else
 	{
 		ni = 1.0f;
 		nt = ray.Ni;
 	}
-	else
-	{
-		ni = ray.Ni;
-		nt = 1.0f;
-	}
-	float3 o;
-	float3 weight = WHITE;
 
-	float3 m = GGX_NDF(i, norm_sign * n, r1, r2, a); //sampling microfacet normal
-
-	if (dot(ray.spec, ray.spec) > 0.0f) 
-	{
-	 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
-	 	{
-	 		o = normalize(2.0f * dot(i, m) * m - i);
-	 		weight = GGX_weight(i, o, m, norm_sign * n, a);
-	 	}
-	 	else
-	 	{
-	 		float index = ni / nt;
-	 		float c = dot(i,m);
-	 		float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
-	 		if (coeff != coeff)
-	 		{
-	 			//if coeff is Nan, means total internal reflection
-	 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-				weight *= GGX_weight(i, o, m, n, a);
-			}
-	 		else
-	 		{
-	 			o = normalize((coeff * m) - (index * i));
-	 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? ray.spec : WHITE;
-	 		}
-		}
-	}
-	else
+	float a = ray.roughness;
+	float3 m = GGX_NDF(i, n, r1, r2, a);
+	//reflect or transmit?
+	float fresnel = GGX_F(i, m, ni, nt);
+	if (dot(ray.spec, ray.spec) == 0.0f)
 	{
 		//Cosine-weighted pure diffuse reflection
 		//local orthonormal system
@@ -455,18 +402,40 @@ __kernel void bounce( 	__global Ray *rays,
 		float theta = 2.0f * PI * r2;
 
 		//combine for new direction
-		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N *norm_sign * native_sqrt(max(0.0f, 1.0f - r1)));
+		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
+	}
+	else if (get_random(&seed0, &seed1) < fresnel)
+	{
+		//reflect
+		o = 2 * dot(i,m) * m - i;
+		weight = GGX_weight(i, o, m, n, a) * ray.spec;
+	}
+	else
+	{
+		//transmit
+		float index = ni / nt;
+		float c = dot(i, m);
+		float radicand = 1.0f + index * (c * c - 1.0f);
+		if (radicand < 0.0f)
+		{
+			o = 2 * dot(i,m) * m - i;
+			weight = GGX_weight(i, o, m, n, a) * ray.spec;
+		}
+		else
+		{
+			float coeff = index * c - sqrt(radicand);
+			o = coeff * m - index * i;
+			weight = GGX_weight(i, o, m, n, a) * ray.spec;
+		}
 	}
 
 	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
-	ray.origin = ray.origin + ray.direction * ray.t + n * NORMAL_SHIFT;
+	ray.origin = ray.origin + ray.direction * ray.t + n * o_sign * NORMAL_SHIFT;
 	ray.direction = o;
 	ray.inv_dir = 1.0f / o;
 	ray.status = TRAVERSE;
-	if (dot(ray.mask, ray.mask) == 0.0f)
-		ray.status = DEAD;
 
 	rays[gid] = ray;
 	seeds[2 * gid] = seed0;

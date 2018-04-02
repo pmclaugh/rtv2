@@ -55,6 +55,7 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 		simple_mats[i].Ni = s->materials[i].Ni;
 		simple_mats[i].Tr = s->materials[i].Tr;
 		simple_mats[i].roughness = s->materials[i].roughness;
+		printf("gpu mat %d will be a=%.2f, Ni=%.1f, Tr=%.1f\n", i, simple_mats[i].roughness, simple_mats[i].Ni, simple_mats[i].Tr);
 
 		if (s->materials[i].map_Kd)
 		{
@@ -336,7 +337,7 @@ typedef struct s_gpu_camera {
 cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples, int first)
 {
 	//jank!
-	samples *= 12;
+	samples *= 20;
 
 	static gpu_context *CL;
 	if (!CL)
