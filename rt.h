@@ -227,6 +227,29 @@ typedef struct s_gpu_context
 	cl_device_id *device_ids;
 }				gpu_context;
 
+typedef struct s_gpu_ray {
+	cl_float3 origin;
+	cl_float3 direction;
+	cl_float3 inv_dir;
+
+	cl_float3 diff;
+	cl_float3 spec;
+	cl_float3 trans;
+	cl_float3 bump;
+	cl_float3 N;
+	cl_float t;
+	cl_float u;
+	cl_float v;
+
+	cl_float3 color;
+	cl_float3 mask;
+
+	cl_int hit_ind;
+	cl_int pixel_id;
+	cl_int bounce_count;
+	cl_int status;
+}				gpu_ray;
+
 typedef struct s_gpu_mat
 {
 	cl_float3 Ka;
@@ -395,6 +418,12 @@ float SA_overlap(Split *split);
 
 Face *stl_import(char *stl_file);
 
+// typedef struct	s_ray_vis
+// {
+// 	int			density;
+// 	int
+// }				t_ray_vis;
+
 typedef struct	s_mlx_data
 {
 	void		*win;
@@ -417,13 +446,19 @@ typedef struct s_env
 	t_mlx_data	*pt;
 	t_key		key;
 	
+	gpu_ray		**rays;
 	int			mode;
 	int			view;
+	_Bool		show_rays;
 	_Bool		show_fps;
 	int			spp;
 	int			samples;
+	int			depth;
 	_Bool		render;
 	float		eps;
+
+	int			ray_density;
+	int			bounce_vis;
 }				t_env;
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
@@ -446,7 +481,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info);
 Scene *scene_from_ply(char *rel_path, char *filename, File_edits edit_info);
 
 void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples);
-cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples, int first);
+cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples, int first, t_env *env);
 //Scene *scene_from_obj(char *rel_path, char *filename);
 //cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
 
@@ -510,6 +545,7 @@ double			read_double(FILE *fp, const int file_endian, const int machine_endian);
 int get_face_elements(char *line, int *va, int *vta, int *vna, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc, int *vd, int *vtd, int *vnd);
 
 //interactive.c
+void	ray_visualizer(t_env *env);
 void	interactive(t_env *env);
 
 //camera.c

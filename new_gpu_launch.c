@@ -304,28 +304,28 @@ void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples)
 	}
 }
 
-typedef struct s_gpu_ray {
-	cl_float3 origin;
-	cl_float3 direction;
-	cl_float3 inv_dir;
+// typedef struct s_gpu_ray {
+// 	cl_float3 origin;
+// 	cl_float3 direction;
+// 	cl_float3 inv_dir;
 
-	cl_float3 diff;
-	cl_float3 spec;
-	cl_float3 trans;
-	cl_float3 bump;
-	cl_float3 N;
-	cl_float t;
-	cl_float u;
-	cl_float v;
+// 	cl_float3 diff;
+// 	cl_float3 spec;
+// 	cl_float3 trans;
+// 	cl_float3 bump;
+// 	cl_float3 N;
+// 	cl_float t;
+// 	cl_float u;
+// 	cl_float v;
 
-	cl_float3 color;
-	cl_float3 mask;
+// 	cl_float3 color;
+// 	cl_float3 mask;
 
-	cl_int hit_ind;
-	cl_int pixel_id;
-	cl_int bounce_count;
-	cl_int status;
-}				gpu_ray;
+// 	cl_int hit_ind;
+// 	cl_int pixel_id;
+// 	cl_int bounce_count;
+// 	cl_int status;
+// }				gpu_ray;
 
 typedef struct s_gpu_camera {
 	cl_float3 origin;
@@ -335,10 +335,10 @@ typedef struct s_gpu_camera {
 	cl_int width;
 }				gpu_camera;
 
-cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples, int first)
+cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples, int first, t_env *env)
 {
 	//jank!
-	samples *= 12;
+	samples *= env->depth;
 
 	static gpu_context *CL;
 	if (!CL)
@@ -496,6 +496,13 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		clSetKernelArg(bounce[i], 1, sizeof(cl_mem), &d_seeds[i]);
 	}
 
+	gpu_ray	***rays = calloc(CL->numDevices, sizeof(gpu_ray **));
+	for (int i = 0; i < CL->numDevices; i++)
+	{
+		rays[i] = calloc(env->depth, sizeof(gpu_ray *));
+		for (int j = 0; j < env->depth; j++)
+			rays[i][j] = calloc(worksize, sizeof(gpu_ray));
+	}
 
 	//printf("any key to launch\n");
 	//getchar();
@@ -507,10 +514,13 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		for (int j = 0; j < samples; j++)
 		{
 			clEnqueueNDRangeKernel(CL->commands[i], collect[i], 1, 0, &worksize, &localsize, 0, NULL, j == 0 ? &begin: NULL);
+			if (env->show_rays) //assumes samples = 1 * depth
+				clEnqueueReadBuffer(CL->commands[i], d_rays[i], CL_TRUE, 0, worksize * sizeof(gpu_ray), rays[i][j], 0, NULL, NULL);
 			clEnqueueNDRangeKernel(CL->commands[i], traverse[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
 			clEnqueueNDRangeKernel(CL->commands[i], fetch[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
 			clEnqueueNDRangeKernel(CL->commands[i], bounce[i], 1, 0, &worksize, &localsize, 0, NULL, j == samples - 1 ? &finish : NULL);
 		}
+	env->rays = rays[0];
 
 	for (int i = 0; i < d; i++)
 		clFlush(CL->commands[i]);
@@ -531,7 +541,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 	cl_int **counts = calloc(CL->numDevices, sizeof(cl_int *));
 	for (int i = 0; i < CL->numDevices; i++)
 		counts[i] = calloc(worksize, sizeof(cl_int));
-
+	
 	for (int i = 0; i < d; i++)
 	{
 		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_TRUE, 0, worksize * sizeof(cl_float3), outputs[i], 0, NULL, NULL);

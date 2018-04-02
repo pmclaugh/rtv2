@@ -16,6 +16,25 @@
 #define KEY_ENTER	36
 #define KEY_PLUS	24
 #define KEY_MINUS	27
+#define KEY_DELETE	51
+#define KEY_HOME	115
+#define KEY_END		119
+#define KEY_PGUP	116
+#define KEY_PGDWN	121
+
+#define KEY_PAD_PLUS	69
+#define KEY_PAD_MINUS	78
+#define KEY_PAD_1		83
+#define KEY_PAD_2		84
+#define KEY_PAD_3		85
+#define KEY_PAD_4		86
+#define KEY_PAD_5		87
+#define KEY_PAD_6		88
+#define KEY_PAD_7		89
+#define KEY_PAD_8		91
+#define KEY_PAD_9		92
+#define KEY_PAD_MULT	67
+#define KEY_PAD_DIV		75
 
 #define MOVE_KEYS		(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
 #define ARR_KEYS		(key >= KEY_LARR  && key <= KEY_UARR)
@@ -103,8 +122,28 @@ int		key_press(int key, t_env *env)
 	// printf("%d\n", key);
 	if (key == KEY_ESC)
 		exit_hook(key, env);
-	if (key == KEY_ENTER)
+	else if (key == KEY_ENTER)
 		env->render = 1;
+	else if (key == KEY_DELETE)
+	{
+		env->show_rays = (!env->show_rays) ? 1 : 0;
+		if (env->show_rays)
+			gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, 1, env);
+	}
+	else if (key == KEY_PGUP)
+		env->ray_density /= 2;
+	else if (key == KEY_PGDWN)
+		env->ray_density *= 2;
+	else if (key == KEY_HOME)
+	{
+		if (env->bounce_vis < env->depth - 1)
+			env->bounce_vis++;
+	}
+	else if (key == KEY_END)
+	{
+		if (env->bounce_vis > 1)
+			env->bounce_vis--;
+	}
 	else if (key == KEY_TAB)
 	{
 		env->view++;

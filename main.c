@@ -20,7 +20,7 @@ void		path_tracer(t_env *env)
 	int first = (env->samples == 0) ? 1 : 0;
 	env->samples += 1;
 	set_camera(&env->cam, DIM_PT);
-	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, first);
+	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, first, env);
 	sum_color(env->pt->total_clr, pix, DIM_PT * DIM_PT);
 	free(pix);
 	alt_composite(env->pt, DIM_PT * DIM_PT, env->samples);
@@ -83,6 +83,7 @@ t_env		*init_env(void)
 	//load camera settings from config file and import scene
 	env->mode = PT;
 	env->view = 1;
+	env->show_rays = 0;
 	env->show_fps = 0;
 	env->key.w = 0;
 	env->key.a = 0;
@@ -95,8 +96,12 @@ t_env		*init_env(void)
 	env->key.space = 0;
 	env->key.shift = 0;
 	env->samples = 0;
+	env->spp = 0;
+	env->depth = 6;
 	env->render = 1;
 	env->eps = 0.00005;
+	env->ray_density = 2000;
+	env->bounce_vis = 1;
 	load_config(env);
 	return env;
 }
