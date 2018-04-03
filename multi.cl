@@ -20,7 +20,7 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define MIN_BOUNCES 10
+#define MIN_BOUNCES 5
 #define RR_PROB 0.3f
 
 #define NEW 0
@@ -417,7 +417,7 @@ __kernel void bounce( 	__global Ray *rays,
 	{
 		//reflect
 		o = normalize(2.0f * dot(i,m) * m - i);
-		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
+		weight = GGX_weight(i, o, m, n, a, 1.0f) * inside ? pow(ray.spec, ray.t / 50.0f) : ray.spec;
 	}
 	else
 	{
@@ -427,17 +427,16 @@ __kernel void bounce( 	__global Ray *rays,
 		float radicand = 1.0f + index * (c * c - 1.0f);
 		if (radicand < 0.0f)
 		{
+			//Total internal reflection
 			o = normalize(2.0f * dot(i,m) * m - i);
-			weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
+			weight = GGX_weight(i, o, m, n, a, 1.0f) * WHITE;
 		}
 		else
 		{
+			//transmission
 			float coeff = index * c - sqrt(radicand);
 			o = normalize(coeff * m - index * i);
-			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.spec;
-			// float w = GGX_weight(i, o, m, n, a, -1.0f);
-			// if (w > 10.0f)
-			// 	printf("high weight in xmit, dot im %.2f G %.2f / dot in %.2f dot mn %.2f\n", dot(i,m), GGX_G(i, o, m, n, a, -1.0f), dot(i, n), dot(m, n));
+			weight = GGX_weight(i, o, m, n, a, -1.0f) * inside ? pow(ray.spec, ray.t / 50.0f) : ray.spec;
 		}
 	}
 
