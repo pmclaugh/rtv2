@@ -88,6 +88,7 @@ typedef struct s_material
 
 typedef struct s_camera
 {
+	float3 pos;
 	float3 origin;
 	float3 focus;
 	float3 d_x;
@@ -218,7 +219,7 @@ static void fetch_all_tex(const Material mat, __global uchar *tex, float3 txcrd,
 {
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : mat.Ns;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
-	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : GREY;
+	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : mat.Ks;
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 }
 
@@ -531,7 +532,13 @@ __kernel void collect(	__global Ray *rays,
 		float3 through = cam.origin + cam.d_x * x + cam.d_y * y;
 		ray.direction = normalize(cam.focus - through);
 		ray.inv_dir = 1.0f / ray.direction;
-		
+
+		float f_stop = 100;
+		float3 pointAimed = cam.focus + f_stop * (cam.focus - through);
+		float3 start = cam.focus + get_random(&seed0, &seed1);
+		ray.direction = normalize(pointAimed - start);
+		ray.inv_dir = 1.0f / ray.direction;
+
 		ray.status = TRAVERSE;
 		ray.color = BLACK;
 		ray.mask = WHITE;
