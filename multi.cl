@@ -417,7 +417,7 @@ __kernel void bounce( 	__global Ray *rays,
 	{
 		//reflect
 		o = normalize(2.0f * dot(i,m) * m - i);
-		weight = GGX_weight(i, o, m, n, a, 1.0f) * inside ? pow(ray.spec, ray.t / 50.0f) : ray.spec;
+		weight = GGX_weight(i, o, m, n, a, 1.0f) * inside ? WHITE : ray.spec;
 	}
 	else
 	{
@@ -436,7 +436,7 @@ __kernel void bounce( 	__global Ray *rays,
 			//transmission
 			float coeff = index * c - sqrt(radicand);
 			o = normalize(coeff * m - index * i);
-			weight = GGX_weight(i, o, m, n, a, -1.0f) * inside ? pow(ray.spec, ray.t / 50.0f) : ray.spec;
+			weight = GGX_weight(i, o, m, n, a, -1.0f) * inside ? WHITE : ray.spec;
 		}
 	}
 

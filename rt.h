@@ -26,7 +26,7 @@
 #define UNIT_Z (cl_float3){0, 0, 1}
 
 #define DIM_IA		400
-#define DIM_PT		512
+#define DIM_PT		1024
 
 #define H_FOV M_PI_2 * 60.0 / 90.0
 
