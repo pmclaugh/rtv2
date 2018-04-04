@@ -28,11 +28,11 @@ static Scene	*combine_scenes(Scene **S, int num_files)
 	{
 		for (int k = 0; k < S[j]->mat_count; k++)
 		{
-			memcpy((void*)&all->materials[mat_i++], (void*)&S[j]->materials[k], sizeof(Material));
+			memcpy(&all->materials[mat_i++], &S[j]->materials[k], sizeof(Material));
 		}
 		for (int k = 0; k < S[j]->face_count; k++)
 		{
-			memcpy((void*)&all->faces[face_i], (void*)&S[j]->faces[k], sizeof(Face));
+			memcpy(&all->faces[face_i], &S[j]->faces[k], sizeof(Face));
 			all->faces[face_i++].mat_ind += new_mat_ind;
 		}
 		new_mat_ind += S[j]->mat_count;
@@ -46,10 +46,11 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 {
 	edit_info->scale = 1.0f;
 	edit_info->ior = 1.0f;
-	edit_info->map_Kd_path = NULL;
-	edit_info->map_Ks_path = NULL;
-	edit_info->map_Ke_path = NULL;
-	edit_info->Kd = (cl_float3){0.8, 0.2, 0.2};
+	edit_info->Kd = (cl_float3){0.5, 0.5, 0.5};
+	edit_info->Ks = (cl_float3){0.0, 0.0, 0.0};
+	edit_info->Ke = (cl_float3){0.0, 0.0, 0.0};
+	edit_info->roughness = 0.5;
+	edit_info->transparency = 0.0;
 	while (fgets(*line, 512, fp))
 	{
 		if (*line[0] == '#')

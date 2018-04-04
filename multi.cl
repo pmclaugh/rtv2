@@ -20,7 +20,7 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define MIN_BOUNCES 5
+#define MIN_BOUNCES 10
 #define RR_PROB 0.3f
 
 #define NEW 0
@@ -38,6 +38,9 @@ typedef struct s_ray {
 	float3 spec;
 	float3 trans;
 	float3 bump;
+	float Ni;
+	float roughness;
+	float transparency;
 	float3 N;
 	float t;
 	float u;
@@ -54,9 +57,7 @@ typedef struct s_ray {
 
 typedef struct s_material
 {
-	float3 Ka;
 	float3 Kd;
-	float3 Ns;
 	float3 Ks;
 	float3 Ke;
 
@@ -216,9 +217,9 @@ static float3 fetch_tex(	float3 txcrd,
 
 static void fetch_all_tex(const Material mat, __global uchar *tex, float3 txcrd, float3 *trans, float3 *bump, float3 *spec, float3 *diff)
 {
-	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : mat.Ns;
+	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : BLACK;
 	*bump = mat.b_height ? fetch_tex(txcrd, mat.b_index, mat.b_height, mat.b_width, tex) * 2.0f - 1.0f : UNIT_Z;
-	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : GREY;
+	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : mat.Ks;
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 }
 
@@ -234,8 +235,7 @@ static void fetch_NT(__global float3 *V, __global float3 *N, __global float3 *T,
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-	*N_out = dot(dir, geom_N) <= 0.0f ? sample_N : -1.0f * sample_N;
-//	*N_out = sample_N;
+	*N_out = sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
 	txcrd.x -= floor(txcrd.x);
@@ -274,47 +274,30 @@ __kernel void fetch(	__global Ray *rays,
 
 	float3 txcrd;
 	Material mat = mats[M[ray.hit_ind / 3]];
-	
+	ray.Ni = mat.Ni;
+	ray.transparency = mat.Tr;
+	ray.roughness = mat.roughness;
 	fetch_NT(V, N, T, ray.direction, ray.hit_ind, ray.u, ray.v, &ray.N, &txcrd);
 	fetch_all_tex(mat, tex, txcrd, &ray.trans, &ray.bump, &ray.spec, &ray.diff);
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
 	ray.status = BOUNCE;
 
-	// if (ray.trans.x < 1.0f)
-	// {
-	// 	ray.origin = ray.origin + ray.direction * (ray.t + NORMAL_SHIFT);
-	// 	ray.bounce_count--;
-	// 	ray.status = TRAVERSE;
-	// }
-
-	// if (dot(mat.Ke, mat.Ke) > 0.0f)
-	// {
-	// 	ray.color += SUN_BRIGHTNESS * ray.mask;
-	// 	ray.status = DEAD;
-	// }
+	if (dot(mat.Ke, mat.Ke) > 0.0f)
+	{
+		ray.color += SUN_BRIGHTNESS * ray.mask;
+		ray.status = DEAD;
+	}
 
 	rays[gid] = ray;
 }
 
 /////Bounce stuff
 
-static float GGX_D(float a, float cost)
+static float GGX_G1(float3 v, float3 n, float3 m, float a)
 {
-	float a2 = a * a;
-
-	float theta = acos(cost);
-	float cos4 = cost * cost * cost * cost;
-	float tsq = a2 + tan(theta) * tan(theta);
-	tsq *= tsq;
-	float denom = PI * cos4 * tsq;
-
-	return a2 / denom;
-}
-
-static float GGX_G1(float3 v, float3 n, float a)
-{
-	float theta = acos(fabs(dot(v, n))); //still not sure if this should be n or m.
-	//I think it has to be n, because dot(i,m) == dot(o,m) and then they'd just say g1^2
+	if (dot(v,n) == 0.0f || dot(v,m) / dot(v,n) <= 0.0f)
+		return 0.0f;
+	float theta = acos(dot(v, n));
 	if (theta != theta)
 		theta = 0.0f; //acos(1.0f) is nan for some reason.
 	float radicand = 1.0f + a * a * tan(theta) * tan(theta);
@@ -322,16 +305,17 @@ static float GGX_G1(float3 v, float3 n, float a)
 	return ret;
 }
 
-static float GGX_G(float3 i, float3 o, float3 m, float3 n, float a)
+static float GGX_G(float3 i, float3 o, float3 m, float3 n, float a, float norm_sign)
 {
 	//G is zero under these conditions, fail early to avoid nans
 	if (dot(i, m) * dot(i, n) <= 0.0f)
 		return 0.0f;
-	if (dot(o, m) * dot(o,n) <= 0.0f)
+	if (dot(o, norm_sign * m) * dot(o, norm_sign * n) <= 0.0f)
 		return 0.0f;
 
-	float g1 = GGX_G1(i, n, a);
-	float g2 = GGX_G1(o, n, a);
+	float g1 = GGX_G1(i, n, m, a);
+	float g2 = GGX_G1(o, norm_sign * n, norm_sign * m, a);
+	//printf("G %.2f\n", g1 * g2);
 	return g1 * g2;
 }
 
@@ -340,26 +324,8 @@ static float GGX_F(float3 i, float3 m, float n1, float n2)
 	float num = n1 - n2;
 	float denom = n1 + n2;
 	float r0 = (num * num) / (denom * denom);
-	float cos_term = pow(1.0f - fabs(dot(i, m)), 5.0f);
+	float cos_term = pow(1.0f - dot(i, m), 5.0f);
 	return r0 + (1.0f - r0) * cos_term;
-}
-
-static float GGX_eval(float3 i, float3 o, float3 m, float3 n, float a, float n1, float n2)
-{
-	// == F * G * D / 4 |i dot n| |o dot n|
-
-	float f = GGX_F(i, n, n1, n2);
-	float g = GGX_G(i, o, m, n, a);
-	float d = GGX_D(a, dot(m,n));
-	//currently overriding f
-	f = 1.0f;
-
-	if (f * g * d <= 0.0f)
-		return 0.0f;
-
-	float denom = 4.0f * dot(i, n) * dot(o, n);
-	float eval = (f * g * d) / denom;
-	return eval;
 }
 
 static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
@@ -378,16 +344,20 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 	float3 z = n * native_cos(theta);
 
 	float3 m = normalize(x + y + z);
-	//if (dot(m, i) * dot(n, i) < 0.0f)
-	//	m = normalize(z - x - y);
 	return m;
 }
 
-static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a)
+static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a, float norm_sign)
 {
-	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a);
-	float denom = fabs(dot(i, n)) * fabs(dot(m, n));
+	// if (fabs(dot(i,m)) > 1.0f)
+	// {
+	// 	printf("dot > 1.0f!\n");
+	// 	printf("length of i: %.2f m:%.2f\n", sqrt(dot(i, i)), sqrt(dot(m, m)));
+	// }
+	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a, norm_sign);
+	float denom = fabs(dot(i, n));// * fabs(dot(m, n));
 	float weight = denom > 0.0f ? num / denom : 0.0f;
+
 	return weight;
 }
 
@@ -399,65 +369,36 @@ __kernel void bounce( 	__global Ray *rays,
 	if (ray.status != BOUNCE)
 		return;
 
-	// ray.status = DEAD;
-	// ray.color = (1.0f + ray.N) / 2.0f;
-	// rays[gid] = ray;
-	// return;
-
 	uint seed0 = seeds[2 * gid];
 	uint seed1 = seeds[2 * gid + 1];
 	float r1 = get_random(&seed0, &seed1);
 	float r2 = get_random(&seed0, &seed1);
+	float3 weight = WHITE;
 
-	float3 n = ray.N;
 	float3 i = ray.direction * -1.0f;
-	float a = 0.1f;
-	a = (1.2f - 0.2f * sqrt(fabs(dot(i,n)))) * a; //softening approximation to reduce weight variance
-	float3 m = GGX_NDF(i, n, r1, r2, a); //sampling microfacet normal
-
-	//inside or outside the glass?
-	float norm_sign = dot(n, i) > 0.0f ? 1.0f : -1.0f;  
+	float3 o = WHITE;
+	float3 n = ray.N; //this is the N that points OUTSIDE the object.
+	int inside = dot(i, n) < 0.0f ? 1 : 0;
 	float ni, nt;
-	if (norm_sign > 0.0f)
+	if (inside)
 	{
-		ni = 1.0f;
-		nt = 1.5f;
+		n *= -1.0f;
+		ni = ray.Ni;
+		nt = 1.0f;
 	}
 	else
 	{
-		ni = 1.5f;
-		nt = 1.0f;
+		ni = 1.0f;
+		nt = ray.Ni;
 	}
-	
-	float3 o;
-	float3 weight = WHITE;
-//	if (dot(ray.spec, ray.spec) > 0.0f) 
-//	{
-//	 	if (get_random(&seed0, &seed1) <= GGX_F(i, m, ni, nt))
-//	 	{
-//	 		o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-//	 		weight *= GGX_weight(i, o, m, n, a);
-//	 	}
-//	 	else
-//	 	{
-//	 		float index = ni / nt;
-//	 		float c = dot(i,m);
-//	 		float coeff = index * c - norm_sign * sqrt(1.0f + index * (c * c - 1.0f));
-//	 		if (coeff != coeff)
-//	 		{
-//	 			//if coeff is Nan, means total internal reflection
-//	 			o = normalize(2.0f * fabs(dot(i, m)) * m - i);
-//				weight *= GGX_weight(i, o, m, n, a);
-//			}
-//	 		else
-//	 		{
-//	 			o = normalize((coeff * m) - (index * i));
-//	 			weight = GGX_weight(i, o, m, n, a) * norm_sign > 0.0f ? WHITE : ray.diff;
-//	 		}
-//		}
-//	}
-//	else
-//	{
+
+	float a = ray.roughness;
+	//a *= pow(dot(i,n), 10.0f);
+	float3 m = GGX_NDF(i, n, r1, r2, a);
+	//reflect or transmit?
+	float fresnel = GGX_F(i, m, ni, nt);
+	if (dot(ray.spec, ray.spec) == 0.0f)
+	{
 		//Cosine-weighted pure diffuse reflection
 		//local orthonormal system
 		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
@@ -471,7 +412,33 @@ __kernel void bounce( 	__global Ray *rays,
 		//combine for new direction
 		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
-//	}
+	}
+	else if (get_random(&seed0, &seed1) < fresnel)
+	{
+		//reflect
+		o = normalize(2.0f * dot(i,m) * m - i);
+		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
+	}
+	else
+	{
+		//transmit
+		float index = ni / nt;
+		float c = dot(i, m);
+		float radicand = 1.0f + index * (c * c - 1.0f);
+		if (radicand < 0.0f)
+		{
+			//Total internal reflection
+			o = normalize(2.0f * dot(i,m) * m - i);
+			weight = GGX_weight(i, o, m, n, a, 1.0f) * WHITE;
+		}
+		else
+		{
+			//transmission
+			float coeff = index * c - sqrt(radicand);
+			o = normalize(coeff * m - index * i);
+			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.spec;
+		}
+	}
 
 	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
@@ -514,12 +481,8 @@ __kernel void collect(	__global Ray *rays,
 	if (ray.status == DEAD)
 	{
 		if (ray.hit_ind == -1)
-		{
-			if (ray.bounce_count > 0)
-				output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * fabs(pow(dot(ray.direction, UNIT_Y), 1.0f));
-			else
-				output[ray.pixel_id] += 0.1f * SUN_BRIGHTNESS;
-		}
+			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
+		output[ray.pixel_id] += ray.color;
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
 	}
@@ -547,9 +510,7 @@ __kernel void collect(	__global Ray *rays,
 
 __kernel void traverse(	__global Ray *rays,
 						__global Box *boxes,
-						__global float3 *V,
-						__constant Box *boost,
-						const int boost_count)
+						__global float3 *V)
 {
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];
@@ -569,11 +530,7 @@ __kernel void traverse(	__global Ray *rays,
 	{
 		int b_i = stack[--s_i];
 		Box b;
-
-		if (b_i < 2048)
-			b = boost[b_i];
-		else
-			b = boxes[b_i];
+		b = boxes[b_i];
 
 		//check
 		if (intersect_box(ray.origin, ray.inv_dir, b, t, 0))
@@ -588,16 +545,8 @@ __kernel void traverse(	__global Ray *rays,
 			else
 			{
 				Box l, r;
-				if (b.lind < 2048)
-				{
-					l = boost[b.lind];
-					r = boost[b.rind];
-				}
-				else
-				{
-					l = boxes[b.lind];
-					r = boxes[b.rind];
-				}
+				l = boxes[b.lind];
+				r = boxes[b.rind];
                 float t_l = FLT_MAX;
                 float t_r = FLT_MAX;
                 int lhit = intersect_box(ray.origin, ray.inv_dir, l, t, &t_l);
