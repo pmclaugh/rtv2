@@ -53,6 +53,9 @@ typedef struct s_ray {
 	int pixel_id;
 	int bounce_count;
 	int status;
+
+	uint seed0;
+	uint seed1;
 }				Ray;
 
 typedef struct s_material
@@ -369,10 +372,8 @@ __kernel void bounce( 	__global Ray *rays,
 	if (ray.status != BOUNCE)
 		return;
 
-	uint seed0 = seeds[2 * gid];
-	uint seed1 = seeds[2 * gid + 1];
-	float r1 = get_random(&seed0, &seed1);
-	float r2 = get_random(&seed0, &seed1);
+	float r1 = get_random(&ray.seed0, &ray.seed1);
+	float r2 = get_random(&ray.seed0, &ray.seed1);
 	float3 weight = WHITE;
 
 	float3 i = ray.direction * -1.0f;
@@ -413,7 +414,7 @@ __kernel void bounce( 	__global Ray *rays,
 		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
 	}
-	else if (get_random(&seed0, &seed1) < fresnel)
+	else if (get_random(&ray.seed0, &ray.seed1) < fresnel)
 	{
 		//reflect
 		o = normalize(2.0f * dot(i,m) * m - i);
@@ -450,8 +451,6 @@ __kernel void bounce( 	__global Ray *rays,
 		ray.status = DEAD;
 
 	rays[gid] = ray;
-	seeds[2 * gid] = seed0;
-	seeds[2 * gid + 1] = seed1;
 }
 
 __kernel void collect(	__global Ray *rays,
@@ -463,8 +462,13 @@ __kernel void collect(	__global Ray *rays,
 {
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];
-	uint seed0 = seeds[2 * gid];
-	uint seed1 = seeds[2 * gid + 1];
+	
+	if (ray.status == NEW)
+	{
+		//can only enter collect in state NEW on first cycle
+		ray.seed0 = seeds[2 * gid];
+		ray.seed1 = seeds[2 * gid + 1];
+	}
 
 	if (ray.status == TRAVERSE)
 	{
@@ -472,7 +476,7 @@ __kernel void collect(	__global Ray *rays,
 		ray.bounce_count++;
 		if (ray.bounce_count > MIN_BOUNCES)
 		{
-			if (get_random(&seed0, &seed1) < RR_PROB)
+			if (get_random(&ray.seed0, &ray.seed1) < RR_PROB)
 				ray.mask = ray.mask / (1.0f - RR_PROB);
 			else
 				ray.status = DEAD;
@@ -488,8 +492,8 @@ __kernel void collect(	__global Ray *rays,
 	}
 	if (ray.status == NEW)
 	{
-		float x = (float)(gid % cam.width) + get_random(&seed0, &seed1);
-		float y = (float)(gid / cam.width) + get_random(&seed0, &seed1);
+		float x = (float)(gid % cam.width) + get_random(&ray.seed0, &ray.seed1);
+		float y = (float)(gid / cam.width) + get_random(&ray.seed0, &ray.seed1);
 		ray.origin = cam.focus;
 		float3 through = cam.origin + cam.d_x * x + cam.d_y * y;
 		ray.direction = normalize(cam.focus - through);
@@ -504,13 +508,74 @@ __kernel void collect(	__global Ray *rays,
 	}
 
 	rays[gid] = ray;
-	seeds[2 * gid] = seed0;
-	seeds[2 * gid + 1] = seed1;
 }
 
 __kernel void traverse(	__global Ray *rays,
 						__global Box *boxes,
 						__global float3 *V)
+{
+	int gid = get_global_id(0);
+	Ray ray = rays[gid];
+
+	if (ray.status != TRAVERSE)
+		return ;
+
+	float t = FLT_MAX;
+	float u, v;
+	int ind = -1;
+
+	int stack[32];
+	stack[0] = 0;
+	int s_i = 1;
+  
+	while (s_i)
+	{
+		int b_i = stack[--s_i];
+		Box b;
+		b = boxes[b_i];
+
+		//check
+		if (intersect_box(ray.origin, ray.inv_dir, b, t, 0))
+		{
+			if (b.rind < 0)
+			{
+				const int count = -1 * b.rind;
+				const int start = -1 * b.lind;
+				for (int i = start; i < start + count; i += 3)
+					intersect_triangle(ray.origin, ray.direction, V, i, &ind, &t, &u, &v);	
+			}
+			else
+			{
+				Box l, r;
+				l = boxes[b.lind];
+				r = boxes[b.rind];
+                float t_l = FLT_MAX;
+                float t_r = FLT_MAX;
+                int lhit = intersect_box(ray.origin, ray.inv_dir, l, t, &t_l);
+                int rhit = intersect_box(ray.origin, ray.inv_dir, r, t, &t_r);
+                if (lhit && t_l >= t_r)
+                    stack[s_i++] = b.lind;
+                if (rhit)
+                    stack[s_i++] = b.rind;
+                if (lhit && t_l < t_r)
+                    stack[s_i++] = b.lind;
+			}
+		}
+	}
+
+	ray.t = t;
+	ray.u = u;
+	ray.v = v;
+	ray.hit_ind = ind;
+	ray.status = ind == -1 ? DEAD : FETCH;
+	rays[gid] = ray;
+}
+
+__kernel void NEE(	__global Ray *rays,
+					__global Box *boxes,
+					__global float3 *V,
+					__global int3 *lights,
+					const int light_count)
 {
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];

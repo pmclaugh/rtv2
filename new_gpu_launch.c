@@ -324,6 +324,8 @@ typedef struct s_gpu_ray {
 	cl_int pixel_id;
 	cl_int bounce_count;
 	cl_int status;
+	cl_uint seed0;
+	cl_uint seed1;
 }				gpu_ray;
 
 typedef struct s_gpu_camera {
