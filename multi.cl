@@ -480,6 +480,8 @@ __kernel void collect(	__global Ray *rays,
 	}
 	if (ray.status == DEAD)
 	{
+		if (ray.hit_ind == -1)
+			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
 		output[ray.pixel_id] += ray.color;
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
