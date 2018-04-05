@@ -600,11 +600,7 @@ __kernel void nee(	__global Ray *rays,
 	//pick random point just off of that triangle
 	float r1 = get_random(&ray.seed0, &ray.seed1);
 	float r2 = get_random(&ray.seed0, &ray.seed1);
-	float3 p;
-	if (r1 + r2 <= 1.0f)
-		p = r1 * (v1 - v0) + r2 * (v2 - v0) + n * NORMAL_SHIFT;
-	else
-		p = (1.0f - r1) * (v1 - v0) + (1.0f * r2) * (v2 - v0) + n * NORMAL_SHIFT;
+	float3 p = (1.0f - sqrt(r1)) * v0 + (sqrt(r1) * (1.0f - r2)) * v1 + (r2 * sqrt(r1)) * v2;
 
 	//fail-early traverse to see if clear path
 
@@ -689,7 +685,8 @@ __kernel void nee(	__global Ray *rays,
 		}
 	}
 	if (!hit)
-		ray.color += ray.mask * ray.diff * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.N, nee_dir)), 2.0f);
+		ray.color += ray.mask * SUN_BRIGHTNESS * fmax(0.0f, dot(ray.N, nee_dir))* fmax(0.0f, dot(n, -1.0f * nee_dir));
+
 	ray.status = TRAVERSE;
 	rays[gid] = ray;
 }
