@@ -28,6 +28,7 @@
 #define FETCH 2
 #define BOUNCE 3
 #define DEAD 4
+#define NEE 5
 
 typedef struct s_ray {
 	float3 origin;
@@ -445,7 +446,7 @@ __kernel void bounce( 	__global Ray *rays)
 	ray.origin = ray.origin + ray.direction * ray.t + n * o_sign * NORMAL_SHIFT;
 	ray.direction = o;
 	ray.inv_dir = 1.0f / o;
-	ray.status = TRAVERSE;
+	ray.status = NEE;
 	if (dot(ray.mask, ray.mask) == 0.0f)
 		ray.status = DEAD;
 
@@ -473,7 +474,7 @@ __kernel void collect(	__global Ray *rays,
 	{
 		//update bounce count, do RR if needed
 		ray.bounce_count++;
-		if (ray.bounce_count > MIN_BOUNCES)
+		if (ray.bounce_count >= MIN_BOUNCES)
 		{
 			if (get_random(&ray.seed0, &ray.seed1) < RR_PROB)
 				ray.mask = ray.mask / (1.0f - RR_PROB);
@@ -582,7 +583,7 @@ __kernel void nee(	__global Ray *rays,
 	Ray ray = rays[gid];
 
 	//CHECK RAY STATUS
-	if (ray.status != BOUNCE)
+	if (ray.status != NEE)
 		return;
 
 	//pick a random light triangle
@@ -594,7 +595,7 @@ __kernel void nee(	__global Ray *rays,
 	v0 = V[light.x];
 	v1 = V[light.y];
 	v2 = V[light.z];
-	n = N[light.x];
+	n = normalize(N[light.x]);
 
 	//pick random point just off of that triangle
 	float r1 = get_random(&ray.seed0, &ray.seed1);
@@ -607,8 +608,7 @@ __kernel void nee(	__global Ray *rays,
 
 	//fail-early traverse to see if clear path
 
-	float3 orig = ray.origin + ray.direction * ray.t;
-	float3 nee_dir = p - orig;
+	float3 nee_dir = p - ray.origin;
 	float t = sqrt(dot(nee_dir, nee_dir));
 	nee_dir = normalize(nee_dir);
 
@@ -643,9 +643,9 @@ __kernel void nee(	__global Ray *rays,
 				for (int i = start; i < start + count; i += 3)
 				{
 					float this_t;
-					float3 v0 = V[start];
-					float3 v1 = V[start + 1];
-					float3 v2 = V[start + 2];
+					float3 v0 = V[i];
+					float3 v1 = V[i + 1];
+					float3 v2 = V[i + 2];
 
 					float3 e1 = v1 - v0;
 					float3 e2 = v2 - v0;
@@ -654,7 +654,7 @@ __kernel void nee(	__global Ray *rays,
 					float a = dot(h, e1);
 
 					float f = 1.0f / a;
-					float3 s = orig - v0;
+					float3 s = ray.origin - v0;
 					u = f * dot(s, h);
 					if (u < 0.0f || u > 1.0f)
 						continue;
@@ -675,8 +675,8 @@ __kernel void nee(	__global Ray *rays,
 				Box l, r;
 				l = boxes[b.lind];
 				r = boxes[b.rind];
-                float t_l = FLT_MAX;
-                float t_r = FLT_MAX;
+                float t_l = t;
+                float t_r = t;
                 int lhit = intersect_box(ray.origin, inv_nee_dir, l, t, &t_l);
                 int rhit = intersect_box(ray.origin, inv_nee_dir, r, t, &t_r);
                 if (lhit && t_l >= t_r)
@@ -690,5 +690,6 @@ __kernel void nee(	__global Ray *rays,
 	}
 	if (!hit)
 		ray.color += ray.mask * ray.diff * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.N, nee_dir)), 2.0f);
+	ray.status = TRAVERSE;
 	rays[gid] = ray;
 }

@@ -542,9 +542,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 			clEnqueueNDRangeKernel(CL->commands[i], collect[i], 1, 0, &worksize, &localsize, 0, NULL, j == 0 ? &begin: NULL);
 			clEnqueueNDRangeKernel(CL->commands[i], traverse[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
 			clEnqueueNDRangeKernel(CL->commands[i], fetch[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
-			clEnqueueNDRangeKernel(CL->commands[i], nee[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
 			clEnqueueNDRangeKernel(CL->commands[i], bounce[i], 1, 0, &worksize, &localsize, 0, NULL, j == samples - 1 ? &finish : NULL);
-			
+			clEnqueueNDRangeKernel(CL->commands[i], nee[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
 		}
 
 	for (int i = 0; i < d; i++)
