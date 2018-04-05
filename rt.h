@@ -279,6 +279,9 @@ typedef struct s_gpu_scene
 
 	cl_uint *seeds;
 	cl_uint seed_count;
+
+	cl_int3 *lights;
+	cl_uint light_count;
 }				gpu_scene;
 
 typedef struct s_file_edits

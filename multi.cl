@@ -20,7 +20,7 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define MIN_BOUNCES 10
+#define MIN_BOUNCES 5
 #define RR_PROB 0.3f
 
 #define NEW 0
@@ -364,8 +364,7 @@ static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a, float n
 	return weight;
 }
 
-__kernel void bounce( 	__global Ray *rays,
-						__global uint *seeds)
+__kernel void bounce( 	__global Ray *rays)
 {
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];
@@ -398,7 +397,7 @@ __kernel void bounce( 	__global Ray *rays,
 	float3 m = GGX_NDF(i, n, r1, r2, a);
 	//reflect or transmit?
 	float fresnel = GGX_F(i, m, ni, nt);
-	if (dot(ray.spec, ray.spec) == 0.0f)
+	if (1 || dot(ray.spec, ray.spec) == 0.0f)
 	{
 		//Cosine-weighted pure diffuse reflection
 		//local orthonormal system
@@ -449,6 +448,8 @@ __kernel void bounce( 	__global Ray *rays,
 	ray.status = TRAVERSE;
 	if (dot(ray.mask, ray.mask) == 0.0f)
 		ray.status = DEAD;
+
+	ray.N = m;
 
 	rays[gid] = ray;
 }
@@ -571,41 +572,103 @@ __kernel void traverse(	__global Ray *rays,
 	rays[gid] = ray;
 }
 
-__kernel void NEE(	__global Ray *rays,
+__kernel void nee(	__global Ray *rays,
 					__global Box *boxes,
 					__global float3 *V,
 					__global int3 *lights,
-					const int light_count)
+					const uint light_count)
 {
+
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];
 
+	//CHECK RAY STATUS
 	if (ray.status != TRAVERSE)
-		return ;
+		return;
 
-	float t = FLT_MAX;
+	//pick a random light triangle
+	int light_ind = (int)floor((float)light_count * get_random(&ray.seed0, &ray.seed1));
+	light_ind = light_ind == light_count ? 0 : light_ind;
+	int3 light = lights[light_ind];
+	
+	float3 v0, v1, v2, N;
+	v0 = V[light.x];
+	v1 = V[light.y];
+	v2 = V[light.z];
+	N = normalize(cross(v1 - v0, v2 - v0));
+
+	//pick random point just off of that triangle
+	float r1 = get_random(&ray.seed0, &ray.seed1);
+	float r2 = get_random(&ray.seed0, &ray.seed1);
+	float3 p;
+	if (r1 + r2 <= 1.0f)
+		p = r1 * (v1 - v0) + r2 * (v2 - v0);// + N * NORMAL_SHIFT;
+	else
+		p = (1.0f - r1) * (v1 - v0) + (1.0f * r2) * (v2 - v0);// + N * NORMAL_SHIFT;
+
+	//fail-early traverse to see if clear path
+
+	float3 nee_dir = p - ray.origin;
+	float t = sqrt(dot(nee_dir, nee_dir));
+	nee_dir = normalize(nee_dir);
+
+
+	// ray.color = (nee_dir + 1.0f) / 2.0f;
+	// ray.status = DEAD;
+	// rays[gid] = ray;
+	// return;
+
+
+	float3 inv_nee_dir = 1.0f / nee_dir;
 	float u, v;
-	int ind = -1;
 
 	int stack[32];
 	stack[0] = 0;
 	int s_i = 1;
+	int hit = 0;
   
-	while (s_i)
+	while (!hit && s_i)
 	{
 		int b_i = stack[--s_i];
 		Box b;
 		b = boxes[b_i];
 
 		//check
-		if (intersect_box(ray.origin, ray.inv_dir, b, t, 0))
+		if (intersect_box(ray.origin, inv_nee_dir, b, t, 0))
 		{
 			if (b.rind < 0)
 			{
 				const int count = -1 * b.rind;
 				const int start = -1 * b.lind;
 				for (int i = start; i < start + count; i += 3)
-					intersect_triangle(ray.origin, ray.direction, V, i, &ind, &t, &u, &v);	
+				{
+					float this_t;
+					float3 v0 = V[start];
+					float3 v1 = V[start + 1];
+					float3 v2 = V[start + 2];
+
+					float3 e1 = v1 - v0;
+					float3 e2 = v2 - v0;
+
+					float3 h = cross(nee_dir, e2);
+					float a = dot(h, e1);
+
+					float f = 1.0f / a;
+					float3 s = ray.origin - v0;
+					u = f * dot(s, h);
+					if (u < 0.0f || u > 1.0f)
+						continue;
+					float3 q = cross(s, e1);
+					v = f * dot(nee_dir, q);
+					if (v < 0.0f || u + v > 1.0f)
+						continue;
+					this_t = f * dot(e2, q);
+					if (this_t < t && this_t > 0.0f)
+					{
+						hit = 1;
+						break;
+					}
+				}
 			}
 			else
 			{
@@ -614,8 +677,8 @@ __kernel void NEE(	__global Ray *rays,
 				r = boxes[b.rind];
                 float t_l = FLT_MAX;
                 float t_r = FLT_MAX;
-                int lhit = intersect_box(ray.origin, ray.inv_dir, l, t, &t_l);
-                int rhit = intersect_box(ray.origin, ray.inv_dir, r, t, &t_r);
+                int lhit = intersect_box(ray.origin, inv_nee_dir, l, t, &t_l);
+                int rhit = intersect_box(ray.origin, inv_nee_dir, r, t, &t_r);
                 if (lhit && t_l >= t_r)
                     stack[s_i++] = b.lind;
                 if (rhit)
@@ -625,11 +688,7 @@ __kernel void NEE(	__global Ray *rays,
 			}
 		}
 	}
-
-	ray.t = t;
-	ray.u = u;
-	ray.v = v;
-	ray.hit_ind = ind;
-	ray.status = ind == -1 ? DEAD : FETCH;
+	if (!hit)
+		ray.color += ray.mask * SUN_BRIGHTNESS * fmax(0.0f, dot(ray.N, nee_dir));
 	rays[gid] = ray;
 }
