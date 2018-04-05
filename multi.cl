@@ -287,7 +287,7 @@ __kernel void fetch(	__global Ray *rays,
 
 	if (dot(mat.Ke, mat.Ke) > 0.0f)
 	{
-		ray.color += SUN_BRIGHTNESS * ray.mask;
+		//ray.color += SUN_BRIGHTNESS * ray.mask;
 		ray.status = DEAD;
 	}
 
@@ -449,8 +449,6 @@ __kernel void bounce( 	__global Ray *rays)
 	if (dot(ray.mask, ray.mask) == 0.0f)
 		ray.status = DEAD;
 
-	ray.N = m;
-
 	rays[gid] = ray;
 }
 
@@ -576,14 +574,15 @@ __kernel void nee(	__global Ray *rays,
 					__global Box *boxes,
 					__global float3 *V,
 					__global int3 *lights,
-					const uint light_count)
+					const uint light_count,
+					__global float3 *N)
 {
 
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];
 
 	//CHECK RAY STATUS
-	if (ray.status != TRAVERSE)
+	if (ray.status != BOUNCE)
 		return;
 
 	//pick a random light triangle
@@ -591,24 +590,25 @@ __kernel void nee(	__global Ray *rays,
 	light_ind = light_ind == light_count ? 0 : light_ind;
 	int3 light = lights[light_ind];
 	
-	float3 v0, v1, v2, N;
+	float3 v0, v1, v2, n;
 	v0 = V[light.x];
 	v1 = V[light.y];
 	v2 = V[light.z];
-	N = normalize(cross(v1 - v0, v2 - v0));
+	n = N[light.x];
 
 	//pick random point just off of that triangle
 	float r1 = get_random(&ray.seed0, &ray.seed1);
 	float r2 = get_random(&ray.seed0, &ray.seed1);
 	float3 p;
 	if (r1 + r2 <= 1.0f)
-		p = r1 * (v1 - v0) + r2 * (v2 - v0);// + N * NORMAL_SHIFT;
+		p = r1 * (v1 - v0) + r2 * (v2 - v0) + n * NORMAL_SHIFT;
 	else
-		p = (1.0f - r1) * (v1 - v0) + (1.0f * r2) * (v2 - v0);// + N * NORMAL_SHIFT;
+		p = (1.0f - r1) * (v1 - v0) + (1.0f * r2) * (v2 - v0) + n * NORMAL_SHIFT;
 
 	//fail-early traverse to see if clear path
 
-	float3 nee_dir = p - ray.origin;
+	float3 orig = ray.origin + ray.direction * ray.t;
+	float3 nee_dir = p - orig;
 	float t = sqrt(dot(nee_dir, nee_dir));
 	nee_dir = normalize(nee_dir);
 
@@ -654,7 +654,7 @@ __kernel void nee(	__global Ray *rays,
 					float a = dot(h, e1);
 
 					float f = 1.0f / a;
-					float3 s = ray.origin - v0;
+					float3 s = orig - v0;
 					u = f * dot(s, h);
 					if (u < 0.0f || u > 1.0f)
 						continue;
@@ -689,6 +689,6 @@ __kernel void nee(	__global Ray *rays,
 		}
 	}
 	if (!hit)
-		ray.color += ray.mask * SUN_BRIGHTNESS * fmax(0.0f, dot(ray.N, nee_dir));
+		ray.color += ray.mask * ray.diff * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.N, nee_dir)), 2.0f);
 	rays[gid] = ray;
 }
