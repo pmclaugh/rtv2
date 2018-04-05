@@ -21,7 +21,7 @@
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
 #define MIN_BOUNCES 5
-#define RR_PROB 0.3f
+#define RR_PROB 0.0f
 
 #define NEW 0
 #define TRAVERSE 1
@@ -607,12 +607,6 @@ __kernel void nee(	__global Ray *rays,
 	float3 nee_dir = p - ray.origin;
 	float t = sqrt(dot(nee_dir, nee_dir));
 	nee_dir = normalize(nee_dir);
-
-
-	// ray.color = (nee_dir + 1.0f) / 2.0f;
-	// ray.status = DEAD;
-	// rays[gid] = ray;
-	// return;
 
 
 	float3 inv_nee_dir = 1.0f / nee_dir;
