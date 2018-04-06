@@ -4,6 +4,10 @@
 #define MIN_EDGE_WIDTH 1000
 #define HEATMAP_RATIO .02f
 
+static cl_float3 g_focus;
+static cl_float3 g_through;
+static float g_focal_length;
+
 typedef struct	s_ray
 {
 	cl_float3	origin;
@@ -199,6 +203,10 @@ void	trace_scene(AABB *tree, t_ray *ray, int view)
 	}
 	if (ray->poly_edge && view == 2)
 		ray->color = (cl_double3){.25, .25, .25};
+	cl_float3 focal_point = vec_scale(unit_vec(vec_sub(g_focus, g_through)), g_focal_length);
+	cl_float3 dist = vec_sub(vec_scale(ray->direction, ray->t), focal_point);
+	if (fabsf(dist.x) < 5 && fabsf(dist.y) < 5 && fabsf(dist.z) < 5)
+		ray->color = (cl_double3){1, 0, 0};
 	else
 	{
 		// cl_float3	light = unit_vec((cl_float3){.5, 1, -.25});
@@ -216,7 +224,10 @@ t_ray	generate_ray(t_env *env, float x, float y)
 {
 	t_ray ray;
 	ray.origin = env->cam.focus;
+	g_focus = env->cam.focus;
 	cl_float3 through = vec_add(env->cam.origin, vec_add(vec_scale(env->cam.d_x, x), vec_scale(env->cam.d_y, y)));
+	g_through = through;
+	g_focal_length = env->cam.focal_length;
 	ray.direction = unit_vec(vec_sub(env->cam.focus, through));
 	ray.inv_dir.x = 1.0f / ray.direction.x;
 	ray.inv_dir.y = 1.0f / ray.direction.y;

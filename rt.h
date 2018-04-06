@@ -332,6 +332,9 @@ typedef struct	s_camera
 	cl_float3	origin;
 	cl_float3	d_x;
 	cl_float3	d_y;
+
+	float		focal_length;
+	float		aperture;
 }				t_camera;
 
 typedef struct s_split
@@ -422,6 +425,7 @@ typedef struct s_env
 	int			samples;
 	_Bool		render;
 	float		eps;
+	int			min_bounces;
 }				t_env;
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
@@ -444,7 +448,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info);
 Scene *scene_from_ply(char *rel_path, char *filename, File_edits edit_info);
 
 void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples);
-cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples, int first);
+cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int samples, int min_bounces, int first);
 //Scene *scene_from_obj(char *rel_path, char *filename);
 //cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
 
