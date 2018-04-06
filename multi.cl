@@ -1,4 +1,3 @@
-
 #define PI 3.14159265359f
 #define NORMAL_SHIFT 0.0003f
 #define COLLISION_ERROR 0.0001f
@@ -20,7 +19,6 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define MIN_BOUNCES 10
 #define RR_PROB 0.3f
 
 #define NEW 0
@@ -89,11 +87,14 @@ typedef struct s_material
 
 typedef struct s_camera
 {
+	float3 pos;
 	float3 origin;
 	float3 focus;
 	float3 d_x;
 	float3 d_y;
 	int width;
+	float focal_length;
+	float aperture;
 }				Camera;
 
 typedef struct s_box
@@ -459,7 +460,8 @@ __kernel void collect(	__global Ray *rays,
 						const Camera cam,
 						__global float3 *output,
 						__global int *sample_counts,
-						const int sample_max)
+						const int sample_max,
+						const int min_bounces)
 {
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];
@@ -470,7 +472,7 @@ __kernel void collect(	__global Ray *rays,
 	{
 		//update bounce count, do RR if needed
 		ray.bounce_count++;
-		if (ray.bounce_count > MIN_BOUNCES)
+		if (ray.bounce_count > min_bounces)
 		{
 			if (get_random(&seed0, &seed1) < RR_PROB)
 				ray.mask = ray.mask / (1.0f - RR_PROB);
@@ -494,7 +496,16 @@ __kernel void collect(	__global Ray *rays,
 		float3 through = cam.origin + cam.d_x * x + cam.d_y * y;
 		ray.direction = normalize(cam.focus - through);
 		ray.inv_dir = 1.0f / ray.direction;
-		
+
+		float3 aperture;
+		aperture.x = (get_random(&seed0, &seed1) - 0.5f) * cam.aperture;
+		aperture.y = (get_random(&seed0, &seed1) - 0.5f) * cam.aperture;
+		aperture.z = (get_random(&seed0, &seed1) - 0.5f) * cam.aperture;
+		float3 f_point = cam.focus + cam.focal_length * ray.direction;
+		ray.origin = cam.focus + aperture;
+		ray.direction = normalize(f_point - ray.origin);
+		ray.inv_dir = 1.0f / ray.direction;
+
 		ray.status = TRAVERSE;
 		ray.color = BLACK;
 		ray.mask = WHITE;

@@ -20,7 +20,7 @@ void		path_tracer(t_env *env)
 	int first = (env->samples == 0) ? 1 : 0;
 	env->samples += 1;
 	set_camera(&env->cam, DIM_PT);
-	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, first);
+	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, env->min_bounces, first);
 	sum_color(env->pt->total_clr, pix, DIM_PT * DIM_PT);
 	free(pix);
 	alt_composite(env->pt, DIM_PT * DIM_PT, env->samples);
