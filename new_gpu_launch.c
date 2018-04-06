@@ -49,14 +49,13 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 	gpu_mat *simple_mats = calloc(s->mat_count, sizeof(gpu_mat));
 	for (int i = 0; i < s->mat_count; i++)
 	{
-		simple_mats[i].Ka = s->materials[i].Ka;
 		simple_mats[i].Kd = s->materials[i].Kd;
-		simple_mats[i].Ns = s->materials[i].Ns;
 		simple_mats[i].Ks = s->materials[i].Ks;
 		simple_mats[i].Ke = s->materials[i].Ke;
 		simple_mats[i].Ni = s->materials[i].Ni;
 		simple_mats[i].Tr = s->materials[i].Tr;
 		simple_mats[i].roughness = s->materials[i].roughness;
+		printf("gpu mat %d will be a=%.2f, Ni=%.1f, Tr=%.1f\n", i, simple_mats[i].roughness, simple_mats[i].Ni, simple_mats[i].Tr);
 
 		if (s->materials[i].map_Kd)
 		{
@@ -149,14 +148,11 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 
 
 	//BINS
-	gpu_bin *boost;
-	cl_int boost_count;
-	gpu_bin *flat_bvh = flatten_bvh(s, &boost, &boost_count);
-	printf("BVH has been flattened (?)\n");
+	gpu_bin *flat_bvh = flatten_bvh(s);
 
 	//COMBINE
 	gpu_scene *gs = calloc(1, sizeof(gpu_scene));
-	*gs = (gpu_scene){V, T, N, M, TN, BTN, s->face_count * 3, flat_bvh, s->bin_count, boost, boost_count, h_tex, tex_size, simple_mats, s->mat_count, h_seeds, xdim * ydim * 2 * CL->numDevices * CL->numPlatforms};
+	*gs = (gpu_scene){V, T, N, M, TN, BTN, s->face_count * 3, flat_bvh, s->bin_count, h_tex, tex_size, simple_mats, s->mat_count, h_seeds, xdim * ydim * 2 * CL->numDevices * CL->numPlatforms};
 	return gs;
 }
 
@@ -313,6 +309,9 @@ typedef struct s_gpu_ray {
 	cl_float3 spec;
 	cl_float3 trans;
 	cl_float3 bump;
+	cl_float Ni;
+	cl_float roughness;
+	cl_float transparency;
 	cl_float3 N;
 	cl_float t;
 	cl_float u;
@@ -381,7 +380,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	cl_mem d_materials;
 	cl_mem d_tex;
 	cl_mem d_material_indices;
-	cl_mem d_boost;
 	
 	//per-platform
 	d_vertexes = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->V, NULL);
@@ -393,7 +391,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	d_materials = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_mat) * scene->mat_count, scene->mats, NULL);
 	d_tex = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * scene->tex_size, scene->tex, NULL);
 	d_material_indices= clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * scene->tri_count / 3, scene->M, NULL);
-	d_boost = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_bin) * scene->boost_count, scene->boost, NULL);
 
 	//per-device
 	cl_mem *d_outputs = calloc(CL->numDevices, sizeof(cl_mem));
@@ -464,15 +461,11 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		/*
 		__kernel void traverse(	__global Ray *rays,
 								__global Box *boxes,
-								__global float3 *V,
-								__constant Box *boost,
-								const int boost_count)
+								__global float3 *V)
 		*/
 		clSetKernelArg(traverse[i], 0, sizeof(cl_mem), &d_rays[i]);
 		clSetKernelArg(traverse[i], 1, sizeof(cl_mem), &d_boxes);
 		clSetKernelArg(traverse[i], 2, sizeof(cl_mem), &d_vertexes);
-		clSetKernelArg(traverse[i], 3, sizeof(cl_mem), &d_boost);
-		clSetKernelArg(traverse[i], 4, sizeof(cl_int), &scene->boost_count);
 
 		/*
 		__kernel void fetch(	__global Ray *rays,
@@ -555,7 +548,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	clReleaseMemObject(d_materials);
 	clReleaseMemObject(d_tex);
 	clReleaseMemObject(d_material_indices);
-	clReleaseMemObject(d_boost);
 	for (int i = 0; i < d; i++)
 	{
 		//kernels
