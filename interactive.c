@@ -10,7 +10,7 @@ typedef struct	s_ray
 	cl_float3	direction;
 	cl_float3	inv_dir;
 	cl_float3	N;
-	cl_double3	color;
+	cl_float3	color;
 	float		t;
 	_Bool		poly_edge;
 	float		eps;
@@ -124,7 +124,7 @@ void	trace_bvh_heatmap(AABB *tree, t_ray *ray)
 	tree->next = NULL;
 	AABB *stack = tree;
 
-	ray->color = (cl_double3){0, 0, 1};
+	ray->color = (cl_float3){0, 0, 1};
 	while(stack)
 	{
 		AABB *box = stack_pop(&stack);
@@ -153,7 +153,7 @@ void	trace_bvh(AABB *tree, t_ray *ray)
 	tree->next = NULL;
 	AABB *stack = tree;
 
-	ray->color = (cl_double3){1, 1, 1};
+	ray->color = (cl_float3){1, 1, 1};
 	while(stack)
 	{
 		AABB *box = stack_pop(&stack);
@@ -198,7 +198,7 @@ void	trace_scene(AABB *tree, t_ray *ray, int view)
 		}
 	}
 	if (ray->poly_edge && view == 2)
-		ray->color = (cl_double3){.25, .25, .25};
+		ray->color = (cl_float3){.25, .25, .25};
 	else
 	{
 		// cl_float3	light = unit_vec((cl_float3){.5, 1, -.25});
@@ -206,7 +206,7 @@ void	trace_scene(AABB *tree, t_ray *ray, int view)
 		if (cost < 0)
 			cost *= -1.0f;
 		cost = ((cost - .5) / 2) + .5; //make greyscale contrast less extreme
-		ray->color = (cl_double3){cost, cost, cost};
+		ray->color = (cl_float3){cost, cost, cost};
 	}
 }
 
@@ -228,7 +228,7 @@ t_ray	generate_ray(t_env *env, float x, float y)
 	return ray;
 }
 
-void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_double3 clr)
+void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
 {
 	// printf("------------------\n");
 	// printf("x1 = %d\ty1 = %d\nx2 = %d\ty2 = %d\n", x1, y1, x2, y2);
@@ -263,7 +263,7 @@ void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_double3 clr)
 	}
 }
 
-void	draw_ray(t_env *env, cl_float3 p1, cl_float3 p2, cl_double3 clr)
+void	draw_ray(t_env *env, cl_float3 p1, cl_float3 p2, cl_float3 clr)
 {
 	float		pix_x1, pix_y1, pix_x2, pix_y2, ratio;
 	cl_float3	dir1, dir2;
@@ -288,12 +288,13 @@ void	draw_ray(t_env *env, cl_float3 p1, cl_float3 p2, cl_double3 clr)
 
 void	ray_visualizer(t_env *env)
 {
-	cl_double3	clr = (cl_double3){1, 0, 0};
+	cl_float3	clr = (cl_float3){1, 0, 0};
 	double		clr_delta = env->depth / 6;
 	for (int i = 0; i < env->bounce_vis; i++)
 	{
-		for (int j = 0; j < DIM_PT * DIM_PT; j += env->ray_density)
-			draw_ray(env, env->rays[i][j].origin, env->rays[i + 1][j].origin, clr);
+		for (int y = 0; y < DIM_PT; y += env->ray_density)
+			for (int x = 0; x < DIM_PT; x += env->ray_density)
+				draw_ray(env, env->rays[i][x + (y * DIM_PT)].origin, env->rays[i + 1][x + (y * DIM_PT)].origin, clr);
 		if (clr.y < 1.0)
 			clr.y += clr_delta;
 		else if (clr.x > 0.0)
@@ -322,21 +323,22 @@ void	interactive(t_env *env)
 			else if (env->view == 4)
 				trace_bvh_heatmap(env->scene->bins, &ray);
 			//upscaling the resolution by 2x
-			env->ia->pixels[x + (y * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[(x + 1) + (y * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[x + ((y + 1) * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[(x + 1) + ((y + 1) * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[x + (y * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[(x + 1) + (y * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[x + ((y + 1) * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[(x + 1) + ((y + 1) * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
 		}
 	}
 	if (env->show_rays)
 		ray_visualizer(env);
-	draw_pixels(env->ia, DIM_IA, DIM_IA);
-	mlx_put_image_to_window(env->mlx, env->ia->win, env->ia->img, 0, 0);
-	if (env->show_fps)
-	{
-		float frames = 1.0f / (((float)clock() - (float)frame_start) / (float)CLOCKS_PER_SEC);
-		char *fps = NULL;
-		asprintf(&fps, "%lf", frames);
-		mlx_string_put(env->mlx, env->ia->win, 0, 0, 0x00ff00, fps);
-	}
+	draw_pixels(env->ia);
+	// draw_pixels(env->ia, DIM_IA, DIM_IA);
+	// mlx_put_image_to_window(env->mlx, env->ia->win, env->ia->img, 0, 0);
+	// if (env->show_fps)
+	// {
+	// 	float frames = 1.0f / (((float)clock() - (float)frame_start) / (float)CLOCKS_PER_SEC);
+	// 	char *fps = NULL;
+	// 	asprintf(&fps, "%lf", frames);
+	// 	mlx_string_put(env->mlx, env->ia->win, 0, 0, 0x00ff00, fps);
+	// }
 }

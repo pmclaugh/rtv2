@@ -25,7 +25,10 @@ void		set_camera(t_camera *cam, float win_dim)
 	cam->origin = vec_sub(cam->pos, vec_scale(cam->hor_ref, cam->width / 2.0));
 	cam->origin = vec_sub(cam->origin, vec_scale(cam->vert_ref, cam->height / 2.0));
 
-	cam->angle_x = atan2(cam->dir.z, cam->dir.x);
+	if (cam->dir.x == 0 && cam->dir.z == 0)
+		cam->angle_x = 3 * M_PI / 2;
+	else
+		cam->angle_x = atan2(cam->dir.z, cam->dir.x);
 }
 
 t_camera	init_camera(void)

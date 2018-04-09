@@ -5,7 +5,7 @@
 #else
 #endif
 
-void	sum_color(cl_double3 *a, cl_float3 *b, int size)
+void	sum_color(cl_float3 *a, cl_float3 *b, int size)
 {
 	for (int i = 0; i < size; i++)
 	{
@@ -17,6 +17,8 @@ void	sum_color(cl_double3 *a, cl_float3 *b, int size)
 
 void		path_tracer(t_env *env)
 {
+	if (!env->pt)
+		init_sdl_pt(env);
 	int first = (env->samples == 0) ? 1 : 0;
 	env->samples += 1;
 	set_camera(&env->cam, DIM_PT);
@@ -24,9 +26,7 @@ void		path_tracer(t_env *env)
 	sum_color(env->pt->total_clr, pix, DIM_PT * DIM_PT);
 	free(pix);
 	alt_composite(env->pt, DIM_PT * DIM_PT, env->samples);
-	draw_pixels(env->pt, DIM_PT, DIM_PT);
-	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
-	mlx_key_hook(env->pt->win, exit_hook, env);
+	draw_pixels(env->pt);
 	if (env->samples >= env->spp)
 	{
 		env->samples = 0;
@@ -38,42 +38,6 @@ void		path_tracer(t_env *env)
 			env->pt->total_clr[i].z = 0;
 		}
 	}
-}
-
-void		init_mlx_data(t_env *env)
-{
-	env->mlx = mlx_init();
-
-	env->pt = malloc(sizeof(t_mlx_data));
-	env->pt->bpp = 0;
-	env->pt->size_line = 0;
-	env->pt->endian = 0;
-	env->pt->win = mlx_new_window(env->mlx, DIM_PT, DIM_PT, "CLIVE - Path Tracer");
-	env->pt->img = mlx_new_image(env->mlx, DIM_PT, DIM_PT);
-	env->pt->imgbuff = mlx_get_data_addr(env->pt->img, &env->pt->bpp, &env->pt->size_line, &env->pt->endian);
-	env->pt->bpp /= 8;
-	env->pt->pixels = calloc(DIM_PT * DIM_PT, sizeof(cl_double3));
-	env->pt->total_clr = calloc(DIM_PT * DIM_PT, sizeof(cl_double3));
-	
-	if (env->mode == IA)
-	{
-		env->ia = malloc(sizeof(t_mlx_data));
-		env->ia->bpp = 0;
-		env->ia->size_line = 0;
-		env->ia->endian = 0;
-		env->ia->win = mlx_new_window(env->mlx, DIM_IA, DIM_IA, "CLIVE - Interactive Mode");
-		env->ia->img = mlx_new_image(env->mlx, DIM_IA, DIM_IA);
-		env->ia->imgbuff = mlx_get_data_addr(env->ia->img, &env->ia->bpp, &env->ia->size_line, &env->ia->endian);
-		env->ia->bpp /= 8;
-		env->ia->pixels = calloc(DIM_IA * DIM_IA, sizeof(cl_double3));
-		env->ia->total_clr = NULL;
-		mlx_hook(env->ia->win, 2, 0, key_press, env);
-		mlx_hook(env->ia->win, 3, 0, key_release, env);
-		mlx_hook(env->ia->win, 17, 0, exit_hook, env);
-	}
-
-	mlx_loop_hook(env->mlx, forever_loop, env);
-	mlx_loop(env->mlx);
 }
 
 t_env		*init_env(void)
@@ -100,8 +64,12 @@ t_env		*init_env(void)
 	env->depth = 6;
 	env->render = 1;
 	env->eps = 0.00005;
-	env->ray_density = 2000;
+	env->ray_density = 64;
 	env->bounce_vis = 1;
+	env->running = 1;
+
+	env->ia = NULL;
+	env->pt = NULL;
 	load_config(env);
 	return env;
 }
@@ -143,7 +111,7 @@ int 		main(int ac, char **av)
 	// 	face_list = tmp;
 	// }
 
-	init_mlx_data(env);
-	
+	run_sdl(env);
+
 	return 0;
 }

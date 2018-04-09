@@ -10,6 +10,7 @@
 #include <time.h>
 #include <pthread.h>
 #include "qdbmp/qdbmp.h"
+#include <SDL2/SDL.h>
 
 #ifdef __APPLE__
 # include <OpenCL/cl.h>
@@ -36,6 +37,8 @@
 
 #define IA 0
 #define PT 1
+
+#define FPS	60
 
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
 #define RED (cl_float3){1.0, 0.2, 0.2}
@@ -436,14 +439,22 @@ typedef struct	s_mlx_data
 	cl_double3	*total_clr;
 }				t_mlx_data;
 
+typedef struct	s_sdl
+{
+	SDL_Window		*win;
+	SDL_Surface		*screen;
+	cl_float3		*pixels;
+	cl_float3		*total_clr;
+}				t_sdl;
+
 typedef struct s_env
 {
 	t_camera	cam;
 	Scene		*scene;
 
 	void		*mlx;
-	t_mlx_data	*ia;
-	t_mlx_data	*pt;
+	t_sdl		*ia;
+	t_sdl		*pt;
 	t_key		key;
 	
 	gpu_ray		**rays;
@@ -459,6 +470,10 @@ typedef struct s_env
 
 	int			ray_density;
 	int			bounce_vis;
+
+	SDL_Event	event;
+	_Bool		running;
+
 }				t_env;
 
 AABB *sbvh(Face *faces, int *box_count, int *ref_count);
@@ -473,14 +488,11 @@ int depth(AABB *box);
 Face *ply_import(char *ply_file, File_edits edit_info, int *face_count);
 Face *object_flatten(Face *faces, int *face_count);
 
-////Old stuff
-void draw_pixels(t_mlx_data *data, int xres, int yres);
-
 void load_config(t_env *env);
 Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info);
 Scene *scene_from_ply(char *rel_path, char *filename, File_edits edit_info);
 
-void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples);
+void	alt_composite(t_sdl *sdl, int resolution, unsigned int samples);
 cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples, int first, t_env *env);
 //Scene *scene_from_obj(char *rel_path, char *filename);
 //cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
@@ -524,13 +536,6 @@ void print_clf3(cl_float3 v);
 float max3(float a, float b, float c);
 float min3(float a, float b, float c);
 
-
-//key_command.c
-int		exit_hook(int key, t_env *env);
-int		key_press(int key, t_env *env);
-int		key_release(int key, t_env *env);
-int		forever_loop(t_env *env);
-
 //read.c
 char			read_char(FILE *fp, const int file_endian, const int machine_endian);
 unsigned char	read_uchar(FILE *fp, const int file_endian, const int machine_endian);
@@ -544,16 +549,26 @@ double			read_double(FILE *fp, const int file_endian, const int machine_endian);
 //get_face.c
 int get_face_elements(char *line, int *va, int *vta, int *vna, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc, int *vd, int *vtd, int *vnd);
 
-//interactive.c
-void	ray_visualizer(t_env *env);
-void	interactive(t_env *env);
+//main.c
+void		path_tracer(t_env *env);
+t_env		*init_env(void);
 
 //camera.c
 void		set_camera(t_camera *cam, float win_dim);
 t_camera	init_camera(void);
 
+//input.c
+int		exit_hook(t_env *env);
+int		key_press(int key, t_env *env);
+int		key_release(int key, t_env *env);
+int		handle_input(t_env *env);
 
-//main.c
-void		path_tracer(t_env *env);
-void		init_mlx_data(t_env *env);
-t_env		*init_env(void);
+//interactive.c
+void	ray_visualizer(t_env *env);
+void	interactive(t_env *env);
+
+//sdl.c
+void		draw_pixels(t_sdl *sdl);
+void		init_sdl_pt(t_env *env);
+void		init_sdl_ia(t_env *env);
+void		run_sdl(t_env *env);

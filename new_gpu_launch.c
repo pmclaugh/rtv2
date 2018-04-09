@@ -272,17 +272,17 @@ void recompile(gpu_context *gpu)
 	printf("good compile\n");
 }
 
-void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples)
+void	alt_composite(t_sdl *sdl, int resolution, unsigned int samples)
 {
 	double Lw = 0.0;
 	for (int i = 0; i < resolution; i++)
 	{
 		double scale = 1.0 / (double)samples;
-		data->pixels[i].x = data->total_clr[i].x * scale;
-		data->pixels[i].y = data->total_clr[i].y * scale;
-		data->pixels[i].z = data->total_clr[i].z * scale;
+		sdl->pixels[i].x = sdl->total_clr[i].x * scale;
+		sdl->pixels[i].y = sdl->total_clr[i].y * scale;
+		sdl->pixels[i].z = sdl->total_clr[i].z * scale;
 
-		double this_lw = log(0.1 + 0.2126 * data->pixels[i].x + 0.7152 * data->pixels[i].y + 0.0722 * data->pixels[i].z);
+		double this_lw = log(0.1 + 0.2126 * sdl->pixels[i].x + 0.7152 * sdl->pixels[i].y + 0.0722 * sdl->pixels[i].z);
 		if (this_lw == this_lw)
 			Lw += this_lw;
 		else
@@ -294,13 +294,13 @@ void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples)
 
 	for (int i = 0; i < resolution; i++)
 	{
-		data->pixels[i].x = data->pixels[i].x * 0.36 / Lw;
-		data->pixels[i].y = data->pixels[i].y * 0.36 / Lw;
-		data->pixels[i].z = data->pixels[i].z * 0.36 / Lw;
+		sdl->pixels[i].x = sdl->pixels[i].x * 0.36 / Lw;
+		sdl->pixels[i].y = sdl->pixels[i].y * 0.36 / Lw;
+		sdl->pixels[i].z = sdl->pixels[i].z * 0.36 / Lw;
 
-		data->pixels[i].x = data->pixels[i].x / (data->pixels[i].x + 1.0);
-		data->pixels[i].y = data->pixels[i].y / (data->pixels[i].y + 1.0);
-		data->pixels[i].z = data->pixels[i].z / (data->pixels[i].z + 1.0);
+		sdl->pixels[i].x = sdl->pixels[i].x / (sdl->pixels[i].x + 1.0);
+		sdl->pixels[i].y = sdl->pixels[i].y / (sdl->pixels[i].y + 1.0);
+		sdl->pixels[i].z = sdl->pixels[i].z / (sdl->pixels[i].z + 1.0);
 	}
 }
 
