@@ -16,7 +16,7 @@ typedef struct	s_ray
 	float		eps;
 }				t_ray;
 
-/////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static int inside_box(t_ray *ray, AABB *box)
 {
@@ -102,6 +102,8 @@ void check_triangles(t_ray *ray, AABB *box)
 		intersect_triangle(ray, member->f->verts[0], member->f->verts[1], member->f->verts[2]);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 static void stack_push(AABB **stack, AABB *box)
 {
 	box->next = *stack;
@@ -137,7 +139,7 @@ void	trace_bvh_heatmap(AABB *tree, t_ray *ray)
 			}
 			else if (ray->color.x < 1.0f)
 				ray->color.x += HEATMAP_RATIO;
-			else
+			else if (ray->color.y > 0.0f)
 				ray->color.y -= HEATMAP_RATIO;
 			if (box->left) //boxes have either 0 or 2 children
 			{
@@ -210,57 +212,50 @@ void	trace_scene(AABB *tree, t_ray *ray, int view)
 	}
 }
 
-//////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-t_ray	generate_ray(t_env *env, float x, float y)
-{
-	t_ray ray;
-	ray.origin = env->cam.focus;
-	cl_float3 through = vec_add(env->cam.origin, vec_add(vec_scale(env->cam.d_x, x), vec_scale(env->cam.d_y, y)));
-	ray.direction = unit_vec(vec_sub(env->cam.focus, through));
-	ray.inv_dir.x = 1.0f / ray.direction.x;
-	ray.inv_dir.y = 1.0f / ray.direction.y;
-	ray.inv_dir.z = 1.0f / ray.direction.z;
-	ray.N = ray.direction;
-	ray.t = FLT_MAX;
-	ray.poly_edge = 0;
-	ray.eps = env->eps;
-	return ray;
-}
+// void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
+// {
+// 	// printf("------------------\n");
+// 	// printf("x1 = %d\ty1 = %d\nx2 = %d\ty2 = %d\n", x1, y1, x2, y2);
+// 	int		dx, dy, sx, sy, err, err2;
+
+// 	dx = abs(x2 - x1);
+// 	sx = x1 < x2 ? 1 : -1;
+// 	dy = abs(y2 - y1);
+// 	sy = y1 < y2 ? 1 : -1;
+// 	err = (dx > dy ? dx : -dy) / 2;
+// 	while (x1 != x2)
+// 	{
+// 		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
+// 			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr; //is the image being flipped horizontally?
+// 		err2 = err;
+// 		if (err2 > -dx)
+// 		{
+// 			err -= dy;
+// 			x1 += sx;
+// 		}
+// 		if (err2 < dy)
+// 		{
+// 			err += dx;
+// 			y1 += sy;
+// 		}
+// 	}
+// 	while (y1 != y2)
+// 	{
+// 		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
+// 			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr;
+// 		y1 += sy;
+// 	}
+// }
 
 void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
 {
-	// printf("------------------\n");
-	// printf("x1 = %d\ty1 = %d\nx2 = %d\ty2 = %d\n", x1, y1, x2, y2);
-	int		dx, dy, sx, sy, err, err2;
-
-	dx = abs(x2 - x1);
-	sx = x1 < x2 ? 1 : -1;
-	dy = abs(y2 - y1);
-	sy = y1 < y2 ? 1 : -1;
-	err = (dx > dy ? dx : -dy) / 2;
-	while (x1 != x2)
-	{
-		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr; //is the image being flipped horizontally?
-		err2 = err;
-		if (err2 > -dx)
-		{
-			err -= dy;
-			x1 += sx;
-		}
-		if (err2 < dy)
-		{
-			err += dx;
-			y1 += sy;
-		}
-	}
-	while (y1 != y2)
-	{
-		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr;
-		y1 += sy;
-	}
+	SDL_Renderer	*renderer = SDL_CreateRenderer(env->ia->win, -1, SDL_RENDERER_ACCELERATED);
+	SDL_SetRenderDrawColor(renderer, clr.x, clr.y, clr.z, SDL_ALPHA_OPAQUE);
+	SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
+	SDL_RenderPresent(renderer);
+	// SDL_DestroyRenderer(renderer);
 }
 
 void	draw_ray(t_env *env, cl_float3 p1, cl_float3 p2, cl_float3 clr)
@@ -304,6 +299,24 @@ void	ray_visualizer(t_env *env)
 		else
 			clr.y -= clr_delta;
 	}
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+t_ray	generate_ray(t_env *env, float x, float y)
+{
+	t_ray ray;
+	ray.origin = env->cam.focus;
+	cl_float3 through = vec_add(env->cam.origin, vec_add(vec_scale(env->cam.d_x, x), vec_scale(env->cam.d_y, y)));
+	ray.direction = unit_vec(vec_sub(env->cam.focus, through));
+	ray.inv_dir.x = 1.0f / ray.direction.x;
+	ray.inv_dir.y = 1.0f / ray.direction.y;
+	ray.inv_dir.z = 1.0f / ray.direction.z;
+	ray.N = ray.direction;
+	ray.t = FLT_MAX;
+	ray.poly_edge = 0;
+	ray.eps = env->eps;
+	return ray;
 }
 
 void	interactive(t_env *env)

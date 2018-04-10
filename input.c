@@ -9,13 +9,6 @@
 
 int		exit_hook(t_env *env)
 {
-	if (env->mode == IA)
-	{
-		SDL_DestroyWindow(env->ia->win);
-		// SDL_FreeSurface(env->ia->screen);
-		free(env->ia->pixels);
-		free(env->ia);
-	}
 	for (int i = 0; i < env->scene->mat_count; i++)
 	{
 		if (env->scene->materials[i].friendly_name != NULL)
@@ -67,11 +60,21 @@ int		exit_hook(t_env *env)
 	free(env->scene->faces);
 	free(env->scene);
 
-	SDL_DestroyWindow(env->pt->win);
-	// SDL_FreeSurface(env->pt->screen);
-	free(env->pt->pixels);
-	free(env->pt->total_clr);
-	free(env->pt);
+	if (env->mode == IA)
+	{
+		SDL_DestroyWindow(env->ia->win);
+		// SDL_FreeSurface(env->ia->screen);
+		free(env->ia->pixels);
+		free(env->ia);
+	}
+	if (env->pt)
+	{
+		SDL_DestroyWindow(env->pt->win);
+		// SDL_FreeSurface(env->pt->screen);
+		free(env->pt->pixels);
+		free(env->pt->total_clr);
+		free(env->pt);
+	}
 	
 	free(env);
 	SDL_Quit();
