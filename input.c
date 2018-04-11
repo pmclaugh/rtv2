@@ -7,7 +7,7 @@
 #define MOVE_SPEED	10
 #define TURN_SPEED	M_PI / 30
 
-int		exit_hook(t_env *env)
+void		exit_hook(t_env *env)
 {
 	for (int i = 0; i < env->scene->mat_count; i++)
 	{
@@ -80,10 +80,9 @@ int		exit_hook(t_env *env)
 	SDL_Quit();
 
 	exit(0);
-	return 0;
 }
 
-int		key_press(int key, t_env *env)
+void		key_press(int key, t_env *env)
 {
 	// printf("%d\n", key);
 	if (key == SDLK_ESCAPE)
@@ -154,10 +153,9 @@ int		key_press(int key, t_env *env)
 	// 	if (key == KEY_MINUS)
 	// 		env->key.minus = 1;
 	// }
-	return 0;
 }
 
-int		key_release(int key, t_env *env)
+void		key_release(int key, t_env *env)
 {
 	if (MOVE_KEYS || ARR_KEYS)
 	{
@@ -195,11 +193,13 @@ int		key_release(int key, t_env *env)
 	// 	if (key == KEY_MINUS)
 	// 		env->key.minus = 0;
 	// }
-	return 0;
 }
 
-int		handle_input(t_env *env)
+void		handle_input(t_env *env)
 {
+	float	interval = ((float)env->current_tick - (float)env->previous_tick) * ((float)FPS / 1000.0f);
+	float	move_dist = interval * MOVE_SPEED;
+	// printf("%f\n", FPS / interval); //printf fps
 	if (env->mode == IA && !env->render && PRESSED_KEYS)
 	{
 		if (env->key.w || env->key.a || env->key.s || env->key.d)
@@ -209,25 +209,25 @@ int		handle_input(t_env *env)
 
 			if (env->key.w || env->key.s)
 			{
-				// move_x = cos(env->cam.angle_x) * MOVE_SPEED;
-				// move_z = sin(env->cam.angle_x) * MOVE_SPEED;
+				move_x = cos(env->cam.angle_x) * move_dist;
+				move_z = sin(env->cam.angle_x) * move_dist;
 				if (env->key.w)
 				{
-					env->cam.pos = vec_add(env->cam.pos, vec_scale(env->cam.dir, MOVE_SPEED));
-					// env->cam.pos.x += move_x;
-					// env->cam.pos.z -= move_z;
+					// env->cam.pos = vec_add(env->cam.pos, vec_scale(env->cam.dir, MOVE_SPEED));
+					env->cam.pos.x += move_x;
+					env->cam.pos.z += move_z;
 				}
 				if (env->key.s)
 				{
-					env->cam.pos = vec_add(env->cam.pos, vec_scale(env->cam.dir, -MOVE_SPEED));
-					// env->cam.pos.x -= move_x;
-					// env->cam.pos.z += move_z;
+					// env->cam.pos = vec_add(env->cam.pos, vec_scale(env->cam.dir, -MOVE_SPEED));
+					env->cam.pos.x -= move_x;
+					env->cam.pos.z -= move_z;
 				}
 			}
 			if (env->key.a || env->key.d)
 			{
-				move_x = cos(env->cam.angle_x - (M_PI / 2)) * MOVE_SPEED;
-				move_z = sin(env->cam.angle_x - (M_PI / 2)) * MOVE_SPEED;
+				move_x = cos(env->cam.angle_x - (M_PI / 2)) * move_dist;
+				move_z = sin(env->cam.angle_x - (M_PI / 2)) * move_dist;
 				if (env->key.a)
 				{
 					env->cam.pos.x += move_x;
@@ -241,23 +241,23 @@ int		handle_input(t_env *env)
 			}
 		}
 		if (env->key.space)
-			env->cam.pos.y += MOVE_SPEED;
+			env->cam.pos.y += move_dist;
 		if (env->key.shift)
-			env->cam.pos.y -= MOVE_SPEED;
+			env->cam.pos.y -= move_dist;
 		if (env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
 		{
 			if (env->key.larr)
-				env->cam.dir = vec_rotate_xz(env->cam.dir, TURN_SPEED);
+				env->cam.dir = vec_rotate_xz(env->cam.dir, TURN_SPEED * interval);
 			if (env->key.rarr)
-				env->cam.dir = vec_rotate_xz(env->cam.dir, -TURN_SPEED);
+				env->cam.dir = vec_rotate_xz(env->cam.dir, -TURN_SPEED * interval);
 			if (env->key.uarr && env->cam.dir.y < 1)
 			{
-				env->cam.dir.y += .1;
+				env->cam.dir.y += .1 * interval;
 				env->cam.dir = unit_vec(env->cam.dir);
 			}
 			if (env->key.darr && env->cam.dir.y > -1)
 			{
-				env->cam.dir.y -= .1;
+				env->cam.dir.y -= .1 * interval;
 				env->cam.dir = unit_vec(env->cam.dir);
 			}
 			while (env->cam.angle_x < 0)
@@ -281,5 +281,14 @@ int		handle_input(t_env *env)
 		path_tracer(env);
 	else if (env->mode == IA)
 		interactive(env);
-	return 0;
+}
+
+void	mouse_press(int x, int y, t_env *env)
+{
+	if (x >= DIM_IA - 100 && x < DIM_IA && y < 100 && y >= 0)
+	{
+		env->view++;
+		if (env->view > 4)
+			env->view = 1;
+	}
 }

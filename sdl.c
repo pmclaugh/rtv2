@@ -11,12 +11,28 @@ void	draw_pixels(t_sdl *sdl)
 		}
 	SDL_UnlockSurface(sdl->screen);
 	SDL_UpdateWindowSurface(sdl->win);
-}
 
-void	cap_framerate(Uint32 start_tick)
-{
-	if (1000 / FPS > SDL_GetTicks() - start_tick)
-		SDL_Delay((1000 / FPS) - (SDL_GetTicks() - start_tick));
+	// SDL_Renderer	*renderer = SDL_GetRenderer(sdl->win);
+	// // SDL_Renderer	*renderer = SDL_CreateRenderer(sdl->win, -1, SDL_RENDERER_ACCELERATED);
+	// // SDL_SetRenderDrawColor(renderer, 255, 0, 0, 1);
+	// SDL_Surface		*surface = SDL_LoadBMP("Smiley.bmp");
+
+	// SDL_Texture		*texture = SDL_CreateTextureFromSurface(renderer, surface);
+
+	// SDL_RendererInfo info;
+	// SDL_GetRendererInfo(renderer, &info);
+	// // printf("%d\t%d\n", info.max_texture_width, info.max_texture_height);
+	// printf("%s\n", info.name);
+
+	// // SDL_Rect rect;
+	// // rect.x = 0;
+	// // rect.y = 0;
+	// // rect.w = 100;
+	// // rect.h = 100;
+
+	// SDL_RenderClear(renderer);
+	// SDL_RenderCopy(renderer, texture, NULL, NULL);
+	// SDL_RenderPresent(renderer);
 }
 
 void		init_sdl_pt(t_env *env)
@@ -27,6 +43,7 @@ void		init_sdl_pt(t_env *env)
 	SDL_SetSurfaceRLE(env->pt->screen, 1);
 	env->pt->pixels = calloc(sizeof(cl_float3), (DIM_PT * DIM_PT));
 	env->pt->total_clr = calloc(sizeof(cl_float3), (DIM_PT * DIM_PT));
+	env->pt->renderer = SDL_GetRenderer(env->pt->win);
 }
 
 void		init_sdl_ia(t_env *env)
@@ -37,6 +54,13 @@ void		init_sdl_ia(t_env *env)
 	SDL_SetSurfaceRLE(env->ia->screen, 1);
 	env->ia->pixels = calloc(sizeof(cl_float3), (DIM_IA * DIM_IA));
 	env->ia->total_clr = NULL;
+	env->ia->renderer = SDL_GetRenderer(env->ia->win);
+	// env->ia->renderer = SDL_CreateRenderer(env->ia->win, -1, SDL_RENDERER_ACCELERATED);
+	SDL_RendererInfo info;
+	SDL_GetRendererInfo(env->ia->renderer, &info);
+	// printf("%d\t%d\n", info.max_texture_width, info.max_texture_height);
+	// printf("%s\n", info.name);
+	// printf("%u\n", info.flags);
 }
 
 void		run_sdl(t_env *env)
@@ -45,9 +69,10 @@ void		run_sdl(t_env *env)
 	if (env->mode == IA)
 		init_sdl_ia(env);
 
-	Uint32	start_tick = SDL_GetTicks();
 	while (env->running) //MAIN LOOP
 	{
+		env->previous_tick = env->current_tick;
+		env->current_tick = SDL_GetTicks();
 		while (SDL_PollEvent(&env->event))
 		{
 			if (env->event.type == SDL_QUIT)
@@ -56,8 +81,9 @@ void		run_sdl(t_env *env)
 				key_press(env->event.key.keysym.sym, env);
 			else if (env->event.type == SDL_KEYUP)
 				key_release(env->event.key.keysym.sym, env);
+			else if (env->event.type == SDL_MOUSEBUTTONDOWN)
+				mouse_press(env->event.button.x, env->event.button.y, env);
 		}
 		handle_input(env);
-		cap_framerate(start_tick);
 	}
 }

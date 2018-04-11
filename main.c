@@ -67,6 +67,8 @@ t_env		*init_env(void)
 	env->ray_density = 64;
 	env->bounce_vis = 1;
 	env->running = 1;
+	env->current_tick = 0;
+	env->previous_tick = 0;
 
 	env->ia = NULL;
 	env->pt = NULL;

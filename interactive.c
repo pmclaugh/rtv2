@@ -214,49 +214,49 @@ void	trace_scene(AABB *tree, t_ray *ray, int view)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
-// {
-// 	// printf("------------------\n");
-// 	// printf("x1 = %d\ty1 = %d\nx2 = %d\ty2 = %d\n", x1, y1, x2, y2);
-// 	int		dx, dy, sx, sy, err, err2;
-
-// 	dx = abs(x2 - x1);
-// 	sx = x1 < x2 ? 1 : -1;
-// 	dy = abs(y2 - y1);
-// 	sy = y1 < y2 ? 1 : -1;
-// 	err = (dx > dy ? dx : -dy) / 2;
-// 	while (x1 != x2)
-// 	{
-// 		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-// 			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr; //is the image being flipped horizontally?
-// 		err2 = err;
-// 		if (err2 > -dx)
-// 		{
-// 			err -= dy;
-// 			x1 += sx;
-// 		}
-// 		if (err2 < dy)
-// 		{
-// 			err += dx;
-// 			y1 += sy;
-// 		}
-// 	}
-// 	while (y1 != y2)
-// 	{
-// 		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-// 			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr;
-// 		y1 += sy;
-// 	}
-// }
-
 void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
 {
-	SDL_Renderer	*renderer = SDL_CreateRenderer(env->ia->win, -1, SDL_RENDERER_ACCELERATED);
-	SDL_SetRenderDrawColor(renderer, clr.x, clr.y, clr.z, SDL_ALPHA_OPAQUE);
-	SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
-	SDL_RenderPresent(renderer);
-	// SDL_DestroyRenderer(renderer);
+	// printf("------------------\n");
+	// printf("x1 = %d\ty1 = %d\nx2 = %d\ty2 = %d\n", x1, y1, x2, y2);
+	int		dx, dy, sx, sy, err, err2;
+
+	dx = abs(x2 - x1);
+	sx = x1 < x2 ? 1 : -1;
+	dy = abs(y2 - y1);
+	sy = y1 < y2 ? 1 : -1;
+	err = (dx > dy ? dx : -dy) / 2;
+	while (x1 != x2)
+	{
+		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
+			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr; //is the image being flipped horizontally?
+		err2 = err;
+		if (err2 > -dx)
+		{
+			err -= dy;
+			x1 += sx;
+		}
+		if (err2 < dy)
+		{
+			err += dx;
+			y1 += sy;
+		}
+	}
+	while (y1 != y2)
+	{
+		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
+			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr;
+		y1 += sy;
+	}
 }
+
+// void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
+// {
+// 	SDL_Renderer	*renderer = SDL_CreateRenderer(env->ia->win, -1, SDL_RENDERER_ACCELERATED);
+// 	SDL_SetRenderDrawColor(renderer, clr.x, clr.y, clr.z, SDL_ALPHA_OPAQUE);
+// 	SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
+// 	SDL_RenderPresent(renderer);
+// 	// SDL_DestroyRenderer(renderer);
+// }
 
 void	draw_ray(t_env *env, cl_float3 p1, cl_float3 p2, cl_float3 clr)
 {
@@ -319,6 +319,29 @@ t_ray	generate_ray(t_env *env, float x, float y)
 	return ray;
 }
 
+void	draw_text(t_sdl *sdl)
+{
+	SDL_Renderer	*renderer = SDL_GetRenderer(sdl->win);
+	// SDL_SetRenderDrawColor(renderer, 0, 0, 0, 1);
+
+	TTF_Font	*Sans = TTF_OpenFont("Sans.ttf", 24);
+	SDL_Color White = {255, 0, 0};
+
+	SDL_Surface* surfaceMessage = TTF_RenderText_Solid(Sans, "CLIVE - Path Tracer", White);
+
+	SDL_Texture* Message = SDL_CreateTextureFromSurface(renderer, surfaceMessage);
+
+	// SDL_Rect Message_rect;
+	// Message_rect.x = 0;
+	// Message_rect.y = 0;
+	// Message_rect.w = 100;
+	// Message_rect.h = 100;
+
+	// SDL_RenderClear(renderer);
+	SDL_RenderCopy(renderer, Message, NULL, NULL);
+	SDL_RenderPresent(renderer);
+}
+
 void	interactive(t_env *env)
 {
 	clock_t	frame_start = clock();
@@ -345,6 +368,8 @@ void	interactive(t_env *env)
 	if (env->show_rays)
 		ray_visualizer(env);
 	draw_pixels(env->ia);
+	// draw_text(env->ia);
+	// SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Missing file", "File is missing. Please reinstall the program.", env->ia->win);
 	// draw_pixels(env->ia, DIM_IA, DIM_IA);
 	// mlx_put_image_to_window(env->mlx, env->ia->win, env->ia->img, 0, 0);
 	// if (env->show_fps)

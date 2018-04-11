@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include "qdbmp/qdbmp.h"
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 
 #ifdef __APPLE__
 # include <OpenCL/cl.h>
@@ -38,7 +39,7 @@
 #define IA 0
 #define PT 1
 
-#define FPS	10
+#define FPS	30
 
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
 #define RED (cl_float3){1.0, 0.2, 0.2}
@@ -421,30 +422,13 @@ float SA_overlap(Split *split);
 
 Face *stl_import(char *stl_file);
 
-// typedef struct	s_ray_vis
-// {
-// 	int			density;
-// 	int
-// }				t_ray_vis;
-
-typedef struct	s_mlx_data
-{
-	void		*win;
-	void		*img;
-	char		*imgbuff;
-	int			bpp;
-	int			size_line;
-	int			endian;
-	cl_double3	*pixels;
-	cl_double3	*total_clr;
-}				t_mlx_data;
-
 typedef struct	s_sdl
 {
 	SDL_Window		*win;
 	SDL_Surface		*screen;
 	cl_float3		*pixels;
 	cl_float3		*total_clr;
+	SDL_Renderer	*renderer;
 }				t_sdl;
 
 typedef struct s_env
@@ -452,7 +436,6 @@ typedef struct s_env
 	t_camera	cam;
 	Scene		*scene;
 
-	void		*mlx;
 	t_sdl		*ia;
 	t_sdl		*pt;
 	t_key		key;
@@ -468,11 +451,15 @@ typedef struct s_env
 	_Bool		render;
 	float		eps;
 
+	//ray visualizer
 	int			ray_density;
 	int			bounce_vis;
 
+	//SDL stuff
 	SDL_Event	event;
 	_Bool		running;
+	Uint32		current_tick;
+	Uint32		previous_tick;
 
 }				t_env;
 
@@ -558,10 +545,11 @@ void		set_camera(t_camera *cam, float win_dim);
 t_camera	init_camera(void);
 
 //input.c
-int		exit_hook(t_env *env);
-int		key_press(int key, t_env *env);
-int		key_release(int key, t_env *env);
-int		handle_input(t_env *env);
+void	exit_hook(t_env *env);
+void	key_press(int key, t_env *env);
+void	key_release(int key, t_env *env);
+void	mouse_press(int x, int y, t_env *env);
+void	handle_input(t_env *env);
 
 //interactive.c
 void	ray_visualizer(t_env *env);
