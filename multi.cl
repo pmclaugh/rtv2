@@ -285,7 +285,7 @@ __kernel void fetch(	__global Ray *rays,
 
 	if (dot(mat.Ke, mat.Ke) > 0.0f)
 	{
-		ray.color += SUN_BRIGHTNESS * ray.mask;
+		ray.color += SUN_BRIGHTNESS * mat.Ke * ray.mask;
 		ray.status = DEAD;
 	}
 
@@ -325,7 +325,7 @@ static float GGX_F(float3 i, float3 m, float n1, float n2)
 	float num = n1 - n2;
 	float denom = n1 + n2;
 	float r0 = (num * num) / (denom * denom);
-	float cos_term = pow(1.0f - dot(i, m), 5.0f);
+	float cos_term = pow(1.0f - fmax(0.0f, dot(i, m)), 5.0f);
 	return r0 + (1.0f - r0) * cos_term;
 }
 
@@ -356,11 +356,13 @@ static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a, float n
 	// 	printf("length of i: %.2f m:%.2f\n", sqrt(dot(i, i)), sqrt(dot(m, m)));
 	// }
 	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a, norm_sign);
-	float denom = fabs(dot(i, n));// * fabs(dot(m, n));
+	float denom = fabs(dot(i, n)) * fabs(dot(m, n));
 	float weight = denom > 0.0f ? num / denom : 0.0f;
 
-	return weight;
+	return fmin(10.0f, weight);
 }
+
+#define EXTINCTION 10.0f
 
 __kernel void bounce( 	__global Ray *rays,
 						__global uint *seeds)
@@ -414,13 +416,13 @@ __kernel void bounce( 	__global Ray *rays,
 		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
 	}
-	else if (get_random(&seed0, &seed1) < fresnel)
+	else if (ray.transparency == 0.0f || get_random(&seed0, &seed1) < fresnel)
 	{
 		//reflect
 		o = normalize(2.0f * dot(i,m) * m - i);
-		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
+		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec * inside ? pow(ray.spec, ray.t / EXTINCTION) : WHITE;
 	}
-	else
+	else if(ray.transparency == 1.0f)
 	{
 		//transmit
 		float index = ni / nt;
@@ -430,18 +432,34 @@ __kernel void bounce( 	__global Ray *rays,
 		{
 			//Total internal reflection
 			o = normalize(2.0f * dot(i,m) * m - i);
-			weight = GGX_weight(i, o, m, n, a, 1.0f) * WHITE;
+			weight = GGX_weight(i, o, m, n, a, 1.0f) * inside ? pow(ray.spec, ray.t / EXTINCTION) : WHITE;
 		}
 		else
 		{
 			//transmission
 			float coeff = index * c - sqrt(radicand);
-			o = normalize(coeff * m - index * i);
-			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.spec;
+			o = normalize(coeff * -1.0f * m - index * i);
+			weight = GGX_weight(i, o, m, n, a, -1.0f) * inside ? pow(ray.spec, ray.t / EXTINCTION) : ray.diff;
 		}
 	}
+	else
+	{
+		//Cosine-weighted pure diffuse reflection
+		//local orthonormal system
+		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+		float3 hem_x = cross(axis, ray.N);
+		float3 hem_y = cross(ray.N, hem_x);
 
-	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
+		//generate random direction on the unit hemisphere (cosine-weighted)
+		float r = native_sqrt(r1);
+		float theta = 2.0f * PI * r2;
+
+		//combine for new direction
+		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
+		weight = ray.diff;
+	}
+
+	float o_sign = dot(m, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
 	ray.origin = ray.origin + ray.direction * ray.t + n * o_sign * NORMAL_SHIFT;
 	ray.direction = o;
