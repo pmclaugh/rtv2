@@ -31,7 +31,7 @@ cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_in
 	int nan = 0;
 	for (int j = 0;j < resolution; j++)
 	{
-		double scale = 1.0 / (double)(count_sum[j] == 0 ? 1 : count_sum[j]);
+		double scale = 1.0 / (double)(count_sum[j] == 0 ? 1 : (double)count_sum[j]);
 		output_sum[j].x *= scale;
 		output_sum[j].y *= scale;
 		output_sum[j].z *= scale;

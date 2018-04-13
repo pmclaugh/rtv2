@@ -15,15 +15,24 @@ void	sum_color(cl_double3 *a, cl_float3 *b, int size)
 	}
 }
 
+void add_counts(int *total, int *new, int size)
+{
+	for (int i = 0; i < size; i++)
+		total[i] += new[i];
+}
+
 void		path_tracer(t_env *env)
 {
 	int first = (env->samples == 0) ? 1 : 0;
 	env->samples += 1;
 	set_camera(&env->cam, DIM_PT);
-	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, env->min_bounces, first);
+	cl_int *count = NULL;
+	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, env->min_bounces, first, &count);
 	sum_color(env->pt->total_clr, pix, DIM_PT * DIM_PT);
 	free(pix);
-	alt_composite(env->pt, DIM_PT * DIM_PT, env->samples);
+	add_counts(env->pt->count, count, DIM_PT * DIM_PT);
+	free(count);
+	alt_composite(env->pt, DIM_PT * DIM_PT, env->pt->count);
 	draw_pixels(env->pt, DIM_PT, DIM_PT);
 	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
 	mlx_key_hook(env->pt->win, exit_hook, env);
@@ -54,6 +63,7 @@ void		init_mlx_data(t_env *env)
 	env->pt->bpp /= 8;
 	env->pt->pixels = calloc(DIM_PT * DIM_PT, sizeof(cl_double3));
 	env->pt->total_clr = calloc(DIM_PT * DIM_PT, sizeof(cl_double3));
+	env->pt->count = calloc(DIM_PT * DIM_PT, sizeof(cl_int));
 	
 	if (env->mode == IA)
 	{

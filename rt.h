@@ -26,7 +26,7 @@
 #define UNIT_Z (cl_float3){0, 0, 1}
 
 #define DIM_IA		400
-#define DIM_PT		512
+#define DIM_PT		2880
 
 #define H_FOV M_PI_2 * 60.0 / 90.0
 
@@ -346,13 +346,6 @@ typedef struct s_split
 	float ratio;
 }				Split;
 
-typedef struct	s_render_token {
-	cl_event *done;
-	int device_count;
-	cl_float3 **outputs;
-	int **counts;
-}				render_token;
-
 //bvh_util.c
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
@@ -401,6 +394,7 @@ typedef struct	s_mlx_data
 	int			endian;
 	cl_double3	*pixels;
 	cl_double3	*total_clr;
+	cl_int		*count;
 }				t_mlx_data;
 
 typedef struct s_env
@@ -442,8 +436,8 @@ void load_config(t_env *env);
 Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info);
 Scene *scene_from_ply(char *rel_path, char *filename, File_edits edit_info);
 
-void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples);
-cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int samples, int min_bounces, int first);
+void	alt_composite(t_mlx_data *data, int resolution, cl_int *count);
+cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int samples, int min_bounces, int first, cl_int **count_out);
 //Scene *scene_from_obj(char *rel_path, char *filename);
 //cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
 

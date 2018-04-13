@@ -63,6 +63,16 @@ void push_tri(tri_list **list, Face *f)
 	*list = elem;
 }
 
+void free_list(tri_list *list)
+{
+	while(list)
+	{
+		tri_list *tmp = list;
+		list = list->next;
+		free(tmp);
+	}
+}
+
 static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_total, int v_total, File_edits edit_info, int file_endian)
 {
 	Face *list = NULL;
@@ -215,9 +225,13 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 						push_tri(&smoothing_hash[b], &list[i]);
 						push_tri(&smoothing_hash[c], &list[i]);
 
+						// face.verts[0] = V[a]; 
+						// face.verts[1] = V[b];
+						// face.verts[2] = V[c];
+
 						face.center = vec_scale(vec_add(vec_add(V[a], V[b]), V[c]), 1.0 / 3.0);
 
-						cl_float3 N = cross(vec_sub(V[b], V[a]), vec_sub(V[c], V[a]));
+						cl_float3 N = unit_vec(cross(vec_sub(V[b], V[a]), vec_sub(V[c], V[a])));
 						face.norms[0] = N;
 						face.norms[1] = N;
 						face.norms[2] = N;
@@ -289,6 +303,7 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 				}
 			}
 			//smoothing happens here.
+
 			//first calculate new smoothed normals
 			cl_float3 *smoothed = calloc(v_total, sizeof(cl_float3));
 			for (int i = 0; i < v_total; i++)
@@ -300,6 +315,20 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 						if ((int)(t->f->verts[j].x) == i)
 							avg = vec_add(avg, t->f->norms[j]);
 				smoothed[i] = vec_scale(avg, 1.0f / (float)count);
+				// cl_float3 avg = (cl_float3){0, 0, 0};
+				// for (tri_list *t = smoothing_hash[i]; t; t = t->next)
+				// 	for (int j = 0; j < 3; j++)
+				// 		if ((int)(t->f->verts[j].x) == i)
+				// 		{
+				// 			//determine angle at this vertex for this face
+				// 			cl_float3 e1 = unit_vec(vec_sub(V[(int)(t->f->verts[(j + 1) % 3].x)], V[(int)(t->f->verts[j].x)]));
+				// 			cl_float3 e2 = unit_vec(vec_sub(V[(int)(t->f->verts[(j + 2) % 3].x)], V[(int)(t->f->verts[j].x)]));
+				// 			float angle = acos(dot(e1, e2));
+				// 			if (angle != angle)
+				// 				angle = 0.0f;
+				// 			avg = vec_add(avg, vec_scale(t->f->norms[j], angle));
+				// 		}
+				// smoothed[i] = unit_vec(avg);
 			}
 			//then overwrite old normals with them and also correctly populate verts
 			for (int i = 0; i < v_total; i++)
@@ -310,6 +339,9 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 							t->f->verts[j] = V[(int)(t->f->verts[j].x)];
 							t->f->norms[j] = smoothed[i];
 						}
+			free(smoothed);
+			for (int i = 0; i < v_total; i++)
+				free_list(smoothing_hash[i]);
 		}
 	}
 	free(V);
@@ -418,9 +450,13 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 						push_tri(&smoothing_hash[b], &list[i]);
 						push_tri(&smoothing_hash[c], &list[i]);
 
+						// face.verts[0] = V[a];
+						// face.verts[1] = V[b];
+						// face.verts[2] = V[c];
+
 						face.center = vec_scale(vec_add(vec_add(V[a], V[b]), V[c]), 1.0 / (float)face.shape);
 
-						cl_float3 N = cross(vec_sub(V[b], V[a]), vec_sub(V[c], V[a]));
+						cl_float3 N = unit_vec(cross(vec_sub(V[b], V[a]), vec_sub(V[c], V[a])));
 						face.norms[0] = N;
 						face.norms[1] = N;
 						face.norms[2] = N;
@@ -510,6 +546,21 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 						if ((int)(t->f->verts[j].x) == i)
 							avg = vec_add(avg, t->f->norms[j]);
 				smoothed[i] = vec_scale(avg, 1.0f / (float)count);
+
+				// cl_float3 avg = (cl_float3){0, 0, 0};
+				// for (tri_list *t = smoothing_hash[i]; t; t = t->next)
+				// 	for (int j = 0; j < 3; j++)
+				// 		if ((int)(t->f->verts[j].x) == i)
+				// 		{
+				// 			//determine angle at this vertex for this face
+				// 			cl_float3 e1 = unit_vec(vec_sub(V[(int)(t->f->verts[(j + 1) % 3].x)], V[(int)(t->f->verts[j].x)]));
+				// 			cl_float3 e2 = unit_vec(vec_sub(V[(int)(t->f->verts[(j + 2) % 3].x)], V[(int)(t->f->verts[j].x)]));
+				// 			float angle = acos(dot(e1, e2));
+				// 			if (angle != angle)
+				// 				angle = 0.0f;
+				// 			avg = vec_add(avg, vec_scale(t->f->norms[j], angle));
+				// 		}
+				// smoothed[i] = unit_vec(avg);
 			}
 			//then overwrite old normals with them and also correctly populate verts
 			for (int i = 0; i < v_total; i++)
@@ -518,8 +569,13 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 						if ((int)(t->f->verts[j].x) == i)
 						{
 							t->f->verts[j] = V[(int)(t->f->verts[j].x)];
-							t->f->norms[j] = smoothed[i];
+							if (vec_mag(smoothed[i]) > 0.0f)
+								t->f->norms[j] = unit_vec(smoothed[i]);
 						}
+			
+			free(smoothed);
+			for (int i = 0; i < v_total; i++)
+				free_list(smoothing_hash[i]);
 		}
 	}
 	free(V);

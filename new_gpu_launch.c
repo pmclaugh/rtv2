@@ -268,12 +268,12 @@ void recompile(gpu_context *gpu)
 	printf("good compile\n");
 }
 
-void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples)
+void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
 {
 	double Lw = 0.0;
 	for (int i = 0; i < resolution; i++)
 	{
-		double scale = 1.0 / (double)samples;
+		double scale = 1.0 / (double)(count[i]);
 		data->pixels[i].x = data->total_clr[i].x * scale;
 		data->pixels[i].y = data->total_clr[i].y * scale;
 		data->pixels[i].z = data->total_clr[i].z * scale;
@@ -337,10 +337,10 @@ typedef struct s_gpu_camera {
 	cl_float aperture;
 }				gpu_camera;
 
-cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, int min_bounces, int first)
+cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, int min_bounces, int first, cl_int **count_out)
 {
 	//jank!
-	samples *= 12;
+	samples *= 60;
 
 	static gpu_context *CL;
 	if (!CL)
@@ -578,17 +578,16 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		{
 			output[j] = vec_add(output[j], outputs[i][j]);
 			count[j] += counts[i][j];
-			if (i == d - 1 && count[j] != 0)
-				output[j] = vec_scale(output[j], 1.0f / (float)count[j]);
 		}
 	for (int i = 0; i < CL->numDevices; i++)
 	{
 		free(counts[i]);
 		free(outputs[i]);
 	}
-	free(count);
+	//free(count);
 	free(counts);
 	free(outputs);
 
+	*count_out = count;
 	return output;
 }
