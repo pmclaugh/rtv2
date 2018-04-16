@@ -9,11 +9,7 @@
 #define BLUE (float3)(0.2f, 0.2f, 0.8f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
-#define LUMA (float3)(0.2126f, 0.7152f, 0.0722f)
-
-#define SUN (float3)(0.0f, 10000.0f, 0.0f)
 #define SUN_BRIGHTNESS 60000.0f
-#define SUN_RAD 1.0f;
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
@@ -180,6 +176,8 @@ static inline void intersect_triangle(const float3 origin, const float3 directio
 	float3 h = cross(direction, e2);
 	float a = dot(h, e1);
 
+	// if (fabs(a) < COLLISION_ERROR)
+	// 	return;
 	float f = 1.0f / a;
 	float3 s = origin - v0;
 	this_u = f * dot(s, h);
@@ -283,7 +281,7 @@ __kernel void fetch(	__global Ray *rays,
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
 	ray.status = BOUNCE;
 
-	if (dot(mat.Ke, mat.Ke) > 0.0f)
+	if (dot(ray.N, ray.direction) < 0.0f && dot(mat.Ke, mat.Ke) > 0.0f)
 	{
 		ray.color += SUN_BRIGHTNESS * mat.Ke * ray.mask;
 		ray.status = DEAD;
@@ -362,7 +360,7 @@ static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a, float n
 	return fmin(10.0f, weight);
 }
 
-#define EXTINCTION 10.0f
+#define EXTINCTION 1000.0f
 
 __kernel void bounce( 	__global Ray *rays,
 						__global uint *seeds)
@@ -371,6 +369,11 @@ __kernel void bounce( 	__global Ray *rays,
 	Ray ray = rays[gid];
 	if (ray.status != BOUNCE)
 		return;
+
+	// ray.color = (ray.N + 1.0f) / 2.0f;
+	// ray.status = DEAD;
+	// rays[gid] = ray;
+	// return;
 
 	uint seed0 = seeds[2 * gid];
 	uint seed1 = seeds[2 * gid + 1];
@@ -420,7 +423,7 @@ __kernel void bounce( 	__global Ray *rays,
 	{
 		//reflect
 		o = normalize(2.0f * dot(i,m) * m - i);
-		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec * inside ? pow(ray.spec, ray.t / EXTINCTION) : WHITE;
+		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
 	}
 	else if(ray.transparency == 1.0f)
 	{
@@ -432,14 +435,14 @@ __kernel void bounce( 	__global Ray *rays,
 		{
 			//Total internal reflection
 			o = normalize(2.0f * dot(i,m) * m - i);
-			weight = GGX_weight(i, o, m, n, a, 1.0f) * inside ? pow(ray.spec, ray.t / EXTINCTION) : WHITE;
+			weight = GGX_weight(i, o, m, n, a, 1.0f);
 		}
 		else
 		{
 			//transmission
 			float coeff = index * c - sqrt(radicand);
 			o = normalize(coeff * -1.0f * m - index * i);
-			weight = GGX_weight(i, o, m, n, a, -1.0f) * inside ? pow(ray.spec, ray.t / EXTINCTION) : ray.diff;
+			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.diff;
 		}
 	}
 	else
@@ -500,8 +503,8 @@ __kernel void collect(	__global Ray *rays,
 	}
 	if (ray.status == DEAD)
 	{
-		if (ray.hit_ind == -1)
-			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
+		// if (ray.hit_ind == -1)
+		// 	output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
 		output[ray.pixel_id] += ray.color;
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
