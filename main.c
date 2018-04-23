@@ -21,6 +21,21 @@ void add_counts(int *total, int *new, int size)
 		total[i] += new[i];
 }
 
+void save_file(t_env *env, int frame_no)
+{
+	char *filename;
+	asprintf(&filename, "frame-%d.ppm", frame_no);
+	FILE *f = fopen(filename, "w");
+	fprintf(f, "P3\n%d %d\n%d\n ",DIM_PT,DIM_PT,255);
+	for (int row=0;row<DIM_PT;row++) {
+		for (int col=DIM_PT - 1;col>=0;col--) {
+			fprintf(f,"%d %d %d ", (int)(env->pt->pixels[col + DIM_PT * row].x * 255.0f), (int)(env->pt->pixels[col + DIM_PT * row].y * 255.0f), (int)(env->pt->pixels[col + DIM_PT * row].z * 255.0f));
+		}
+		fprintf(f, "\n");
+	}
+	fclose(f);
+}
+
 void		path_tracer(t_env *env)
 {
 	int first = (env->samples == 0) ? 1 : 0;
@@ -36,6 +51,7 @@ void		path_tracer(t_env *env)
 	draw_pixels(env->pt, DIM_PT, DIM_PT);
 	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
 	mlx_key_hook(env->pt->win, exit_hook, env);
+	// save_file(env, env->samples);
 	if (env->samples >= env->spp)
 	{
 		env->samples = 0;
@@ -147,6 +163,9 @@ int 		main(int ac, char **av)
 	// 	free(face_list);
 	// 	face_list = tmp;
 	// }
+
+	printf("ready to start\n");
+	getchar();
 
 	init_mlx_data(env);
 	

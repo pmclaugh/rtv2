@@ -15,7 +15,7 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define RR_PROB 0.3f
+#define RR_PROB 0.0f
 
 #define NEW 0
 #define TRAVERSE 1
@@ -348,11 +348,6 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a, float norm_sign)
 {
-	// if (fabs(dot(i,m)) > 1.0f)
-	// {
-	// 	printf("dot > 1.0f!\n");
-	// 	printf("length of i: %.2f m:%.2f\n", sqrt(dot(i, i)), sqrt(dot(m, m)));
-	// }
 	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a, norm_sign);
 	float denom = fabs(dot(i, n)) * fabs(dot(m, n));
 	float weight = denom > 0.0f ? num / denom : 0.0f;
@@ -360,7 +355,36 @@ static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a, float n
 	return fmin(10.0f, weight);
 }
 
-#define EXTINCTION 1000.0f
+static float3 diffuse_direction(float3 N, uint *seed0, uint *seed1)
+{
+	//Cosine-weighted pure diffuse reflection
+	//local orthonormal system
+	float3 axis = fabs(N.x) > fabs(N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+	float3 hem_x = cross(axis, N);
+	float3 hem_y = cross(N, hem_x);
+
+	//generate random direction on the unit hemisphere (cosine-weighted)
+	float r1 = get_random(seed0, seed1);
+	float r2 = get_random(seed0, seed1);
+	float r = native_sqrt(r1);
+	float theta = 2.0f * PI * r2;
+
+	//combine for new direction
+	return normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + N * native_sqrt(max(0.0f, 1.0f - r1)));
+}
+
+static float3 unweighted_direction(uint *seed0, uint *seed1)
+{
+	float r1 = get_random(seed0, seed1);
+	float r = sqrt(1.0f - r1 * r1);
+	float phi = 2.0f * PI * get_random(seed0, seed1);
+
+	float sign = get_random(seed0, seed1) < 0.5f ? 1.0f : -1.0f;
+
+	return normalize((float3)(cos(phi) * r, sin(phi) * r, sign * r1));
+}
+
+#define SCATTER 0.3f
 
 __kernel void bounce( 	__global Ray *rays,
 						__global uint *seeds)
@@ -399,25 +423,21 @@ __kernel void bounce( 	__global Ray *rays,
 	}
 
 	float a = ray.roughness;
-	//a *= pow(dot(i,n), 10.0f);
 	float3 m = GGX_NDF(i, n, r1, r2, a);
 	//reflect or transmit?
 	float fresnel = GGX_F(i, m, ni, nt);
+	float subsurface = get_random(&seed0, &seed1);
 	if (dot(ray.spec, ray.spec) == 0.0f)
 	{
-		//Cosine-weighted pure diffuse reflection
-		//local orthonormal system
-		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-		float3 hem_x = cross(axis, ray.N);
-		float3 hem_y = cross(ray.N, hem_x);
-
-		//generate random direction on the unit hemisphere (cosine-weighted)
-		float r = native_sqrt(r1);
-		float theta = 2.0f * PI * r2;
-
-		//combine for new direction
-		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
+		o = diffuse_direction(ray.N, &seed0, &seed1);
 		weight = ray.diff;
+	}
+	else if (inside && log(subsurface) / (-1.0f * SCATTER) < ray.t)
+	{
+		ray.t = log(subsurface) / (-1.0f * SCATTER);
+		o = unweighted_direction(&seed0, &seed1);
+		weight = ray.diff; //unsure what goes here
+		n = BLACK;
 	}
 	else if (ray.transparency == 0.0f || get_random(&seed0, &seed1) < fresnel)
 	{
@@ -425,7 +445,7 @@ __kernel void bounce( 	__global Ray *rays,
 		o = normalize(2.0f * dot(i,m) * m - i);
 		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
 	}
-	else if(ray.transparency == 1.0f)
+	else //if(get_random(&seed0, &seed1) <= ray.transparency)
 	{
 		//transmit
 		float index = ni / nt;
@@ -443,26 +463,16 @@ __kernel void bounce( 	__global Ray *rays,
 			float coeff = index * c - sqrt(radicand);
 			o = normalize(coeff * -1.0f * m - index * i);
 			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.diff;
+			o = diffuse_direction(o, &seed0, &seed1);
 		}
 	}
-	else
-	{
-		//Cosine-weighted pure diffuse reflection
-		//local orthonormal system
-		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-		float3 hem_x = cross(axis, ray.N);
-		float3 hem_y = cross(ray.N, hem_x);
+	// else
+	// {
+	// 	o = diffuse_direction(ray.N, &seed0, &seed1);
+	// 	weight = ray.diff;
+	// }
 
-		//generate random direction on the unit hemisphere (cosine-weighted)
-		float r = native_sqrt(r1);
-		float theta = 2.0f * PI * r2;
-
-		//combine for new direction
-		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
-		weight = ray.diff;
-	}
-
-	float o_sign = dot(m, o) > 0.0f ? 1.0f : -1.0f;  
+	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
 	ray.origin = ray.origin + ray.direction * ray.t + n * o_sign * NORMAL_SHIFT;
 	ray.direction = o;
@@ -503,8 +513,6 @@ __kernel void collect(	__global Ray *rays,
 	}
 	if (ray.status == DEAD)
 	{
-		// if (ray.hit_ind == -1)
-		// 	output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
 		output[ray.pixel_id] += ray.color;
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
