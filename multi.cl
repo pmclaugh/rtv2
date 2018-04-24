@@ -14,7 +14,8 @@
 
 #define SUN (float3)(0.0f, 10000.0f, 0.0f)
 #define SUN_BRIGHTNESS 60000.0f
-#define SUN_RAD 1.0f;
+#define SUN_RAD 1.0f
+#define LIGHT_DIR 10.0f
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
@@ -288,7 +289,8 @@ __kernel void fetch(	__global Ray *rays,
 
 	if (dot(mat.Ke, mat.Ke) > 0.0f)
 	{
-		//ray.color += SUN_BRIGHTNESS * ray.mask;
+		if (ray.bounce_count == 0)
+			ray.color += SUN_BRIGHTNESS * ray.mask;
 		ray.status = DEAD;
 	}
 
@@ -679,7 +681,7 @@ __kernel void nee(	__global Ray *rays,
 		}
 	}
 	if (!hit)
-		ray.color += ray.mask * SUN_BRIGHTNESS * fmax(0.0f, dot(ray.N, nee_dir))* fmax(0.0f, dot(n, -1.0f * nee_dir));
+		ray.color += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.N, nee_dir)), LIGHT_DIR) * pow(fmax(0.0f, dot(n, -1.0f * nee_dir)), LIGHT_DIR);
 
 	ray.status = TRAVERSE;
 	rays[gid] = ray;
