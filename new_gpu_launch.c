@@ -19,6 +19,14 @@ void reseed(gpu_scene *scene)
 	scene->seeds = h_seeds;
 }
 
+int nonzero(const cl_float3 v)
+{
+	if (v.x == 0.0f && v.y == 0.0f && v.z == 0.0f)
+		return 0;
+	else
+		return 1;
+}
+
 gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 {
 	//SEEDS
@@ -115,6 +123,8 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 	TN = calloc(s->face_count, sizeof(cl_float3));
 	BTN = calloc(s->face_count, sizeof(cl_float3));
 
+	unsigned int light_count = 0;
+
 	for (int i = 0; i < s->face_count; i++)
 	{
 		Face f = s->faces[i];
@@ -144,6 +154,17 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 			TN[i] = unit_vec(vec_scale(vec_sub(vec_scale(dp1, duv2.y), vec_scale(dp2, duv1.y)), r));
 			BTN[i] = unit_vec(cross(TN[i], cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0]))));
 		}
+		if (nonzero(simple_mats[f.mat_ind].Ke))
+			light_count++;
+	}
+
+	cl_int3 *lights = calloc(light_count, sizeof(cl_int3));
+	light_count = 0;
+	for (int i = 0; i < s->face_count; i++)
+	{
+		Face f = s->faces[i];
+		if (nonzero(simple_mats[f.mat_ind].Ke))
+			lights[light_count++] = (cl_int3){i * 3, i * 3 + 1, i * 3 + 2};
 	}
 
 
@@ -152,7 +173,7 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 
 	//COMBINE
 	gpu_scene *gs = calloc(1, sizeof(gpu_scene));
-	*gs = (gpu_scene){V, T, N, M, TN, BTN, s->face_count * 3, flat_bvh, s->bin_count, h_tex, tex_size, simple_mats, s->mat_count, h_seeds, xdim * ydim * 2 * CL->numDevices * CL->numPlatforms};
+	*gs = (gpu_scene){V, T, N, M, TN, BTN, s->face_count * 3, flat_bvh, s->bin_count, h_tex, tex_size, simple_mats, s->mat_count, h_seeds, xdim * ydim * 2 * CL->numDevices * CL->numPlatforms, lights, light_count};
 	return gs;
 }
 
@@ -324,6 +345,8 @@ typedef struct s_gpu_ray {
 	cl_int pixel_id;
 	cl_int bounce_count;
 	cl_int status;
+	cl_uint seed0;
+	cl_uint seed1;
 }				gpu_ray;
 
 typedef struct s_gpu_camera {
@@ -340,7 +363,7 @@ typedef struct s_gpu_camera {
 cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, int min_bounces, int first, cl_int **count_out)
 {
 	//jank!
-	samples *= 12;
+	samples *= 6;
 
 	static gpu_context *CL;
 	if (!CL)
@@ -380,6 +403,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	cl_mem d_materials;
 	cl_mem d_tex;
 	cl_mem d_material_indices;
+	cl_mem d_lights;
 	
 	//per-platform
 	d_vertexes = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->V, NULL);
@@ -391,6 +415,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	d_materials = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_mat) * scene->mat_count, scene->mats, NULL);
 	d_tex = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * scene->tex_size, scene->tex, NULL);
 	d_material_indices= clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * scene->tri_count / 3, scene->M, NULL);
+	d_lights = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int3) * scene->light_count, scene->lights, NULL);
 
 	//per-device
 	cl_mem *d_outputs = calloc(CL->numDevices, sizeof(cl_mem));
@@ -428,6 +453,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	cl_kernel *traverse = calloc(d, sizeof(cl_kernel));
 	cl_kernel *fetch = calloc(d, sizeof(cl_kernel));
 	cl_kernel *bounce = calloc(d, sizeof(cl_kernel));
+	cl_kernel *nee = calloc(d, sizeof(cl_kernel));
 
 	for (int i = 0; i < d; i++)
 	{
@@ -435,6 +461,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		traverse[i] = clCreateKernel(CL->programs[0], "traverse", &err);
 		fetch[i] = clCreateKernel(CL->programs[0], "fetch", &err);
 		bounce[i] = clCreateKernel(CL->programs[0], "bounce", &err);
+		nee[i] = clCreateKernel(CL->programs[0], "nee", &err);
 	}
 
 	//printf("made kernels!\n");
@@ -489,11 +516,24 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		clSetKernelArg(fetch[i], 8, sizeof(cl_mem), &d_tex);
 
 		/*
-		__kernel void bounce( 	__global Ray *rays,
-								__global uint *seeds)
+		__kernel void bounce( 	__global Ray *rays)
 		*/
 		clSetKernelArg(bounce[i], 0, sizeof(cl_mem), &d_rays[i]);
-		clSetKernelArg(bounce[i], 1, sizeof(cl_mem), &d_seeds[i]);
+
+		/*
+		__kernel void nee(		__global Ray *rays,
+								__global Box *boxes,
+								__global float3 *V,
+								__global int3 *lights,
+								const uint light_count)
+		*/
+
+		clSetKernelArg(nee[i], 0, sizeof(cl_mem), &d_rays[i]);
+		clSetKernelArg(nee[i], 1, sizeof(cl_mem), &d_boxes);
+		clSetKernelArg(nee[i], 2, sizeof(cl_mem), &d_vertexes);
+		clSetKernelArg(nee[i], 3, sizeof(cl_mem), &d_lights);
+		clSetKernelArg(nee[i], 4, sizeof(cl_uint), &scene->light_count);
+		clSetKernelArg(nee[i], 5, sizeof(cl_mem), &d_normal);
 	}
 
 
@@ -510,6 +550,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 			clEnqueueNDRangeKernel(CL->commands[i], traverse[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
 			clEnqueueNDRangeKernel(CL->commands[i], fetch[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
 			clEnqueueNDRangeKernel(CL->commands[i], bounce[i], 1, 0, &worksize, &localsize, 0, NULL, j == samples - 1 ? &finish : NULL);
+			clEnqueueNDRangeKernel(CL->commands[i], nee[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
 		}
 
 	for (int i = 0; i < d; i++)

@@ -10,6 +10,8 @@
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
 #define SUN_BRIGHTNESS 60000.0f
+#define SUN_RAD 1.0f
+#define LIGHT_DIR 10.0f
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
@@ -22,6 +24,7 @@
 #define FETCH 2
 #define BOUNCE 3
 #define DEAD 4
+#define NEE 5
 
 typedef struct s_ray {
 	float3 origin;
@@ -47,6 +50,9 @@ typedef struct s_ray {
 	int pixel_id;
 	int bounce_count;
 	int status;
+
+	uint seed0;
+	uint seed1;
 }				Ray;
 
 typedef struct s_material
@@ -283,7 +289,8 @@ __kernel void fetch(	__global Ray *rays,
 
 	if (dot(ray.N, ray.direction) < 0.0f && dot(mat.Ke, mat.Ke) > 0.0f)
 	{
-		ray.color += SUN_BRIGHTNESS * mat.Ke * ray.mask;
+		if (ray.bounce_count == 0)
+		  ray.color += SUN_BRIGHTNESS * mat.Ke * ray.mask;
 		ray.status = DEAD;
 	}
 
@@ -360,25 +367,15 @@ static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a, float n
 	return fmin(10.0f, weight);
 }
 
-#define EXTINCTION 1000.0f
-
-__kernel void bounce( 	__global Ray *rays,
-						__global uint *seeds)
+__kernel void bounce( 	__global Ray *rays)
 {
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];
 	if (ray.status != BOUNCE)
 		return;
 
-	// ray.color = (ray.N + 1.0f) / 2.0f;
-	// ray.status = DEAD;
-	// rays[gid] = ray;
-	// return;
-
-	uint seed0 = seeds[2 * gid];
-	uint seed1 = seeds[2 * gid + 1];
-	float r1 = get_random(&seed0, &seed1);
-	float r2 = get_random(&seed0, &seed1);
+	float r1 = get_random(&ray.seed0, &ray.seed1);
+	float r2 = get_random(&ray.seed0, &ray.seed1);
 	float3 weight = WHITE;
 
 	float3 i = ray.direction * -1.0f;
@@ -403,7 +400,7 @@ __kernel void bounce( 	__global Ray *rays,
 	float3 m = GGX_NDF(i, n, r1, r2, a);
 	//reflect or transmit?
 	float fresnel = GGX_F(i, m, ni, nt);
-	if (dot(ray.spec, ray.spec) == 0.0f)
+	if (1 || dot(ray.spec, ray.spec) == 0.0f)
 	{
 		//Cosine-weighted pure diffuse reflection
 		//local orthonormal system
@@ -467,13 +464,11 @@ __kernel void bounce( 	__global Ray *rays,
 	ray.origin = ray.origin + ray.direction * ray.t + n * o_sign * NORMAL_SHIFT;
 	ray.direction = o;
 	ray.inv_dir = 1.0f / o;
-	ray.status = TRAVERSE;
+	ray.status = NEE;
 	if (dot(ray.mask, ray.mask) == 0.0f)
 		ray.status = DEAD;
 
 	rays[gid] = ray;
-	seeds[2 * gid] = seed0;
-	seeds[2 * gid + 1] = seed1;
 }
 
 __kernel void collect(	__global Ray *rays,
@@ -486,8 +481,13 @@ __kernel void collect(	__global Ray *rays,
 {
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];
-	uint seed0 = seeds[2 * gid];
-	uint seed1 = seeds[2 * gid + 1];
+	
+	if (ray.status == NEW)
+	{
+		//can only enter collect in state NEW on first cycle
+		ray.seed0 = seeds[2 * gid];
+		ray.seed1 = seeds[2 * gid + 1];
+	}
 
 	if (ray.status == TRAVERSE)
 	{
@@ -495,7 +495,7 @@ __kernel void collect(	__global Ray *rays,
 		ray.bounce_count++;
 		if (ray.bounce_count > min_bounces)
 		{
-			if (get_random(&seed0, &seed1) < RR_PROB)
+			if (get_random(&ray.seed0, &ray.seed1) < RR_PROB)
 				ray.mask = ray.mask / (1.0f - RR_PROB);
 			else
 				ray.status = DEAD;
@@ -511,8 +511,8 @@ __kernel void collect(	__global Ray *rays,
 	}
 	if (ray.status == NEW)
 	{
-		float x = (float)(gid % cam.width) + get_random(&seed0, &seed1);
-		float y = (float)(gid / cam.width) + get_random(&seed0, &seed1);
+		float x = (float)(gid % cam.width) + get_random(&ray.seed0, &ray.seed1);
+		float y = (float)(gid / cam.width) + get_random(&ray.seed0, &ray.seed1);
 		ray.origin = cam.focus;
 		float3 through = cam.origin + cam.d_x * x + cam.d_y * y;
 		ray.direction = normalize(cam.focus - through);
@@ -536,8 +536,6 @@ __kernel void collect(	__global Ray *rays,
 	}
 
 	rays[gid] = ray;
-	seeds[2 * gid] = seed0;
-	seeds[2 * gid + 1] = seed1;
 }
 
 __kernel void traverse(	__global Ray *rays,
@@ -598,5 +596,119 @@ __kernel void traverse(	__global Ray *rays,
 	ray.v = v;
 	ray.hit_ind = ind;
 	ray.status = ind == -1 ? DEAD : FETCH;
+	rays[gid] = ray;
+}
+
+__kernel void nee(	__global Ray *rays,
+					__global Box *boxes,
+					__global float3 *V,
+					__global int3 *lights,
+					const uint light_count,
+					__global float3 *N)
+{
+
+	int gid = get_global_id(0);
+	Ray ray = rays[gid];
+
+	//CHECK RAY STATUS
+	if (ray.status != NEE)
+		return;
+
+	//pick a random light triangle
+	int light_ind = (int)floor((float)light_count * get_random(&ray.seed0, &ray.seed1));
+	light_ind = light_ind == light_count ? 0 : light_ind;
+	int3 light = lights[light_ind];
+	
+	float3 v0, v1, v2, n;
+	v0 = V[light.x];
+	v1 = V[light.y];
+	v2 = V[light.z];
+	n = normalize(N[light.x]);
+
+	//pick random point just off of that triangle
+	float r1 = get_random(&ray.seed0, &ray.seed1);
+	float r2 = get_random(&ray.seed0, &ray.seed1);
+	float3 p = (1.0f - sqrt(r1)) * v0 + (sqrt(r1) * (1.0f - r2)) * v1 + (r2 * sqrt(r1)) * v2;
+
+	//fail-early traverse to see if clear path
+
+	float3 nee_dir = p - ray.origin;
+	float t = sqrt(dot(nee_dir, nee_dir));
+	nee_dir = normalize(nee_dir);
+
+
+	float3 inv_nee_dir = 1.0f / nee_dir;
+	float u, v;
+
+	int stack[32];
+	stack[0] = 0;
+	int s_i = 1;
+	int hit = 0;
+  
+	while (!hit && s_i)
+	{
+		int b_i = stack[--s_i];
+		Box b;
+		b = boxes[b_i];
+
+		//check
+		if (intersect_box(ray.origin, inv_nee_dir, b, t, 0))
+		{
+			if (b.rind < 0)
+			{
+				const int count = -1 * b.rind;
+				const int start = -1 * b.lind;
+				for (int i = start; i < start + count; i += 3)
+				{
+					float this_t;
+					float3 v0 = V[i];
+					float3 v1 = V[i + 1];
+					float3 v2 = V[i + 2];
+
+					float3 e1 = v1 - v0;
+					float3 e2 = v2 - v0;
+
+					float3 h = cross(nee_dir, e2);
+					float a = dot(h, e1);
+
+					float f = 1.0f / a;
+					float3 s = ray.origin - v0;
+					u = f * dot(s, h);
+					if (u < 0.0f || u > 1.0f)
+						continue;
+					float3 q = cross(s, e1);
+					v = f * dot(nee_dir, q);
+					if (v < 0.0f || u + v > 1.0f)
+						continue;
+					this_t = f * dot(e2, q);
+					if (this_t < t && this_t > 0.0f)
+					{
+						hit = 1;
+						break;
+					}
+				}
+			}
+			else
+			{
+				Box l, r;
+				l = boxes[b.lind];
+				r = boxes[b.rind];
+                float t_l = t;
+                float t_r = t;
+                int lhit = intersect_box(ray.origin, inv_nee_dir, l, t, &t_l);
+                int rhit = intersect_box(ray.origin, inv_nee_dir, r, t, &t_r);
+                if (lhit && t_l >= t_r)
+                    stack[s_i++] = b.lind;
+                if (rhit)
+                    stack[s_i++] = b.rind;
+                if (lhit && t_l < t_r)
+                    stack[s_i++] = b.lind;
+			}
+		}
+	}
+	if (!hit)
+		ray.color += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.N, nee_dir)), LIGHT_DIR) * pow(fmax(0.0f, dot(n, -1.0f * nee_dir)), LIGHT_DIR);
+
+	ray.status = TRAVERSE;
 	rays[gid] = ray;
 }
