@@ -289,12 +289,12 @@ void recompile(gpu_context *gpu)
 	printf("good compile\n");
 }
 
-void	alt_composite(t_mlx_data *data, int resolution, unsigned int samples)
+void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
 {
 	double Lw = 0.0;
 	for (int i = 0; i < resolution; i++)
 	{
-		double scale = 1.0 / (double)samples;
+		double scale = 1.0 / (double)(count[i]);
 		data->pixels[i].x = data->total_clr[i].x * scale;
 		data->pixels[i].y = data->total_clr[i].y * scale;
 		data->pixels[i].z = data->total_clr[i].z * scale;
@@ -350,14 +350,17 @@ typedef struct s_gpu_ray {
 }				gpu_ray;
 
 typedef struct s_gpu_camera {
+	cl_float3 pos;
 	cl_float3 origin;
 	cl_float3 focus;
 	cl_float3 d_x;
 	cl_float3 d_y;
 	cl_int width;
+	cl_float focal_length;
+	cl_float aperture;
 }				gpu_camera;
 
-cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int samples, int first)
+cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, int min_bounces, int first, cl_int **count_out)
 {
 	//jank!
 	samples *= 6;
@@ -374,11 +377,14 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		reseed(scene);
 
 	gpu_camera gcam;
+	gcam.pos = cam.pos;
 	gcam.focus = cam.focus;
 	gcam.origin = cam.origin;
 	gcam.d_x = cam.d_x;
 	gcam.d_y = cam.d_y;
 	gcam.width = xdim;
+	gcam.focal_length = cam.focal_length;
+	gcam.aperture = cam.aperture;;
 
 	//for simplicity assuming one platform for now. can easily be extended, see old gpu_launch.c
 
@@ -478,6 +484,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		clSetKernelArg(collect[i], 3, sizeof(cl_mem), &d_outputs[i]);
 		clSetKernelArg(collect[i], 4, sizeof(cl_mem), &d_counts[i]);
 		clSetKernelArg(collect[i], 5, sizeof(cl_int), &sample_max);
+		clSetKernelArg(collect[i], 6, sizeof(cl_int), &min_bounces);
 		/*
 		__kernel void traverse(	__global Ray *rays,
 								__global Box *boxes,
@@ -612,17 +619,16 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, unsigned int s
 		{
 			output[j] = vec_add(output[j], outputs[i][j]);
 			count[j] += counts[i][j];
-			if (i == d - 1 && count[j] != 0)
-				output[j] = vec_scale(output[j], 1.0f / (float)count[j]);
 		}
 	for (int i = 0; i < CL->numDevices; i++)
 	{
 		free(counts[i]);
 		free(outputs[i]);
 	}
-	free(count);
+	//free(count);
 	free(counts);
 	free(outputs);
 
+	*count_out = count;
 	return output;
 }

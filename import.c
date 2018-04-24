@@ -152,7 +152,7 @@ void	load_config(t_env *env)
 			sscanf(line, "import= %s\n", file_path[i]);
 			file_edits(&line, fp, &edit_info[i++]);
 		}
-		if (strncmp(line, "mode=ia", 7) == 0)
+		if (strncmp(line, "mode=", 5) == 0 && strstr(line, "ia"))
 		{
 			env->mode = IA;
 			env->render = 0;
@@ -162,8 +162,20 @@ void	load_config(t_env *env)
 		else if (strncmp(line, "camera.normal=", 14) == 0)
 			env->cam.dir = unit_vec(get_vec(line));
 		else if (strncmp(line, "samples=", 8) == 0)
-			env->spp = (unsigned int)strtoul(strchr(line, '=') + 1, NULL, 10);
+			env->spp = (int)strtoul(strchr(line, '=') + 1, NULL, 10);
+		else if (strncmp(line, "minimum.depth=", 14) == 0)
+			env->min_bounces = (int)strtoul(strchr(line, '=') + 1, NULL, 10);
+		else if (strncmp(line, "focal.length=", 13) == 0)
+			env->cam.focal_length = strtof(strchr(line, '=') + 1, NULL);
+		else if (strncmp(line, "focal.aperture=", 15) == 0)
+			env->cam.aperture = strtof(strchr(line, '=') + 1, NULL);
 	}
+	if (env->cam.focal_length < 1.0f)
+		env->cam.focal_length = 1.0f;
+	if (env->min_bounces <= 0)
+		env->min_bounces = 1;
+	if (env->spp <= 0)
+		env->spp = 1;
 	env->cam.angle_x = atan2(env->cam.dir.z, env->cam.dir.x);
 	printf("cam.pos= %.0f %.0f %.0f\n", env->cam.pos.x, env->cam.pos.y, env->cam.pos.z);
 	printf("cam.dir= %.3f %.3f %.3f\n", env->cam.dir.x, env->cam.dir.y, env->cam.dir.z);

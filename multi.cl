@@ -1,4 +1,3 @@
-
 #define PI 3.14159265359f
 #define NORMAL_SHIFT 0.0003f
 #define COLLISION_ERROR 0.0001f
@@ -10,9 +9,6 @@
 #define BLUE (float3)(0.2f, 0.2f, 0.8f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
-#define LUMA (float3)(0.2126f, 0.7152f, 0.0722f)
-
-#define SUN (float3)(0.0f, 10000.0f, 0.0f)
 #define SUN_BRIGHTNESS 60000.0f
 #define SUN_RAD 1.0f
 #define LIGHT_DIR 10.0f
@@ -21,8 +17,7 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define MIN_BOUNCES 5
-#define RR_PROB 0.0f
+#define RR_PROB 0.3f
 
 #define NEW 0
 #define TRAVERSE 1
@@ -94,11 +89,14 @@ typedef struct s_material
 
 typedef struct s_camera
 {
+	float3 pos;
 	float3 origin;
 	float3 focus;
 	float3 d_x;
 	float3 d_y;
 	int width;
+	float focal_length;
+	float aperture;
 }				Camera;
 
 typedef struct s_box
@@ -184,6 +182,8 @@ static inline void intersect_triangle(const float3 origin, const float3 directio
 	float3 h = cross(direction, e2);
 	float a = dot(h, e1);
 
+	// if (fabs(a) < COLLISION_ERROR)
+	// 	return;
 	float f = 1.0f / a;
 	float3 s = origin - v0;
 	this_u = f * dot(s, h);
@@ -287,10 +287,10 @@ __kernel void fetch(	__global Ray *rays,
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
 	ray.status = BOUNCE;
 
-	if (dot(mat.Ke, mat.Ke) > 0.0f)
+	if (dot(ray.N, ray.direction) < 0.0f && dot(mat.Ke, mat.Ke) > 0.0f)
 	{
 		if (ray.bounce_count == 0)
-			ray.color += SUN_BRIGHTNESS * ray.mask;
+		  ray.color += SUN_BRIGHTNESS * mat.Ke * ray.mask;
 		ray.status = DEAD;
 	}
 
@@ -330,7 +330,7 @@ static float GGX_F(float3 i, float3 m, float n1, float n2)
 	float num = n1 - n2;
 	float denom = n1 + n2;
 	float r0 = (num * num) / (denom * denom);
-	float cos_term = pow(1.0f - dot(i, m), 5.0f);
+	float cos_term = pow(1.0f - fmax(0.0f, dot(i, m)), 5.0f);
 	return r0 + (1.0f - r0) * cos_term;
 }
 
@@ -361,10 +361,10 @@ static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a, float n
 	// 	printf("length of i: %.2f m:%.2f\n", sqrt(dot(i, i)), sqrt(dot(m, m)));
 	// }
 	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a, norm_sign);
-	float denom = fabs(dot(i, n));// * fabs(dot(m, n));
+	float denom = fabs(dot(i, n)) * fabs(dot(m, n));
 	float weight = denom > 0.0f ? num / denom : 0.0f;
 
-	return weight;
+	return fmin(10.0f, weight);
 }
 
 __kernel void bounce( 	__global Ray *rays)
@@ -416,13 +416,13 @@ __kernel void bounce( 	__global Ray *rays)
 		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
 		weight = ray.diff;
 	}
-	else if (get_random(&ray.seed0, &ray.seed1) < fresnel)
+	else if (ray.transparency == 0.0f || get_random(&seed0, &seed1) < fresnel)
 	{
 		//reflect
 		o = normalize(2.0f * dot(i,m) * m - i);
 		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
 	}
-	else
+	else if(ray.transparency == 1.0f)
 	{
 		//transmit
 		float index = ni / nt;
@@ -432,18 +432,34 @@ __kernel void bounce( 	__global Ray *rays)
 		{
 			//Total internal reflection
 			o = normalize(2.0f * dot(i,m) * m - i);
-			weight = GGX_weight(i, o, m, n, a, 1.0f) * WHITE;
+			weight = GGX_weight(i, o, m, n, a, 1.0f);
 		}
 		else
 		{
 			//transmission
 			float coeff = index * c - sqrt(radicand);
-			o = normalize(coeff * m - index * i);
-			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.spec;
+			o = normalize(coeff * -1.0f * m - index * i);
+			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.diff;
 		}
 	}
+	else
+	{
+		//Cosine-weighted pure diffuse reflection
+		//local orthonormal system
+		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+		float3 hem_x = cross(axis, ray.N);
+		float3 hem_y = cross(ray.N, hem_x);
 
-	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
+		//generate random direction on the unit hemisphere (cosine-weighted)
+		float r = native_sqrt(r1);
+		float theta = 2.0f * PI * r2;
+
+		//combine for new direction
+		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
+		weight = ray.diff;
+	}
+
+	float o_sign = dot(m, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
 	ray.origin = ray.origin + ray.direction * ray.t + n * o_sign * NORMAL_SHIFT;
 	ray.direction = o;
@@ -460,7 +476,8 @@ __kernel void collect(	__global Ray *rays,
 						const Camera cam,
 						__global float3 *output,
 						__global int *sample_counts,
-						const int sample_max)
+						const int sample_max,
+						const int min_bounces)
 {
 	int gid = get_global_id(0);
 	Ray ray = rays[gid];
@@ -476,7 +493,7 @@ __kernel void collect(	__global Ray *rays,
 	{
 		//update bounce count, do RR if needed
 		ray.bounce_count++;
-		if (ray.bounce_count >= MIN_BOUNCES)
+		if (ray.bounce_count > min_bounces)
 		{
 			if (get_random(&ray.seed0, &ray.seed1) < RR_PROB)
 				ray.mask = ray.mask / (1.0f - RR_PROB);
@@ -486,8 +503,8 @@ __kernel void collect(	__global Ray *rays,
 	}
 	if (ray.status == DEAD)
 	{
-		if (ray.hit_ind == -1)
-			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
+		// if (ray.hit_ind == -1)
+		// 	output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
 		output[ray.pixel_id] += ray.color;
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
@@ -500,7 +517,16 @@ __kernel void collect(	__global Ray *rays,
 		float3 through = cam.origin + cam.d_x * x + cam.d_y * y;
 		ray.direction = normalize(cam.focus - through);
 		ray.inv_dir = 1.0f / ray.direction;
-		
+
+		float3 aperture;
+		aperture.x = (get_random(&seed0, &seed1) - 0.5f) * cam.aperture;
+		aperture.y = (get_random(&seed0, &seed1) - 0.5f) * cam.aperture;
+		aperture.z = (get_random(&seed0, &seed1) - 0.5f) * cam.aperture;
+		float3 f_point = cam.focus + cam.focal_length * ray.direction;
+		ray.origin = cam.focus + aperture;
+		ray.direction = normalize(f_point - ray.origin);
+		ray.inv_dir = 1.0f / ray.direction;
+
 		ray.status = TRAVERSE;
 		ray.color = BLACK;
 		ray.mask = WHITE;
