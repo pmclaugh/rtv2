@@ -21,6 +21,40 @@ void add_counts(int *total, int *new, int size)
 		total[i] += new[i];
 }
 
+void 		bidirectional_tracer(t_env *env)
+{
+	int first = (env->samples == 0) ? 1 : 0;
+	env->samples += 1;
+	set_camera(&env->cam, DIM_PT);
+	cl_int *count = NULL;
+
+
+
+	cl_float3 *pix = bidirectional(t_env *env, first);
+
+
+
+	sum_color(env->pt->total_clr, pix, DIM_PT * DIM_PT);
+	free(pix);
+	add_counts(env->pt->count, count, DIM_PT * DIM_PT);
+	free(count);
+	alt_composite(env->pt, DIM_PT * DIM_PT, env->pt->count);
+	draw_pixels(env->pt, DIM_PT, DIM_PT);
+	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
+	mlx_key_hook(env->pt->win, exit_hook, env);
+	if (env->samples >= env->spp)
+	{
+		env->samples = 0;
+		env->render = 0;
+		for (int i = 0; i < DIM_PT * DIM_PT; i++)
+		{
+			env->pt->total_clr[i].x = 0;
+			env->pt->total_clr[i].y = 0;
+			env->pt->total_clr[i].z = 0;
+		}
+	}
+}
+
 void		path_tracer(t_env *env)
 {
 	int first = (env->samples == 0) ? 1 : 0;
