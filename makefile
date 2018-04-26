@@ -18,8 +18,10 @@ SRC =	vec.c \
 		composite.c \
 		bvh_util.c \
 		stl_import.c \
-		get_face.c \
-		sdl.c
+		face.c \
+		sdl.c \
+		save_img.c \
+		3ds_import.c
 
 OBJ = $(SRC:.c=.o)
 

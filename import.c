@@ -183,7 +183,9 @@ void	load_config(t_env *env)
 		if (strstr(file[j], ".ply"))
 			S[j] = scene_from_ply(dir_path[j], file[j], edit_info[j]);
 		else if (strstr(file[j], ".obj"))
-			S[j] =  scene_from_obj(dir_path[j], file[j], edit_info[j]);
+			S[j] = scene_from_obj(dir_path[j], file[j], edit_info[j]);
+		else if (strstr(file[j], ".3ds"))
+			S[j] = scene_from_3ds(dir_path[j], file[j], edit_info[j]);
 		else
 		{
 			printf("not a valid file, must be file.ply or file.obj\n");

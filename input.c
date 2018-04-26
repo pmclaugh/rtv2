@@ -117,6 +117,8 @@ void		key_press(int key, t_env *env)
 	}
 	else if (key == SDLK_f)
 		env->show_fps = (!env->show_fps) ? 1 : 0;
+	else if (key == SDLK_z && env->pt)
+		save_img(env->pt->pixels);
 	if (MOVE_KEYS || ARR_KEYS)
 	{
 		if (MOVE_KEYS)
