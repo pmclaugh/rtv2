@@ -15,7 +15,7 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define RR_PROB 0.0f
+#define RR_PROB 0.1f
 
 #define NEW 0
 #define TRAVERSE 1
@@ -384,6 +384,12 @@ static float3 unweighted_direction(uint *seed0, uint *seed1)
 
 #define SCATTER 0.8f
 
+//macros for branch conditions to improve clarity
+#define DEFAULT (dot(ray.spec, ray.spec) == 0.0f)
+#define SUBSURFACE (inside && log(subsurface) / (-1.0f * SCATTER) < ray.t)
+#define REFLECT (ray.transparency == 0.0f || get_random(&seed0, &seed1) < fresnel)
+#define TRANSMIT (get_random(&seed0, &seed1) <= ray.transparency)
+
 __kernel void bounce( 	__global Ray *rays,
 						__global uint *seeds)
 {
@@ -425,26 +431,25 @@ __kernel void bounce( 	__global Ray *rays,
 	//reflect or transmit?
 	float fresnel = GGX_F(i, m, ni, nt);
 	float subsurface = get_random(&seed0, &seed1);
-	if (dot(ray.spec, ray.spec) == 0.0f)
+
+	if DEFAULT
 	{
 		o = diffuse_direction(ray.N, &seed0, &seed1);
 		weight = ray.diff;
 	}
-	// else if (inside && log(subsurface) / (-1.0f * SCATTER) < ray.t)
-	// {
-	// 	ray.t = log(subsurface) / (-1.0f * SCATTER);
-	// 	o = unweighted_direction(&seed0, &seed1);
-	// 	weight = ray.diff; //will be ray.subsurf
-	// }
-	else if (ray.transparency == 0.0f || get_random(&seed0, &seed1) < fresnel)
+	else if SUBSURFACE
 	{
-		//reflect
-		o = normalize(2.0f * dot(i,m) * m - i);
-		weight = ray.spec;
+		ray.t = log(subsurface) / (-1.0f * SCATTER);
+		o = unweighted_direction(&seed0, &seed1);
+		weight = ray.diff; //will be ray.subsurf
 	}
-	else if(get_random(&seed0, &seed1) <= ray.transparency)
+	else if REFLECT
 	{
-		//transmit
+		o = normalize(2.0f * dot(i,m) * m - i);
+		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
+	}
+	else if TRANSMIT
+	{
 		float index = ni / nt;
 		float c = dot(i, m);
 		float radicand = 1.0f + index * (c * c - 1.0f);
@@ -459,7 +464,7 @@ __kernel void bounce( 	__global Ray *rays,
 			//transmission
 			float coeff = index * c - sqrt(radicand);
 			o = normalize(coeff * -1.0f * m - index * i);
-			weight = ray.diff;
+			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.diff;
 		}
 	}
 	else
@@ -549,9 +554,8 @@ __kernel void traverse(	__global Ray *rays,
 						__global float3 *V)
 {
 	int gid = get_global_id(0);
-	Ray ray = rays[gid];
 
-	if (ray.status != TRAVERSE)
+	if (rays[gid].status != TRAVERSE)
 		return ;
 
 	float t = FLT_MAX;
@@ -561,6 +565,9 @@ __kernel void traverse(	__global Ray *rays,
 	int stack[32];
 	stack[0] = 0;
 	int s_i = 1;
+	const float3 origin = rays[gid].origin;
+	const float3 direction = rays[gid].direction;
+	const float3 inv_dir = rays[gid].inv_dir;
   
 	while (s_i)
 	{
@@ -569,14 +576,14 @@ __kernel void traverse(	__global Ray *rays,
 		b = boxes[b_i];
 
 		//check
-		if (intersect_box(ray.origin, ray.inv_dir, b, t, 0))
+		if (intersect_box(origin, inv_dir, b, t, 0))
 		{
 			if (b.rind < 0)
 			{
 				const int count = -1 * b.rind;
 				const int start = -1 * b.lind;
 				for (int i = start; i < start + count; i += 3)
-					intersect_triangle(ray.origin, ray.direction, V, i, &ind, &t, &u, &v);	
+					intersect_triangle(origin, direction, V, i, &ind, &t, &u, &v);	
 			}
 			else
 			{
@@ -585,8 +592,8 @@ __kernel void traverse(	__global Ray *rays,
 				r = boxes[b.rind];
                 float t_l = FLT_MAX;
                 float t_r = FLT_MAX;
-                int lhit = intersect_box(ray.origin, ray.inv_dir, l, t, &t_l);
-                int rhit = intersect_box(ray.origin, ray.inv_dir, r, t, &t_r);
+                int lhit = intersect_box(origin, inv_dir, l, t, &t_l);
+                int rhit = intersect_box(origin, inv_dir, r, t, &t_r);
                 if (lhit && t_l >= t_r)
                     stack[s_i++] = b.lind;
                 if (rhit)
@@ -597,10 +604,9 @@ __kernel void traverse(	__global Ray *rays,
 		}
 	}
 
-	ray.t = t;
-	ray.u = u;
-	ray.v = v;
-	ray.hit_ind = ind;
-	ray.status = ind == -1 ? DEAD : FETCH;
-	rays[gid] = ray;
+	rays[gid].t = t;
+	rays[gid].u = u;
+	rays[gid].v = v;
+	rays[gid].hit_ind = ind;
+	rays[gid].status = ind == -1 ? DEAD : FETCH;
 }

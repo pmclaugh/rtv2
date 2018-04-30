@@ -309,7 +309,7 @@ typedef struct s_gpu_camera {
 cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, int min_bounces, int first, cl_int **count_out)
 {
 	//jank!
-	samples *= 60;
+	samples *= 12;
 
 	static gpu_context *CL;
 	if (!CL)
