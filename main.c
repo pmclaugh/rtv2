@@ -36,6 +36,38 @@ void save_file(t_env *env, int frame_no)
 	fclose(f);
 }
 
+void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
+{
+	double Lw = 0.0;
+	for (int i = 0; i < resolution; i++)
+	{
+		double scale = count[i] > 0 ? 1.0 / (double)(count[i]) : 1;
+		data->pixels[i].x = data->total_clr[i].x * scale;
+		data->pixels[i].y = data->total_clr[i].y * scale;
+		data->pixels[i].z = data->total_clr[i].z * scale;
+
+		double this_lw = log(0.1 + 0.2126 * data->pixels[i].x + 0.7152 * data->pixels[i].y + 0.0722 * data->pixels[i].z);
+		if (this_lw == this_lw)
+			Lw += this_lw;
+		else
+			printf("NaN alert\n");
+	}
+
+	Lw /= (double)resolution;
+	Lw = exp(Lw);
+
+	for (int i = 0; i < resolution; i++)
+	{
+		data->pixels[i].x = data->pixels[i].x * 0.64 / Lw;
+		data->pixels[i].y = data->pixels[i].y * 0.64 / Lw;
+		data->pixels[i].z = data->pixels[i].z * 0.64 / Lw;
+
+		data->pixels[i].x = data->pixels[i].x / (data->pixels[i].x + 1.0);
+		data->pixels[i].y = data->pixels[i].y / (data->pixels[i].y + 1.0);
+		data->pixels[i].z = data->pixels[i].z / (data->pixels[i].z + 1.0);
+	}
+}
+
 void		path_tracer(t_env *env)
 {
 	int first = (env->samples == 0) ? 1 : 0;
@@ -131,17 +163,19 @@ int 		main(int ac, char **av)
 {
 	srand(time(NULL));
 
-	//Initialize environment with scene and intial configurations
+	//Initialize environment with scene and intial configurations, load files
 	t_env	*env = init_env();
 
 	//Build BVH
-	int box_count, ref_count;
 	sbvh(env);
+
+	//Performance metrics on BVH
 	study_tree(env->scene->bins, 100000);
 
 	//Flatten BVH
 	flatten_faces(env->scene);
 
+	//launch core loop
 	init_mlx_data(env);
 	
 	return 0;

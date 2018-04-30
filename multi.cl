@@ -423,7 +423,7 @@ __kernel void bounce( 	__global Ray *rays,
 	float a = ray.roughness;
 	float3 m = GGX_NDF(i, n, r1, r2, a);
 	//reflect or transmit?
-	float fresnel = GGX_F(i, m, ni, nt);
+	float fresnel = GGX_F(i, n, ni, nt);
 	float subsurface = get_random(&seed0, &seed1);
 	if (dot(ray.spec, ray.spec) == 0.0f)
 	{
@@ -440,35 +440,34 @@ __kernel void bounce( 	__global Ray *rays,
 	else if (ray.transparency == 0.0f || get_random(&seed0, &seed1) < fresnel)
 	{
 		//reflect
-		o = normalize(2.0f * dot(i,m) * m - i);
-		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
+		o = normalize(2.0f * dot(i,n) * n - i);
+		weight = ray.spec;
 	}
-	else //if(get_random(&seed0, &seed1) <= ray.transparency)
+	else if(get_random(&seed0, &seed1) <= ray.transparency)
 	{
 		//transmit
 		float index = ni / nt;
-		float c = dot(i, m);
+		float c = dot(i, n);
 		float radicand = 1.0f + index * (c * c - 1.0f);
 		if (radicand < 0.0f)
 		{
 			//Total internal reflection
-			o = normalize(2.0f * dot(i,m) * m - i);
-			weight = GGX_weight(i, o, m, n, a, 1.0f);
+			o = normalize(2.0f * dot(i,n) * n - i);
+			weight = WHITE;
 		}
 		else
 		{
 			//transmission
 			float coeff = index * c - sqrt(radicand);
-			o = normalize(coeff * -1.0f * m - index * i);
-			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.diff;
-			o = diffuse_direction(o, &seed0, &seed1);
+			o = normalize(coeff * -1.0f * n - index * i);
+			weight = ray.diff;
 		}
 	}
-	// else
-	// {
-	// 	o = diffuse_direction(ray.N, &seed0, &seed1);
-	// 	weight = ray.diff;
-	// }
+	else
+	{
+		o = diffuse_direction(ray.N, &seed0, &seed1);
+		weight = ray.diff;
+	}
 
 	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
