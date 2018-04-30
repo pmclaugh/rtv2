@@ -382,7 +382,7 @@ static float3 unweighted_direction(uint *seed0, uint *seed1)
 	return normalize((float3)(cos(phi) * r, sin(phi) * r, sign * r1));
 }
 
-#define SCATTER 0.3f
+#define SCATTER 0.8f
 
 __kernel void bounce( 	__global Ray *rays,
 						__global uint *seeds)
@@ -423,53 +423,52 @@ __kernel void bounce( 	__global Ray *rays,
 	float a = ray.roughness;
 	float3 m = GGX_NDF(i, n, r1, r2, a);
 	//reflect or transmit?
-	float fresnel = GGX_F(i, n, ni, nt);
+	float fresnel = GGX_F(i, m, ni, nt);
 	float subsurface = get_random(&seed0, &seed1);
 	if (dot(ray.spec, ray.spec) == 0.0f)
 	{
 		o = diffuse_direction(ray.N, &seed0, &seed1);
 		weight = ray.diff;
 	}
-	else if (inside && log(subsurface) / (-1.0f * SCATTER) < ray.t)
-	{
-		ray.t = log(subsurface) / (-1.0f * SCATTER);
-		o = unweighted_direction(&seed0, &seed1);
-		weight = ray.diff; //unsure what goes here
-		n = BLACK;
-	}
+	// else if (inside && log(subsurface) / (-1.0f * SCATTER) < ray.t)
+	// {
+	// 	ray.t = log(subsurface) / (-1.0f * SCATTER);
+	// 	o = unweighted_direction(&seed0, &seed1);
+	// 	weight = ray.diff; //will be ray.subsurf
+	// }
 	else if (ray.transparency == 0.0f || get_random(&seed0, &seed1) < fresnel)
 	{
 		//reflect
-		o = normalize(2.0f * dot(i,n) * n - i);
+		o = normalize(2.0f * dot(i,m) * m - i);
 		weight = ray.spec;
 	}
 	else if(get_random(&seed0, &seed1) <= ray.transparency)
 	{
 		//transmit
 		float index = ni / nt;
-		float c = dot(i, n);
+		float c = dot(i, m);
 		float radicand = 1.0f + index * (c * c - 1.0f);
 		if (radicand < 0.0f)
 		{
 			//Total internal reflection
-			o = normalize(2.0f * dot(i,n) * n - i);
+			o = normalize(2.0f * dot(i,m) * m - i);
 			weight = WHITE;
 		}
 		else
 		{
 			//transmission
 			float coeff = index * c - sqrt(radicand);
-			o = normalize(coeff * -1.0f * n - index * i);
+			o = normalize(coeff * -1.0f * m - index * i);
 			weight = ray.diff;
 		}
 	}
 	else
 	{
 		o = diffuse_direction(ray.N, &seed0, &seed1);
-		weight = ray.diff;
+		weight = WHITE / 1.1f;
 	}
 
-	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
+	float o_sign = dot(m, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
 	ray.origin = ray.origin + ray.direction * ray.t + n * o_sign * NORMAL_SHIFT;
 	ray.direction = o;
