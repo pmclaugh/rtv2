@@ -176,8 +176,6 @@ static inline void intersect_triangle(const float3 origin, const float3 directio
 	float3 h = cross(direction, e2);
 	float a = dot(h, e1);
 
-	// if (fabs(a) < COLLISION_ERROR)
-	// 	return;
 	float f = 1.0f / a;
 	float3 s = origin - v0;
 	this_u = f * dot(s, h);

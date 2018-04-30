@@ -134,38 +134,13 @@ int 		main(int ac, char **av)
 	//Initialize environment with scene and intial configurations
 	t_env	*env = init_env();
 
-	//LL is best for this bvh. don't want to rearrange import for now, will do later
-	Face *face_list = NULL;
-	for (int i = 0; i < env->scene->face_count; i++)
-	{
-		Face *f = calloc(1, sizeof(Face));
-		memcpy(f, &env->scene->faces[i], sizeof(Face));
-		f->next = face_list;
-		face_list = f;
-	}
-	free(env->scene->faces);
-
 	//Build BVH
 	int box_count, ref_count;
-	AABB *tree = sbvh(face_list, &box_count, &ref_count);
-	printf("finished with %d boxes\n", box_count);
-	study_tree(tree, 100000);
+	sbvh(env);
+	study_tree(env->scene->bins, 100000);
 
 	//Flatten BVH
-	env->scene->bins = tree;
-	env->scene->bin_count = box_count;
-	env->scene->face_count = ref_count;
 	flatten_faces(env->scene);
-
-	// for (int i = 0; i < env->scene->face_count; i++)
-	// {
-	// 	Face *tmp = face_list->next;
-	// 	free(face_list);
-	// 	face_list = tmp;
-	// }
-
-	printf("ready to start\n");
-	getchar();
 
 	init_mlx_data(env);
 	

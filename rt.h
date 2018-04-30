@@ -417,7 +417,7 @@ typedef struct s_env
 	int			min_bounces;
 }				t_env;
 
-AABB *sbvh(Face *faces, int *box_count, int *ref_count);
+void sbvh(t_env *env);
 void study_tree(AABB *tree, int ray_count);
 void flatten_faces(Scene *scene);
 gpu_bin *flatten_bvh(Scene *scene);

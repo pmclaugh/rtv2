@@ -273,9 +273,19 @@ void partition(AABB *box)
 		printf("the split resulted in: L:%d, R:%d\n", box->left->member_count, box->right->member_count);
 }
 
-AABB *sbvh(Face *faces, int *box_count, int *refs)
+void sbvh(t_env *env)
 {
-	//Split *test = calloc(1, sizeof(Split));
+
+	//LL is best for this bvh. don't want to rearrange import for now, will do later
+	Face *faces = NULL;
+	for (int i = 0; i < env->scene->face_count; i++)
+	{
+		Face *f = calloc(1, sizeof(Face));
+		memcpy(f, &env->scene->faces[i], sizeof(Face));
+		f->next = faces;
+		faces = f;
+	}
+	free(env->scene->faces);
 
 	//put all faces in AABBs
 	AABB *boxes = NULL;
@@ -329,10 +339,10 @@ AABB *sbvh(Face *faces, int *box_count, int *refs)
 	printf("done?? %d boxes?", count);
 	printf("%d member references vs %d starting\n", ref_count, root_box->member_count);
 	printf("pick rates: spatial %.2f object %.2f\n", 100.0f * (float)spatial_wins / (float)(spatial_wins + object_wins), 100.0f * (float)object_wins / (float)(spatial_wins + object_wins));
-	*box_count = count;
-	*refs = ref_count;
-
-	return root_box;
+	
+	env->scene->bins = root_box;
+	env->scene->bin_count = count;
+	env->scene->face_count = ref_count;
 }
 
 ///////FLATTENING SECTION//////////
