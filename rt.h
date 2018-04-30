@@ -334,6 +334,9 @@ typedef struct s_file_edits
 	float ior;			//index of refraction
 	float roughness;	//between 0 and 1
 	float transparency;	//between 0 and 1, 1 fully transparent
+	float metallic;		//between 0 and 1
+	float scatter;		//between 0 and 1
+	cl_float3 Kss;		//between 0 and 1, subsurface color
 }				File_edits;
 
 typedef struct	s_key

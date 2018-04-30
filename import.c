@@ -50,6 +50,10 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 	edit_info->map_Ks_path = NULL;
 	edit_info->map_Ke_path = NULL;
 	edit_info->Kd = (cl_float3){0.8, 0.2, 0.2};
+	printf("\t\t%s", *line);
+	fgets(*line, 512, fp);
+	if (strchr(*line, '{') == NULL)
+		return ;
 	while (fgets(*line, 512, fp))
 	{
 		if (*line[0] == '#')
@@ -77,6 +81,8 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 		}
 		else if (strstr(*line, "Kd"))
 			edit_info->Kd = get_vec(*line);
+		else if (strstr(*line, "Kss"))
+			edit_info->Kss = get_vec(*line);
 		else if (strstr(*line, "Ks"))
 			edit_info->Ks = get_vec(*line);
 		else if (strstr(*line, "Ke"))
@@ -87,17 +93,34 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 			edit_info->roughness = strtof(strchr(*line, '=') + 1, NULL);
 		else if (strstr(*line, "transparency"))
 			edit_info->transparency = strtof(strchr(*line, '=') + 1, NULL);
+		else if (strstr(*line, "metallic"))
+			edit_info->metallic = strtof(strchr(*line, '=') + 1, NULL);
+		else if (strstr(*line, "scatter"))
+			edit_info->scatter = strtof(strchr(*line, '=') + 1, NULL);
+		else if (strchr(*line, '}'))
+			break ;
 		else
 			break ;
+		printf("[*]%s", *line);
 	}
 	if (edit_info->scale <= 0.0f)
 		edit_info->scale = 1.0f;
 	if (edit_info->ior <= 0.0f)
 		edit_info->ior = 1.0f;
 	if (edit_info->roughness < 0.0f || edit_info->roughness > 1.0f)
-		edit_info->roughness = 0.5;
+		edit_info->roughness = (edit_info->roughness < 0.0f) ? 0.0f : 1.0f;
 	if (edit_info->transparency < 0.0f || edit_info->transparency > 1.0f)
-		edit_info->transparency = 0.1f;
+		edit_info->transparency = (edit_info->transparency < 0.0f) ? 0.0f : 1.0f;
+	if (edit_info->metallic < 0.0f || edit_info->metallic > 1.0f)
+		edit_info->metallic = (edit_info->metallic < 0.0f) ? 0.0f : 1.0f;
+	if (edit_info->scatter < 0.0f || edit_info->scatter > 1.0f)
+		edit_info->scatter = (edit_info->scatter < 0.0f) ? 0.0f : 1.0f;
+	if (edit_info->Kss.x < 0.0f || edit_info->Kss.x > 1.0f)
+		edit_info->Kss.x = (edit_info->Kss.x < 0.0f) ? 0.0f : 1.0f;
+	if (edit_info->Kss.y < 0.0f || edit_info->Kss.y > 1.0f)
+		edit_info->Kss.y = (edit_info->Kss.y < 0.0f) ? 0.0f : 1.0f;
+	if (edit_info->Kss.z < 0.0f || edit_info->Kss.z > 1.0f)
+		edit_info->Kss.z = (edit_info->Kss.z < 0.0f) ? 0.0f : 1.0f;
 }
 
 static int	count_files(FILE *fp)
@@ -151,7 +174,7 @@ void	load_config(t_env *env)
 			sscanf(line, "import= %s\n", file_path[i]);
 			file_edits(&line, fp, &edit_info[i++]);
 		}
-		if (strncmp(line, "mode=ia", 7) == 0)
+		if (strncmp(line, "mode=", 5) == 0 && strstr(line, "ia"))
 		{
 			env->mode = IA;
 			env->render = 0;

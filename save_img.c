@@ -11,7 +11,7 @@ void	save_img(cl_float3 *image)
 	cinfo.err = jpeg_std_error(&jerr);
 	jpeg_create_compress(&cinfo);
 
-	char *filename = "../Desktop/image.jpeg";
+	char *filename = "./image.jpeg";
 	if ((outfile = fopen(filename, "wb")) == NULL)
 	{
 		fprintf(stderr, "can't open %s\n", filename);
@@ -24,7 +24,7 @@ void	save_img(cl_float3 *image)
 	cinfo.input_components = 3;		/* # of color components per pixel */
 	cinfo.in_color_space = JCS_RGB; 	/* colorspace of input image */
 	jpeg_set_defaults(&cinfo);
-//	jpeg_set_quality(&cinfo, quality, TRUE /* limit to baseline-JPEG values */);
+	jpeg_set_quality(&cinfo, 100, TRUE); /* limit to baseline-JPEG values */
 
 	jpeg_start_compress(&cinfo, TRUE);
 
