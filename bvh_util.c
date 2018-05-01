@@ -423,6 +423,108 @@ Split *pick_best(Split **splits, AABB *parent)
 
 int x_sort(const void *arg1, const void *arg2)
 {
+	AABB *a = (AABB *)arg1;
+	AABB *b = (AABB *)arg2;
+
+	cl_float3 ca = center(a);
+	cl_float3 cb = center(b);
+
+	if (ca.x > cb.x)
+		return 1;
+	else if (ca.x < cb.x)
+		return -1;
+	else
+	{
+		if (a->min.x > b->min.x)
+			return 1;
+		else if (a->min.x < b->min.x)
+			return -1;
+		else
+		{
+			//sort needs to be fully deterministic so use pointer address of referenced face as tiebreaker
+			if (a->f > b->f)
+				return 1;
+			else if (a->f < b->f)
+				return -1;
+			else
+				return 0;
+		}
+	}
+}
+
+int y_sort(const void *arg1, const void *arg2)
+{
+	AABB *a = (AABB *)arg1;
+	AABB *b = (AABB *)arg2;
+
+	cl_float3 ca = center(a);
+	cl_float3 cb = center(b);
+
+
+	if (ca.y > cb.y)
+		return 1;
+	else if (ca.y < cb.y)
+		return -1;
+	else
+	{
+		if (a->min.y > b->min.y)
+			return 1;
+		else if (a->min.y < b->min.y)
+			return -1;
+		else
+		{
+			if (a->f > b->f)
+				return 1;
+			else if (a->f < b->f)
+				return -1;
+			else
+				return 0;
+		}
+	}
+}
+
+int z_sort(const void *arg1, const void *arg2)
+{
+	AABB *a = (AABB *)arg1;
+	AABB *b = (AABB *)arg2;
+
+	cl_float3 ca = center(a);
+	cl_float3 cb = center(b);
+
+	if (ca.z > cb.z)
+		return 1;
+	else if (ca.z < cb.z)
+		return -1;
+	else
+	{
+		if (a->min.z > b->min.z)
+			return 1;
+		else if (a->min.z < b->min.z)
+			return -1;
+		else
+		{
+			if (a->f > b->f)
+				return 1;
+			else if (a->f < b->f)
+				return -1;
+			else
+				return 0;
+		}
+	}
+}
+
+void fast_axis_sort(AABB *boxes, int count, enum axis ax)
+{
+	if (ax == X_AXIS)
+		qsort(boxes, count, sizeof(AABB), x_sort);
+	else if (ax == Y_AXIS)
+		qsort(boxes, count, sizeof(AABB), y_sort);
+	else if (ax == Z_AXIS)
+		qsort(boxes, count, sizeof(AABB), z_sort);
+}
+
+int x_pointer_sort(const void *arg1, const void *arg2)
+{
 	AABB **ap = (AABB **)arg1;
 	AABB **bp = (AABB **)arg2;
 
@@ -445,9 +547,9 @@ int x_sort(const void *arg1, const void *arg2)
 		else
 		{
 			//sort needs to be fully deterministic so use pointer address as tiebreaker
-			if (a > b)
+			if (a->f > b->f)
 				return 1;
-			else if (a < b)
+			else if (a->f < b->f)
 				return -1;
 			else
 				return 0;
@@ -455,7 +557,7 @@ int x_sort(const void *arg1, const void *arg2)
 	}
 }
 
-int y_sort(const void *arg1, const void *arg2)
+int y_pointer_sort(const void *arg1, const void *arg2)
 {
 	AABB **ap = (AABB **)arg1;
 	AABB **bp = (AABB **)arg2;
@@ -479,9 +581,9 @@ int y_sort(const void *arg1, const void *arg2)
 			return -1;
 		else
 		{
-			if (a > b)
+			if (a->f > b->f)
 				return 1;
-			else if (a < b)
+			else if (a->f < b->f)
 				return -1;
 			else
 				return 0;
@@ -489,7 +591,7 @@ int y_sort(const void *arg1, const void *arg2)
 	}
 }
 
-int z_sort(const void *arg1, const void *arg2)
+int z_pointer_sort(const void *arg1, const void *arg2)
 {
 	AABB **ap = (AABB **)arg1;
 	AABB **bp = (AABB **)arg2;
@@ -512,14 +614,24 @@ int z_sort(const void *arg1, const void *arg2)
 			return -1;
 		else
 		{
-			if (a > b)
+			if (a->f > b->f)
 				return 1;
-			else if (a < b)
+			else if (a->f < b->f)
 				return -1;
 			else
 				return 0;
 		}
 	}
+}
+
+void pointer_axis_sort(AABB **boxes, int count, enum axis ax)
+{
+	if (ax == X_AXIS)
+		qsort(boxes, count, sizeof(AABB *), x_pointer_sort);
+	else if (ax == Y_AXIS)
+		qsort(boxes, count, sizeof(AABB *), y_pointer_sort);
+	else if (ax == Z_AXIS)
+		qsort(boxes, count, sizeof(AABB *), z_pointer_sort);
 }
 
 float SA_overlap(Split *split)

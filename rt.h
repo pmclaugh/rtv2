@@ -26,7 +26,7 @@
 #define UNIT_Z (cl_float3){0, 0, 1}
 
 #define DIM_IA		400
-#define DIM_PT		512
+#define DIM_PT		1024
 
 #define H_FOV M_PI_2 * 60.0 / 90.0
 
@@ -381,6 +381,8 @@ int x_sort(const void *arg1, const void *arg2);
 int y_sort(const void *arg1, const void *arg2);
 int z_sort(const void *arg1, const void *arg2);
 float SA_overlap(Split *split);
+void pointer_axis_sort(AABB **boxes, int count, enum axis ax);
+void fast_axis_sort(AABB *boxes, int count, enum axis ax);
 
 Face *stl_import(char *stl_file);
 
