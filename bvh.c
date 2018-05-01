@@ -1,76 +1,6 @@
 #include "rt.h"
 
-#define SPATIAL_ENABLE 0
 #define VERBOSE 0
-
-Split **new_allocate_splits(AABB *box)
-{
-	cl_float3 span = vec_sub(box->max, box->min);
-	float total = span.x + span.y + span.z;
-	int x_splits = (int)ceil((float)SPLIT_TEST_NUM * span.x / total);
-	int y_splits = (int)((float)SPLIT_TEST_NUM * span.y / total);
-	int z_splits = SPLIT_TEST_NUM - x_splits - y_splits;
-	// printf("%d %d %d\n", x_splits, y_splits, z_splits);
-
-	Split **splits = calloc(SPLIT_TEST_NUM, sizeof(Split));
-	int s = 0;
-	for (int i = 0; i < x_splits; i++, s++)
-		splits[s] = new_split(box, X_AXIS, (float)(i + 1)/(float)(x_splits + 1));
-	for (int i = 0; i < y_splits; i++, s++)
-		splits[s] = new_split(box, Y_AXIS, (float)(i + 1) /(float)(y_splits + 1));
-	for (int i = 0; i < z_splits; i++, s++)
-		splits[s] = new_split(box, Z_AXIS, (float)(i + 1) / (float)(z_splits + 1));
-
-	return splits;
-}
-
-Split *best_spatial_split(AABB *box)
-{
-	Split **spatials = new_allocate_splits(box);
-
-	//for each member, "add" to each split (dont actually make copies)
-	int count = 0;
-	for (int i = 0; i < SPLIT_TEST_NUM; i++)
-	{
-		for (AABB *b = box->members; b != NULL; b = b->next)
-			if (box_in_box(b, spatials[i]->left) && box_in_box(b, spatials[i]->right) && !all_in(b, spatials[i]->right) && !all_in(b, spatials[i]->left))
-			{
-				AABB *lclip = dupe_box(b);
-				AABB *rclip = dupe_box(b);
-
-				clip_box(lclip, spatials[i]->left);
-				clip_box(rclip, spatials[i]->right);
-
-				flex_box(spatials[i]->left_flex, lclip);
-				flex_box(spatials[i]->right_flex, rclip);
-
-				spatials[i]->left_count++;
-				spatials[i]->right_count++;
-				spatials[i]->both_count++;
-				
-				free(lclip);
-				free(rclip);
-			}
-			else if (all_in(b, spatials[i]->left))
-			{
-				flex_box(spatials[i]->left_flex, b);
-				spatials[i]->left_count++;
-			}
-			else if (all_in(b, spatials[i]->right))
-			{
-				flex_box(spatials[i]->right_flex, b);
-				spatials[i]->right_count++;
-			}
-			else
-			{
-				printf("member not in any box (shouldnt happen) (spatial)\n");
-				print_box(b);
-				print_split(spatials[i]);
-				//getchar();
-			}
-	}
-	return pick_best(spatials, box);
-}
 
 // typedef struct s_split
 // {
@@ -100,17 +30,20 @@ AABB sum_box(AABB a, AABB b)
 	return ret;
 }
 
-// float SA(AABB *box)
-// {
-// 	cl_float3 span = vec_sub(box->max, box->min);
-// 	span = (cl_float3){fabs(span.x), fabs(span.y), fabs(span.z)};
-// 	return 2 * span.x * span.y + 2 * span.y * span.z + 2 * span.x * span.z;
-// }
+#define Ct 1.0f
+#define Ci 10.0f
 
-// float SAH(Split *split, AABB *parent)
-// {
-// 	return (SA(split->left_flex) * split->left_count + SA(split->right_flex) * split->right_count) / SA(parent);
-// }
+float SA(AABB *box)
+{
+	cl_float3 span = vec_sub(box->max, box->min);
+	span = (cl_float3){fabs(span.x), fabs(span.y), fabs(span.z)};
+	return 2 * span.x * span.y + 2 * span.y * span.z + 2 * span.x * span.z;
+}
+
+float SAH(Split *split, AABB *parent)
+{
+	return Ct + Ci * (SA(split->left_flex) * split->left_count + SA(split->right_flex) * split->right_count) / SA(parent);
+}
 
 Split *scan_tallies(AABB *ltr, AABB *rtl, int count, AABB *parent, enum axis ax)
 {
@@ -120,7 +53,7 @@ Split *scan_tallies(AABB *ltr, AABB *rtl, int count, AABB *parent, enum axis ax)
 
 	for (int i = 0; i < count - 1; i++)
 	{
-		float this_SAH = (SA(&ltr[i]) * (i + 1) + SA(&rtl[i + 1]) * (count - i)) / SA(parent);
+		float this_SAH = Ct + Ci * (SA(&ltr[i]) * (i + 1) + SA(&rtl[i + 1]) * (count - i)) / SA(parent);
 		if (this_SAH < best_SAH)
 		{
 			best_ind = i;
@@ -130,9 +63,9 @@ Split *scan_tallies(AABB *ltr, AABB *rtl, int count, AABB *parent, enum axis ax)
 
 	Split *best = calloc(1, sizeof(Split));
 	best->ax = ax;
-	best->left = dupe_box(&ltr[best_ind]);
+	best->left_flex = dupe_box(&ltr[best_ind]);
 	best->left_count = best_ind + 1;
-	best->right = dupe_box(&rtl[best_ind + 1]);
+	best->right_flex = dupe_box(&rtl[best_ind + 1]);
 	best->right_count = count - best_ind;
 	best->ratio = best_SAH; //I am going to rename this variable but it's fine for now
 	return best;
@@ -199,36 +132,12 @@ Split *fast_object_split(AABB *box)
 	return best_split;
 }
 
-int spatial_wins;
-int object_wins;
-
-float root_SA;
-
 void partition(AABB *box)
 {
-	if (VERBOSE)
-		printf("trying to partition a box with member count %d\n", box->member_count);
-
 	Split *object = fast_object_split(box);
-	Split *spatial = NULL;
 
-	if (SPATIAL_ENABLE && (!object || SA_overlap(object) / root_SA > ALPHA))
+	if (SAH(object, box) < Ci * box->member_count)
 	{
-		spatial = best_spatial_split(box);
-		if (VERBOSE)
-			printf("SAH obj %.2f SAH spatial %.2f\n", SAH(object, box), SAH(spatial, box));
-	}
-
-	if (spatial == NULL && object == NULL)
-	{
-		printf("splits failed, bailing out!\n");
-		return;
-	}
-	else if (spatial == NULL || (object != NULL && SAH(object, box) < SAH(spatial, box)))
-	{
-		if (VERBOSE)
-			printf("CHOSE OBJECT\n");
-		object_wins++;
 		AABB **members = calloc(box->member_count, sizeof(AABB *));
 		AABB *b = box->members;
 		for (int i = 0; b; b = b->next, i++)
@@ -236,8 +145,8 @@ void partition(AABB *box)
 
 		pointer_axis_sort(members, box->member_count, object->ax);
 
-		box->left = dupe_box(object->left);
-		box->right = dupe_box(object->right);
+		box->left = dupe_box(object->left_flex);
+		box->right = dupe_box(object->right_flex);
 		for (int i = 0; i < box->member_count; i++)
 		{
 			if (i < object->left_count)
@@ -255,58 +164,14 @@ void partition(AABB *box)
 	}
 	else
 	{
-		if (VERBOSE)
-			printf("CHOSE SPATIAL\n");
-		spatial_wins++;
-		box->left = dupe_box(spatial->left_flex);
-		box->right = dupe_box(spatial->right_flex);
-
-		for (AABB *b = box->members; b != NULL;)
-		{
-			AABB *tmp = b->next;
-			if (box_in_box(b, spatial->left) && box_in_box(b, spatial->right) && !all_in(b, spatial->left) && !all_in(b, spatial->right))
-			{
-				AABB *lclip = dupe_box(b);
-				AABB *rclip = dupe_box(b);
-
-				clip_box(lclip, spatial->left);
-				clip_box(rclip, spatial->right);
-
-				push(&box->left->members, lclip);
-				box->left->member_count++;
-				push(&box->right->members, rclip);
-				box->right->member_count++;
-
-				free(b);
-			}
-			else if (all_in(b, spatial->left))
-			{
-				push(&box->left->members, b);
-				box->left->member_count++;
-			}
-			else if (all_in(b, spatial->right))
-			{
-				push(&box->right->members, b);
-				box->right->member_count++;
-			}
-			else
-			{
-				printf("\n\nnot in any final box, real problem (spatial)\n");
-				print_box(b);
-				print_split(spatial);
-				print_box(box);
-				getchar();
-			}
-			b = tmp;
-		}
+		printf("choosing not to split because SAH is %f and check cost is %f\n", SAH(object, box), (float)(Ci * box->member_count));
+		//these should be null already but just making sure
+		box->left = NULL;
+		box->right = NULL;
 	}
+	
 	if (object)
 		free_split(object);
-	if (spatial)
-		free_split(spatial);
-
-	if (VERBOSE)
-		printf("the split resulted in: L:%d, R:%d\n", box->left->member_count, box->right->member_count);
 }
 
 void sbvh(t_env *env)
@@ -331,21 +196,12 @@ void sbvh(t_env *env)
 		fcount++;
 	}
 
-	printf("faces are in boxes, %d\n", fcount);
-
 	AABB *root_box = box_from_boxes(boxes);
-
-	root_SA = SA(root_box);
-
-	printf("root box made\n");
-	print_vec(root_box->min);
-	print_vec(root_box->max);
 
 	AABB *stack = root_box;
 	int count = 1;
 	int ref_count = 0;
-	spatial_wins = 0;
-	object_wins = 0;
+
 	while (stack)
 	{
 		AABB *box = pop(&stack);
@@ -356,30 +212,49 @@ void sbvh(t_env *env)
 			box->right->parent = box;
 			count += 2;
 
-			if (box->left->member_count > LEAF_THRESHOLD)
-				push(&stack, box->left);
-			else
-				ref_count += box->left->member_count;
-
-			if (box->right->member_count > LEAF_THRESHOLD)
-				push(&stack, box->right);
-			else
-				ref_count += box->right->member_count;
+			push(&stack, box->left);
+			push(&stack, box->right);				
 		}
 		else
-		{
-			printf("chose not to split this box\n");
-			print_box(box);
-		}
+			ref_count += box->member_count;
 	}
 	printf("done. %d boxes", count);
 	printf("%d member references vs %d starting\n", ref_count, root_box->member_count);
-	printf("pick rates: spatial %.2f object %.2f\n", 100.0f * (float)spatial_wins / (float)(spatial_wins + object_wins), 100.0f * (float)object_wins / (float)(spatial_wins + object_wins));
-	
+
 	env->scene->bins = root_box;
 	env->scene->bin_count = count;
 	env->scene->face_count = ref_count;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ///////FLATTENING SECTION//////////
 

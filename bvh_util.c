@@ -382,18 +382,6 @@ void print_split(Split *split)
 	printf("%d in both\n", split->both_count);
 }
 
-float SA(AABB *box)
-{
-	cl_float3 span = vec_sub(box->max, box->min);
-	span = (cl_float3){fabs(span.x), fabs(span.y), fabs(span.z)};
-	return 2 * span.x * span.y + 2 * span.y * span.z + 2 * span.x * span.z;
-}
-
-float SAH(Split *split, AABB *parent)
-{
-	return (SA(split->left_flex) * split->left_count + SA(split->right_flex) * split->right_count) / SA(parent);
-}
-
 Split *pick_best(Split **splits, AABB *parent)
 {
 	float min_SAH = FLT_MAX;
