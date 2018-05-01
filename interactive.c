@@ -422,7 +422,7 @@ t_ray	generate_ray(t_env *env, float x, float y)
 	ray.eps = env->eps;
 	return ray;
 }
-
+/*
 void	draw_text(t_sdl *sdl)
 {
 	SDL_Renderer	*renderer = SDL_GetRenderer(sdl->win);
@@ -451,7 +451,7 @@ void	draw_text(t_sdl *sdl)
 	// SDL_RenderPresent(renderer);
 	// SDL_Delay(5000);
 }
-
+*/
 void	interactive(t_env *env)
 {
 	clock_t	frame_start = clock();

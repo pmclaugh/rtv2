@@ -1,12 +1,4 @@
 #include "rt.h"
-#include <string.h>
-#include "libjpeg/jpeglib.h"
-#include "libjpeg/jerror.h"
-#include "libjpeg/jconfig.h"
-#include "libjpeg/jinclude.h"
-#include "libjpeg/jpegint.h"
-#include "libjpeg/jmemsys.h"
-#include "libjpeg/jversion.h"
 
 #define VERBOSE 0
 
@@ -302,7 +294,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 	}
 	free(obj_file);
 
-	char *line = calloc(512, 1);
+	char *line = calloc(3072, 1);
 	char *matpath = calloc(512, 1);
 
 	Scene *S = calloc(1, sizeof(Scene));
@@ -317,7 +309,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 	cl_float3 min = (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX};
 	cl_float3 max = (cl_float3){FLT_MIN, FLT_MIN, FLT_MIN};
 	cl_float3 center;
-	while(fgets(line, 512, fp))
+	while(fgets(line, 3072, fp))
 	{
 		if (strncmp(line, "mtllib", 6) == 0)
 			sscanf(line, "mtllib %s\n", matpath);
@@ -344,17 +336,18 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 			vt_count++;
 		else if (strncmp(line, "f ", 2) == 0)
 		{
-			char temp[256];
-			int count = sscanf(line, "f %s %s %s %s", temp, temp, temp, temp);
-			face_count += count == 3 ? 1 : 2;
+			int count = count_face_elements(line);
+			face_count += (count - 2);
 		}
 		else if (strncmp(line, "g ", 2) == 0)
 			obj_count++;
 	}
 	center = vec_add(vec_scale(vec_sub(max, min), 0.5), min);
+	printf("%d triangles\n", face_count);
 
 	//load mats
-	load_mats(S, rel_path, matpath);
+	if (*matpath != '\0')
+		load_mats(S, rel_path, matpath);
 	free(matpath);
 	printf("basics counted\n");
 
@@ -366,6 +359,7 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 	cl_float3 *VT = calloc(vt_count, sizeof(cl_float3));
 	Face *faces = calloc(face_count, sizeof(Face));
 
+	printf("\t%d %d %d %d\n", v_count, vn_count, vt_count, face_count);
 	v_count = 0;
 	vn_count = 0;
 	vt_count = 0;
@@ -377,8 +371,9 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 
 	int mat_ind = -1;
 	int smoothing = 0;
-	while(fgets(line, 512, fp))
+	while(fgets(line, 3072, fp))
 	{
+		v.x = v.y = v.z = 0;
 		if (strncmp(line, "v ", 2) == 0)
 		{
 			sscanf(line, "v %f %f %f", &v.x, &v.y, &v.z);
@@ -427,22 +422,67 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 			int count = get_face_elements(line, &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc, &vd, &vtd, &vnd);
 			f.shape = 3;
 			f.center = ORIGIN;
-			f.verts[0] = V[va - 1];
+			if (va < 0)
+				f.verts[0] = V[v_count + va];
+			else
+				f.verts[0] = V[va - 1];
 			f.center = vec_add(f.center, f.verts[0]);
-			f.verts[1] = V[vb - 1]; 
+			if (vb < 0)
+				f.verts[1] = V[v_count + vb];
+			else
+				f.verts[1] = V[vb - 1]; 
 			f.center = vec_add(f.center, f.verts[1]);
-			f.verts[2] = V[vc - 1];
+			if (vc < 0)
+				f.verts[2] = V[v_count + vc];
+			else
+				f.verts[2] = V[vc - 1];
 			f.center = vec_add(f.center, f.verts[2]);
 
 			f.center = vec_scale(f.center, 1.0f / (float)f.shape);
 
-			f.norms[0] = VN[vna - 1]; 
-			f.norms[1] = VN[vnb - 1]; 
-			f.norms[2] = VN[vnc - 1]; 
+			if (vna == 0 || vnb == 0 || vnc == 0)
+			{
+				f.norms[0] = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
+				f.norms[1] = f.norms[0];
+				f.norms[2] = f.norms[0];
+			}
+			else
+			{
+				if (vna < 0)
+					f.norms[0] = VN[vn_count + vna];
+				else
+					f.norms[0] = VN[vna - 1];
+				if (vnb < 0)
+					f.norms[1] = VN[vn_count + vnb];
+				else
+					f.norms[1] = VN[vnb - 1];
+				if (vnc < 0)
+					f.norms[2] = VN[vn_count + vnc];
+				else
+					f.norms[2] = VN[vnc - 1];
+			}
 
-			f.tex[0] = (vta == 0) ? (cl_float3){0, 0, 0} : VT[vta - 1];
-			f.tex[1] = (vtb == 0) ? (cl_float3){0, 0, 0} : VT[vtb - 1];
-			f.tex[2] = (vtc == 0) ? (cl_float3){0, 0, 0} : VT[vtc - 1];
+			if (vta == 0 || vtb == 0 || vtc == 0)
+			{
+				f.tex[0] = (cl_float3){0, 0, 0};
+				f.tex[1] = (cl_float3){0, 0, 0};
+				f.tex[2] = (cl_float3){0, 0, 0};
+			}
+			else
+			{
+				if (vta < 0)
+					f.tex[0] = VT[vt_count + vta];
+				else
+					f.tex[0] = VT[vta - 1];
+				if (vtb < 0)
+					f.tex[1] = VT[vt_count + vtb];
+				else
+					f.tex[1] = VT[vtb - 1];
+				if (vtc < 0)
+					f.tex[2] = VT[vt_count + vtc];
+				else
+					f.tex[2] = VT[vtc - 1];
+			}
 
 			f.N = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
 			if (dot(f.N, f.norms[0]) < 0)
@@ -453,34 +493,85 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 			f.next = NULL;
 			faces[face_count++] = f;
 
-			if (count == 4)
+			if (count > 3)
 			{
-				f.center = ORIGIN;
-				f.verts[0] = V[va - 1];
-				f.center = vec_add(f.center, f.verts[0]);
-				f.verts[1] = V[vc - 1]; 
-				f.center = vec_add(f.center, f.verts[1]);
-				f.verts[2] = V[vd - 1];
-				f.center = vec_add(f.center, f.verts[2]);
+				for (int triangle = 0; triangle < count - 3; triangle++)
+				{
+					Face new_f;
+					break_down_poly(line, triangle, &vb, &vtb, &vnb, &vc, &vtc, &vnc);
+					new_f.shape = 3;
+					new_f.center = ORIGIN;
+					if (va < 0)
+						new_f.verts[0] = V[v_count + va];
+					else
+						new_f.verts[0] = V[va - 1];
+					new_f.center = vec_add(new_f.center, new_f.verts[0]);
+					if (vb < 0)
+						new_f.verts[1] = V[v_count + vb];
+					else
+						new_f.verts[1] = V[vb - 1]; 
+					new_f.center = vec_add(new_f.center, new_f.verts[1]);
+					if (vc < 0)
+						new_f.verts[2] = V[v_count + vc];
+					else
+						new_f.verts[2] = V[vc - 1];
+					new_f.center = vec_add(new_f.center, new_f.verts[2]);
+				
+					new_f.center = vec_scale(new_f.center, 1.0f / (float)new_f.shape);
+			
+					if (vna == 0 || vnb == 0 || vnc == 0)
+					{
+						new_f.norms[0] = unit_vec(cross(vec_sub(new_f.verts[1], new_f.verts[0]), vec_sub(new_f.verts[2], new_f.verts[0])));
+						new_f.norms[1] = new_f.norms[0];
+						new_f.norms[2] = new_f.norms[0];
+					}
+					else
+					{
+						if (vna < 0)
+							new_f.norms[0] = VN[vn_count + vna];
+						else
+							new_f.norms[0] = VN[vna - 1];
+						if (vnb < 0)
+							new_f.norms[1] = VN[vn_count + vnb];
+						else
+							new_f.norms[1] = VN[vnb - 1];
+						if (vnc < 0)
+							new_f.norms[2] = VN[vn_count + vnc];
+						else
+							new_f.norms[2] = VN[vnc - 1];
+					}
 
-				f.center = vec_scale(f.center, 1.0f / (float)f.shape);
+					if (vta == 0 || vtb == 0 || vtc == 0)
+					{
+						new_f.tex[0] = (cl_float3){0, 0, 0};
+						new_f.tex[1] = (cl_float3){0, 0, 0};
+						new_f.tex[2] = (cl_float3){0, 0, 0};
+					}
+					else
+					{
+						if (vta < 0)
+							new_f.tex[0] = VT[vt_count + vta];
+						else
+							new_f.tex[0] = VT[vta - 1];
+						if (vtb < 0)
+							new_f.tex[1] = VT[vt_count + vtb];
+						else
+							new_f.tex[1] = VT[vtb - 1];
+						if (vtc < 0)
+							new_f.tex[2] = VT[vt_count + vtc];
+						else
+							new_f.tex[2] = VT[vtc - 1];
+					}
 
-				f.norms[0] = VN[vna - 1]; 
-				f.norms[1] = VN[vnc - 1]; 
-				f.norms[2] = VN[vnd - 1]; 
-
-				f.tex[0] = (vta == 0) ? (cl_float3){0, 0, 0} : VT[vta - 1];
-				f.tex[1] = (vtc == 0) ? (cl_float3){0, 0, 0} : VT[vtc - 1];
-				f.tex[2] = (vtd == 0) ? (cl_float3){0, 0, 0} : VT[vtd - 1];
-
-				f.N = unit_vec(cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0])));
-				if (dot(f.N, f.norms[0]) < 0)
-					f.N = vec_rev(f.N);
-				f.smoothing = smoothing;
-				f.mat_type = GPU_MAT_DIFFUSE;
-				f.mat_ind = mat_ind;
-				f.next = NULL;
-				faces[face_count++] = f;
+					new_f.N = unit_vec(cross(vec_sub(new_f.verts[1], new_f.verts[0]), vec_sub(new_f.verts[2], new_f.verts[0])));
+					if (dot(new_f.N, new_f.norms[0]) < 0)
+						new_f.N = vec_rev(new_f.N);
+					new_f.smoothing = smoothing;
+					new_f.mat_type = GPU_MAT_DIFFUSE;
+					new_f.mat_ind = mat_ind;
+					new_f.next = NULL;
+					faces[face_count++] = new_f;
+				}
 			}
 		}
 	}

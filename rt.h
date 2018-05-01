@@ -10,8 +10,15 @@
 #include <time.h>
 #include <pthread.h>
 #include "qdbmp/qdbmp.h"
+#include "libjpeg/jpeglib.h"
+#include "libjpeg/jerror.h"
+#include "libjpeg/jconfig.h"
+#include "libjpeg/jinclude.h"
+#include "libjpeg/jpegint.h"
+#include "libjpeg/jmemsys.h"
+#include "libjpeg/jversion.h"
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+//#include <SDL2/SDL_ttf.h>
 
 #ifdef __APPLE__
 # include <OpenCL/cl.h>
@@ -481,6 +488,7 @@ Face *object_flatten(Face *faces, int *face_count);
 void load_config(t_env *env);
 Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info);
 Scene *scene_from_ply(char *rel_path, char *filename, File_edits edit_info);
+Scene *scene_from_3ds(char *rel_path, char *filename, File_edits edit_info);
 
 void	alt_composite(t_sdl *sdl, int resolution, unsigned int samples);
 cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, unsigned int samples, int first, t_env *env);
@@ -536,8 +544,10 @@ unsigned int	read_uint(FILE *fp, const int file_endian, const int machine_endian
 float			read_float(FILE *fp, const int file_endian, const int machine_endian);
 double			read_double(FILE *fp, const int file_endian, const int machine_endian);
 
-//get_face.c
+//face.c
 int get_face_elements(char *line, int *va, int *vta, int *vna, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc, int *vd, int *vtd, int *vnd);
+int count_face_elements(const char *str);
+void break_down_poly(char *line, int triangle, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc);
 
 //main.c
 void		path_tracer(t_env *env);
@@ -564,3 +574,6 @@ void		draw_pixels(t_sdl *sdl);
 void		init_sdl_pt(t_env *env);
 void		init_sdl_ia(t_env *env);
 void		run_sdl(t_env *env);
+
+//save_img.c
+void		save_img(cl_float3 *image);
