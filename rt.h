@@ -454,6 +454,9 @@ typedef struct s_env
 	//ray visualizer
 	int			ray_density;
 	int			bounce_vis;
+	int			*ray_display;
+	int			mouse_x;
+	int			mouse_y;
 
 	//SDL stuff
 	SDL_Event	event;
@@ -549,10 +552,11 @@ void	exit_hook(t_env *env);
 void	key_press(int key, t_env *env);
 void	key_release(int key, t_env *env);
 void	mouse_press(int x, int y, t_env *env);
+void	mouse_wheel(int scroll_dir, t_env *env);
 void	handle_input(t_env *env);
 
 //interactive.c
-void	ray_visualizer(t_env *env);
+void	ray_visualizer(t_env *env, float *t_array);
 void	interactive(t_env *env);
 
 //sdl.c

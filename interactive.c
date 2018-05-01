@@ -214,11 +214,11 @@ void	trace_scene(AABB *tree, t_ray *ray, int view)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
+int		plot_line(t_env *env, int x1, int y1, int x2, int y2)
 {
 	// printf("------------------\n");
 	// printf("x1 = %d\ty1 = %d\nx2 = %d\ty2 = %d\n", x1, y1, x2, y2);
-	int		dx, dy, sx, sy, err, err2;
+	int		dx, dy, sx, sy, err, err2, i = 0;
 
 	dx = abs(x2 - x1);
 	sx = x1 < x2 ? 1 : -1;
@@ -227,8 +227,8 @@ void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
 	err = (dx > dy ? dx : -dy) / 2;
 	while (x1 != x2)
 	{
-		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr; //is the image being flipped horizontally?
+		// if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
+		// 	env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr; //is the image being flipped horizontally?
 		err2 = err;
 		if (err2 > -dx)
 		{
@@ -240,13 +240,16 @@ void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
 			err += dx;
 			y1 += sy;
 		}
+		i++;
 	}
 	while (y1 != y2)
 	{
-		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr;
+		// if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
+			// env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr;
 		y1 += sy;
+		i++;
 	}
+	return i;
 }
 
 // void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
@@ -258,46 +261,147 @@ void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
 // 	// SDL_DestroyRenderer(renderer);
 // }
 
-void	draw_ray(t_env *env, cl_float3 p1, cl_float3 p2, cl_float3 clr)
+	// dir3 = unit_vec(vec_sub(p2, p1));
+	// cl_float3	hor_ref = unit_vec(cross((cl_float3){dir3.x, 0, dir3.z}, (cl_float3){0, -1, 0}));
+	// cl_float3	vert_ref = unit_vec(cross(dir3, hor_ref));
+	// rot_hor = rotation_matrix(hor_ref, UNIT_X);
+	// rot_vert = rotation_matrix(vert_ref, UNIT_Y);
+	// dir3 = unit_vec(mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir3)));
+
+void	draw_ray(t_env *env, cl_float3 p1, cl_float3 p2, cl_float3 clr, float *t_array)
 {
-	float		pix_x1, pix_y1, pix_x2, pix_y2, ratio;
+	// printf("========================\n");
+	// print_vec(p1);
+	int		x1, y1, x2, y2;
+	float	ratio, t;
 	cl_float3	dir1, dir2;
 	float 		dist = (env->cam.width / 2) / tan(H_FOV / 2);
 	t_3x3 		rot_hor = rotation_matrix(env->cam.hor_ref, UNIT_X);
 	t_3x3 		rot_vert = rotation_matrix(env->cam.vert_ref, UNIT_Y);
 
-	dir1 = unit_vec(vec_sub(p1, env->cam.pos));
+	dir1 = unit_vec(vec_sub(p1, env->cam.focus));
 	dir1 = mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir1));
-	ratio = (dir1.z > 0) ? dist / dir1.z : 100; //protection against inf when dir1.z is 0
-	pix_x1 = ((dir1.x * ratio) * DIM_IA) + (DIM_IA / 2);
-	pix_y1 = ((dir1.y * -ratio) * DIM_IA) + (DIM_IA / 2);
+	if (dir1.z > 0)
+		ratio = dist / dir1.z;
+	else if (dir1.z < 0)
+		ratio = 10;
+	else
+		ratio = 1;
+	x1 = ((dir1.x * ratio) * DIM_IA) + (DIM_IA / 2);
+	y1 = ((dir1.y * -ratio) * DIM_IA) + (DIM_IA / 2);
 
-	dir2 = unit_vec(vec_sub(p2, env->cam.pos));
+	// printf("------------------------\n");
+	// printf("%f\n", ratio);
+	// print_vec(dir1);
+	// printf("%d\t%d\n", x1, y1);
+
+	dir2 = unit_vec(vec_sub(p2, env->cam.focus));
 	dir2 = mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir2));
-	ratio = (dir2.z > 0) ? dist / dir2.z : 100;
-	pix_x2 = ((dir2.x * ratio) * DIM_IA) + (DIM_IA / 2);
-	pix_y2 = ((dir2.y * -ratio) * DIM_IA) + (DIM_IA / 2);
+	if (dir2.z > 0)
+		ratio = dist / dir2.z;
+	else if (dir2.z < 0)
+		ratio = 10;
+	else
+		ratio = 1;
+	x2 = ((dir2.x * ratio) * DIM_IA) + (DIM_IA / 2);
+	y2 = ((dir2.y * -ratio) * DIM_IA) + (DIM_IA / 2);
 
-	plot_line(env, pix_x1, pix_y1, pix_x2, pix_y2, clr);
+	if (dir1.z < .25 && dir2.z < .25)
+		return ; 
+	int		steps = plot_line(env, x1, y1, x2, y2);
+	cl_float3	ray_step = vec_scale(vec_sub(p2, p1), 1 / (float)steps);
+
+	///////////////////// PLOT LINE
+	int		dx, dy, sx, sy, err, err2;
+
+	dx = abs(x2 - x1);
+	sx = x1 < x2 ? 1 : -1;
+	dy = abs(y2 - y1);
+	sy = y1 < y2 ? 1 : -1;
+	err = (dx > dy ? dx : -dy) / 2;
+	if (err > 100000)
+		return ;
+	// printf("---------------------------\n");
+	// printf("p1_t = %f\np2_t = %f\n", vec_mag(vec_sub(p1, env->cam.focus)), vec_mag(vec_sub(p2, env->cam.focus)));
+	// printf("steps = %d\n", steps);
+	// print_vec(p1);
+	while (x1 != x2)
+	{
+		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
+		{
+			t = vec_mag(vec_sub(p1, env->cam.focus));
+			// printf("%f\n", t);
+			if (t <= t_array[(DIM_IA - x1) + (y1 * DIM_IA)])
+				env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr; //is the image being flipped horizontally?
+			// else
+			// 	printf("%f\t%f\n", t, t_array[(DIM_IA - x1) + (y1 * DIM_IA)]);
+		}
+		err2 = err;
+		if (err2 > -dx)
+		{
+			err -= dy;
+			x1 += sx;
+		}
+		if (err2 < dy)
+		{
+			err += dx;
+			y1 += sy;
+		}
+		p1 = vec_add(p1, ray_step);
+	}
+	while (y1 != y2)
+	{
+		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
+		{
+			t = vec_mag(vec_sub(p1, env->cam.focus));
+			if (t <= t_array[(DIM_IA - x1) + (y1 * DIM_IA)])
+				env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr;
+		}
+		y1 += sy;
+		p1 = vec_add(p1, ray_step);
+	}
+	// print_vec(p1);
+	// printf("%f\t", t_array[(DIM_IA - 200) + (200 * DIM_IA)]);
+	// printf("%f\n", t);
+
+	// plot_line(env, x1, y1, x2, y2, clr);
 }
 
-void	ray_visualizer(t_env *env)
+void	ray_visualizer(t_env *env, float *t_array)
 {
-	cl_float3	clr = (cl_float3){1, 0, 0};
+	// for (int i = 0; i < env->bounce_vis; i++)
+	// {
+		// for (int y = 0; y < DIM_PT; y += env->ray_density)
+		// 	for (int x = 0; x < DIM_PT; x += env->ray_density)
+		// 		env->ray_display[x + (y * DIM_PT)] = 1;
+		// if (clr.y < 1.0)
+		// 	clr.y += clr_delta;
+		// else if (clr.x > 0.0)
+		// 	clr.x -= clr_delta;
+		// else if (clr.z < 1.0)
+		// 	clr.z += clr_delta;
+		// else
+		// 	clr.y -= clr_delta;
+	// }
+	cl_float3	clr;
 	double		clr_delta = env->depth / 6;
-	for (int i = 0; i < env->bounce_vis; i++)
+	
+	for (int i = 0; i < (DIM_PT * DIM_PT); i++)
 	{
-		for (int y = 0; y < DIM_PT; y += env->ray_density)
-			for (int x = 0; x < DIM_PT; x += env->ray_density)
-				draw_ray(env, env->rays[i][x + (y * DIM_PT)].origin, env->rays[i + 1][x + (y * DIM_PT)].origin, clr);
-		if (clr.y < 1.0)
-			clr.y += clr_delta;
-		else if (clr.x > 0.0)
-			clr.x -= clr_delta;
-		else if (clr.z < 1.0)
-			clr.z += clr_delta;
-		else
-			clr.y -= clr_delta;
+		clr = (cl_float3){1, 0, 0};
+		// draw_ray(env, (cl_float3){325, 0, 100}, (cl_float3){325, 0, 400}, clr, t_array);
+		for (int bounce = 0; bounce < env->ray_display[i]; bounce++)
+		{
+			draw_ray(env, env->rays[bounce][i].origin, env->rays[bounce + 1][i].origin, clr, t_array);
+			if (clr.y < 1.0)
+				clr.y += clr_delta;
+			else if (clr.x > 0.0)
+				clr.x -= clr_delta;
+			else if (clr.z < 1.0)
+				clr.z += clr_delta;
+			else
+				clr.y -= clr_delta;
+		}
 	}
 }
 
@@ -324,12 +428,17 @@ void	draw_text(t_sdl *sdl)
 	SDL_Renderer	*renderer = SDL_GetRenderer(sdl->win);
 	// SDL_SetRenderDrawColor(renderer, 0, 0, 0, 1);
 
-	TTF_Font	*Sans = TTF_OpenFont("Sans.ttf", 24);
-	SDL_Color White = {255, 0, 0};
+	// TTF_Font	*Sans = TTF_OpenFont("Sans.ttf", 24);
+	// SDL_Color clr = {255, 0, 0};
 
-	SDL_Surface* surfaceMessage = TTF_RenderText_Solid(Sans, "CLIVE - Path Tracer", White);
+	// SDL_Surface* surfaceMessage = TTF_RenderText_Solid(Sans, "CLIVE - Path Tracer", clr);
 
-	SDL_Texture* Message = SDL_CreateTextureFromSurface(renderer, surfaceMessage);
+	// SDL_Texture* Message = SDL_CreateTextureFromSurface(renderer, surfaceMessage);
+
+	SDL_RendererInfo info;
+	SDL_GetRendererInfo(renderer, &info);
+	// printf("%d\t%d\n", info.max_texture_width, info.max_texture_height);
+	printf("%s\n", info.name);
 
 	// SDL_Rect Message_rect;
 	// Message_rect.x = 0;
@@ -338,14 +447,17 @@ void	draw_text(t_sdl *sdl)
 	// Message_rect.h = 100;
 
 	// SDL_RenderClear(renderer);
-	SDL_RenderCopy(renderer, Message, NULL, NULL);
-	SDL_RenderPresent(renderer);
+	// SDL_RenderCopy(renderer, Message, NULL, NULL);
+	// SDL_RenderPresent(renderer);
+	// SDL_Delay(5000);
 }
 
 void	interactive(t_env *env)
 {
 	clock_t	frame_start = clock();
 	set_camera(&env->cam, (float)DIM_IA);
+	float	*t_array = calloc(sizeof(float), DIM_IA * DIM_IA);
+	
 	for (int y = 0; y < DIM_IA; y += 2)
 	{
 		for (int x = 0; x < DIM_IA; x += 2)
@@ -359,14 +471,18 @@ void	interactive(t_env *env)
 			else if (env->view == 4)
 				trace_bvh_heatmap(env->scene->bins, &ray);
 			//upscaling the resolution by 2x
-			env->ia->pixels[x + (y * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[(x + 1) + (y * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[x + ((y + 1) * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[(x + 1) + ((y + 1) * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[x + (y * DIM_IA)] = ray.color;
+			env->ia->pixels[(x + 1) + (y * DIM_IA)] = ray.color;
+			env->ia->pixels[x + ((y + 1) * DIM_IA)] = ray.color;
+			env->ia->pixels[(x + 1) + ((y + 1) * DIM_IA)] = ray.color;
+			t_array[x + (y * DIM_IA)] = ray.t;
+			t_array[(x + 1) + (y * DIM_IA)] = ray.t;
+			t_array[x + ((y + 1) * DIM_IA)] = ray.t;
+			t_array[(x + 1) + ((y + 1) * DIM_IA)] = ray.t;
 		}
 	}
 	if (env->show_rays)
-		ray_visualizer(env);
+		ray_visualizer(env, t_array);
 	draw_pixels(env->ia);
 	// draw_text(env->ia);
 	// SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Missing file", "File is missing. Please reinstall the program.", env->ia->win);

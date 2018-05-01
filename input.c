@@ -5,7 +5,7 @@
 #define PRESSED_KEYS	(env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.shift || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr || env->key.plus || env->key.minus)
 
 #define MOVE_SPEED	10
-#define TURN_SPEED	M_PI / 30
+#define TURN_SPEED	M_PI / 60
 
 void		exit_hook(t_env *env)
 {
@@ -146,13 +146,13 @@ void		key_press(int key, t_env *env)
 				env->key.uarr = 1;
 		}
 	}
-	// else if (key == KEY_PLUS || key == KEY_MINUS)
-	// {
-	// 	if (key == KEY_PLUS)
-	// 		env->key.plus = 1;
-	// 	if (key == KEY_MINUS)
-	// 		env->key.minus = 1;
-	// }
+	else if (key == SDLK_KP_PLUS || key == SDLK_KP_MINUS)
+	{
+		if (key == SDLK_KP_PLUS)
+			env->key.plus = 1;
+		if (key == SDLK_KP_MINUS)
+			env->key.minus = 1;
+	}
 }
 
 void		key_release(int key, t_env *env)
@@ -186,13 +186,13 @@ void		key_release(int key, t_env *env)
 				env->key.uarr = 0;
 		}
 	}
-	// else if (key == KEY_PLUS || key == KEY_MINUS)
-	// {
-	// 	if (key == KEY_PLUS)
-	// 		env->key.plus = 0;
-	// 	if (key == KEY_MINUS)
-	// 		env->key.minus = 0;
-	// }
+	else if (key == SDLK_KP_PLUS || key == SDLK_KP_MINUS)
+	{
+		if (key == SDLK_KP_PLUS)
+			env->key.plus = 0;
+		if (key == SDLK_KP_MINUS)
+			env->key.minus = 0;
+	}
 }
 
 void		handle_input(t_env *env)
@@ -213,13 +213,11 @@ void		handle_input(t_env *env)
 				move_z = sin(env->cam.angle_x) * move_dist;
 				if (env->key.w)
 				{
-					// env->cam.pos = vec_add(env->cam.pos, vec_scale(env->cam.dir, MOVE_SPEED));
 					env->cam.pos.x += move_x;
 					env->cam.pos.z += move_z;
 				}
 				if (env->key.s)
 				{
-					// env->cam.pos = vec_add(env->cam.pos, vec_scale(env->cam.dir, -MOVE_SPEED));
 					env->cam.pos.x -= move_x;
 					env->cam.pos.z -= move_z;
 				}
@@ -285,10 +283,20 @@ void		handle_input(t_env *env)
 
 void	mouse_press(int x, int y, t_env *env)
 {
-	if (x >= DIM_IA - 100 && x < DIM_IA && y < 100 && y >= 0)
+	if (env->show_rays)
+		env->ray_display[x + (y * DIM_PT)] = 1;
+	env->mouse_x = x;
+	env->mouse_y = y;
+}
+
+void	mouse_wheel(int scroll_dir, t_env *env)
+{
+	int		*ray = &env->ray_display[env->mouse_x + (env->mouse_y * DIM_PT)];
+	if (env->show_rays)
 	{
-		env->view++;
-		if (env->view > 4)
-			env->view = 1;
+		if (scroll_dir > 0 && *ray < env->depth - 1)
+			*ray += 1;
+		else if(scroll_dir < 0 && *ray > 0)
+			*ray -= 1;
 	}
 }

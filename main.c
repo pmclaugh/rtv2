@@ -70,6 +70,10 @@ t_env		*init_env(void)
 	env->current_tick = 0;
 	env->previous_tick = 0;
 
+	env->ray_display = calloc(sizeof(int), (DIM_PT * DIM_PT));
+	env->mouse_x = 0;
+	env->mouse_y = 0;
+
 	env->ia = NULL;
 	env->pt = NULL;
 	load_config(env);

@@ -48,8 +48,6 @@ CLIVE_bundle: $(NAME)
 	echo "APPL????" > $(bundle_contents)/PkgInfo
 	$(INSTALL_PROGRAM) $< $(bundle_contents)/MacOS/
 
-# gcc main.c -I SDL2-2.0.8/include -lSDL2.a
-
 $(NAME): $(OBJ)
 	gcc -o $(NAME) $(FLAGS) -I $(INC) $(OBJ) $(LIBS) -L libjpeg -ljpeg -lSDL2
 %.o: %.c rt.h
