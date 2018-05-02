@@ -227,8 +227,8 @@ void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
 	err = (dx > dy ? dx : -dy) / 2;
 	while (x1 != x2)
 	{
-		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr; //is the image being flipped horizontally?
+		if (x1 >= 0 && x1 < env->ia_dim && y1 >= 0 && y1 < env->ia_dim)
+			env->ia->pixels[(env->ia_dim - x1) + (y1 * env->ia_dim)] = clr; //is the image being flipped horizontally?
 		err2 = err;
 		if (err2 > -dx)
 		{
@@ -243,8 +243,8 @@ void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
 	}
 	while (y1 != y2)
 	{
-		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr;
+		if (x1 >= 0 && x1 < env->ia_dim && y1 >= 0 && y1 < env->ia_dim)
+			env->ia->pixels[(env->ia_dim - x1) + (y1 * env->ia_dim)] = clr;
 		y1 += sy;
 	}
 }
@@ -269,14 +269,14 @@ void	draw_ray(t_env *env, cl_float3 p1, cl_float3 p2, cl_float3 clr)
 	dir1 = unit_vec(vec_sub(p1, env->cam.pos));
 	dir1 = mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir1));
 	ratio = (dir1.z > 0) ? dist / dir1.z : 100; //protection against inf when dir1.z is 0
-	pix_x1 = ((dir1.x * ratio) * DIM_IA) + (DIM_IA / 2);
-	pix_y1 = ((dir1.y * -ratio) * DIM_IA) + (DIM_IA / 2);
+	pix_x1 = ((dir1.x * ratio) * env->ia_dim) + (env->ia_dim / 2);
+	pix_y1 = ((dir1.y * -ratio) * env->ia_dim) + (env->ia_dim / 2);
 
 	dir2 = unit_vec(vec_sub(p2, env->cam.pos));
 	dir2 = mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir2));
 	ratio = (dir2.z > 0) ? dist / dir2.z : 100;
-	pix_x2 = ((dir2.x * ratio) * DIM_IA) + (DIM_IA / 2);
-	pix_y2 = ((dir2.y * -ratio) * DIM_IA) + (DIM_IA / 2);
+	pix_x2 = ((dir2.x * ratio) * env->ia_dim) + (env->ia_dim / 2);
+	pix_y2 = ((dir2.y * -ratio) * env->ia_dim) + (env->ia_dim / 2);
 
 	plot_line(env, pix_x1, pix_y1, pix_x2, pix_y2, clr);
 }
@@ -287,9 +287,9 @@ void	ray_visualizer(t_env *env)
 	double		clr_delta = env->depth / 6;
 	for (int i = 0; i < env->bounce_vis; i++)
 	{
-		for (int y = 0; y < DIM_PT; y += env->ray_density)
-			for (int x = 0; x < DIM_PT; x += env->ray_density)
-				draw_ray(env, env->rays[i][x + (y * DIM_PT)].origin, env->rays[i + 1][x + (y * DIM_PT)].origin, clr);
+		for (int y = 0; y < env->pt_dim; y += env->ray_density)
+			for (int x = 0; x < env->pt_dim; x += env->ray_density)
+				draw_ray(env, env->rays[i][x + (y * env->pt_dim)].origin, env->rays[i + 1][x + (y * env->pt_dim)].origin, clr);
 		if (clr.y < 1.0)
 			clr.y += clr_delta;
 		else if (clr.x > 0.0)
@@ -345,10 +345,10 @@ void	draw_text(t_sdl *sdl)
 void	interactive(t_env *env)
 {
 	clock_t	frame_start = clock();
-	set_camera(&env->cam, (float)DIM_IA);
-	for (int y = 0; y < DIM_IA; y += 2)
+	set_camera(&env->cam, (float)env->ia_dim);
+	for (int y = 0; y < env->ia_dim; y += 2)
 	{
-		for (int x = 0; x < DIM_IA; x += 2)
+		for (int x = 0; x < env->ia_dim; x += 2)
 		{
 			//find world co-ordinates from camera and pixel plane (generate ray)
 			t_ray ray = generate_ray(env, x, y);
@@ -359,10 +359,10 @@ void	interactive(t_env *env)
 			else if (env->view == 4)
 				trace_bvh_heatmap(env->scene->bins, &ray);
 			//upscaling the resolution by 2x
-			env->ia->pixels[x + (y * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[(x + 1) + (y * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[x + ((y + 1) * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[(x + 1) + ((y + 1) * DIM_IA)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[x + (y * env->ia_dim)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[(x + 1) + (y * env->ia_dim)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[x + ((y + 1) * env->ia_dim)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[(x + 1) + ((y + 1) * env->ia_dim)] = (cl_float3){ray.color.x, ray.color.y, ray.color.z};
 		}
 	}
 	if (env->show_rays)
@@ -370,7 +370,7 @@ void	interactive(t_env *env)
 	draw_pixels(env->ia);
 	// draw_text(env->ia);
 	// SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Missing file", "File is missing. Please reinstall the program.", env->ia->win);
-	// draw_pixels(env->ia, DIM_IA, DIM_IA);
+	// draw_pixels(env->ia, env->ia_dim, env->ia_dim);
 	// mlx_put_image_to_window(env->mlx, env->ia->win, env->ia->img, 0, 0);
 	// if (env->show_fps)
 	// {

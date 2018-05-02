@@ -38,21 +38,21 @@ void	draw_pixels(t_sdl *sdl)
 void		init_sdl_pt(t_env *env)
 {
 	env->pt = malloc(sizeof(t_sdl));
-	env->pt->win = SDL_CreateWindow("CLIVE - Path Tracer", 900, 500, DIM_PT, DIM_PT, SDL_WINDOW_INPUT_FOCUS);
+	env->pt->win = SDL_CreateWindow("CLIVE - Path Tracer", 900, 500, env->pt_dim, env->pt_dim, SDL_WINDOW_INPUT_FOCUS);
 	env->pt->screen = SDL_GetWindowSurface(env->pt->win);
 	SDL_SetSurfaceRLE(env->pt->screen, 1);
-	env->pt->pixels = calloc(sizeof(cl_float3), (DIM_PT * DIM_PT));
-	env->pt->total_clr = calloc(sizeof(cl_float3), (DIM_PT * DIM_PT));
+	env->pt->pixels = calloc(sizeof(cl_float3), (env->pt_dim * env->pt_dim));
+	env->pt->total_clr = calloc(sizeof(cl_float3), (env->pt_dim * env->pt_dim));
 	env->pt->renderer = SDL_GetRenderer(env->pt->win);
 }
 
 void		init_sdl_ia(t_env *env)
 {
 	env->ia = malloc(sizeof(t_sdl));
-	env->ia->win = SDL_CreateWindow("CLIVE - Interactive Mode", 500, 500, DIM_IA, DIM_IA, SDL_WINDOW_INPUT_FOCUS);
+	env->ia->win = SDL_CreateWindow("CLIVE - Interactive Mode", 500, 500, env->ia_dim, env->ia_dim, SDL_WINDOW_INPUT_FOCUS);
 	env->ia->screen = SDL_GetWindowSurface(env->ia->win);
 	SDL_SetSurfaceRLE(env->ia->screen, 1);
-	env->ia->pixels = calloc(sizeof(cl_float3), (DIM_IA * DIM_IA));
+	env->ia->pixels = calloc(sizeof(cl_float3), (env->ia_dim * env->ia_dim));
 	env->ia->total_clr = NULL;
 	env->ia->renderer = SDL_GetRenderer(env->ia->win);
 	// env->ia->renderer = SDL_CreateRenderer(env->ia->win, -1, SDL_RENDERER_ACCELERATED);
@@ -65,7 +65,6 @@ void		init_sdl_ia(t_env *env)
 
 void		run_sdl(t_env *env)
 {
-	SDL_Init(SDL_INIT_VIDEO);
 	if (env->mode == IA)
 		init_sdl_ia(env);
 

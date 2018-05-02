@@ -181,10 +181,30 @@ void	load_config(t_env *env)
 		}
 		else if (strncmp(line, "camera.position=", 16) == 0)
 			env->cam.pos = get_vec(line);
-		else if (strncmp(line, "camera.normal=", 14) == 0)
+		else if (strncmp(line, "camera.direction=", 17) == 0)
 			env->cam.dir = unit_vec(get_vec(line));
 		else if (strncmp(line, "samples=", 8) == 0)
-			env->spp = (unsigned int)strtoul(strchr(line, '=') + 1, NULL, 10);
+			env->spp = (int)strtoul(strchr(line, '=') + 1, NULL, 10);
+		else if (strncmp(line, "ia.dimension=", 13) == 0)
+			env->ia_dim = (int)strtoul(strchr(line, '=') + 1, NULL, 10);
+		else if (strncmp(line, "pt.dimension=", 13) == 0)
+			env->pt_dim = (int)strtoul(strchr(line, '=') + 1, NULL, 10);
+	}
+	if (env->spp <= 0)
+		env->spp = 1;
+	SDL_DisplayMode dm;
+	SDL_Init(SDL_INIT_VIDEO);
+	if (SDL_GetDesktopDisplayMode(0, &dm) != 0)
+		dm.w = dm.h = 1080;
+	const int max_dim = (dm.w < dm.h) ? dm.w : dm.h;
+	if (env->ia_dim <= 0 || env->ia_dim > max_dim)
+		env->ia_dim = (env->ia_dim <= 0) ? 400 : max_dim;
+	if (env->pt_dim <= 0 || env->pt_dim > max_dim)
+		env->pt_dim = (env->pt_dim <= 0) ? 512 : max_dim;
+	if (env->pt_dim % 32 != 0 && env->pt_dim > 0)
+	{
+		env->pt_dim -= (env->pt_dim % 32);
+		printf("pt.dimension must be a multiple of 32\npt.dimension has been modified to %d\n", env->pt_dim);
 	}
 	env->cam.angle_x = atan2(env->cam.dir.z, env->cam.dir.x);
 	printf("cam.pos= %.0f %.0f %.0f\n", env->cam.pos.x, env->cam.pos.y, env->cam.pos.z);

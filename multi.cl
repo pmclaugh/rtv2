@@ -59,10 +59,13 @@ typedef struct s_material
 	float3 Ns;
 	float3 Ks;
 	float3 Ke;
+	float3 Kss;
 
 	float Ni;
 	float Tr;
 	float roughness;
+	float metallic;
+	float scatter;
 
 	//here's where texture and stuff goes
 	int d_index;

@@ -57,6 +57,10 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int xdim, int ydim)
 		simple_mats[i].Ni = s->materials[i].Ni;
 		simple_mats[i].Tr = s->materials[i].Tr;
 		simple_mats[i].roughness = s->materials[i].roughness;
+		
+		simple_mats[i].metallic = s->materials[i].metallic;
+		simple_mats[i].scatter = s->materials[i].scatter;
+		simple_mats[i].Kss = s->materials[i].Kss;
 
 		if (s->materials[i].map_Kd)
 		{

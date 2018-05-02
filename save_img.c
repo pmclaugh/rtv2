@@ -1,6 +1,6 @@
 #include "rt.h"
 
-void	save_img(cl_float3 *image)
+void	save_img(cl_float3 *image, int dimension)
 {
 	struct jpeg_compress_struct cinfo;
 	struct jpeg_error_mgr jerr;
@@ -19,8 +19,8 @@ void	save_img(cl_float3 *image)
 	}
 	jpeg_stdio_dest(&cinfo, outfile);
 
-	cinfo.image_width = DIM_PT; 	/* image width and height, in pixels */
-	cinfo.image_height = DIM_PT;
+	cinfo.image_width = dimension; 	/* image width and height, in pixels */
+	cinfo.image_height = dimension;
 	cinfo.input_components = 3;		/* # of color components per pixel */
 	cinfo.in_color_space = JCS_RGB; 	/* colorspace of input image */
 	jpeg_set_defaults(&cinfo);
@@ -30,13 +30,13 @@ void	save_img(cl_float3 *image)
 
 	row_stride = cinfo.image_width * 3;	/* JSAMPLEs per row in image_buffer */
 
-	unsigned char *img_data = calloc((DIM_PT * DIM_PT) * 3, sizeof(unsigned char));
-	for (int y = 0; y < DIM_PT; y++)
-		for (int x = 0; x < DIM_PT; x++)
+	unsigned char *img_data = calloc((dimension * dimension) * 3, sizeof(unsigned char));
+	for (int y = 0; y < dimension; y++)
+		for (int x = 0; x < dimension; x++)
 		{
-			img_data[(x * 3) + (y * DIM_PT * 3)] = image[x + (y * DIM_PT)].x * 255.0f;
-			img_data[1 + (x * 3) + (y * DIM_PT * 3)] = image[x + (y * DIM_PT)].y * 255.0f;
-			img_data[2 + (x * 3) + (y * DIM_PT * 3)] = image[x + (y * DIM_PT)].z * 255.0f;
+			img_data[(x * 3) + (y * dimension * 3)] = image[x + (y * dimension)].x * 255.0f;
+			img_data[1 + (x * 3) + (y * dimension * 3)] = image[x + (y * dimension)].y * 255.0f;
+			img_data[2 + (x * 3) + (y * dimension * 3)] = image[x + (y * dimension)].z * 255.0f;
 		}
 	while (cinfo.next_scanline < cinfo.image_height)
 	{

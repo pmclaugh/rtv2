@@ -34,9 +34,6 @@
 #define UNIT_Y (cl_float3){0, 1, 0}
 #define UNIT_Z (cl_float3){0, 0, 1}
 
-#define DIM_IA		400
-#define DIM_PT		512
-
 #define H_FOV M_PI_2 * 60.0 / 90.0
 
 #define ERROR 1e-4
@@ -122,12 +119,15 @@ typedef struct s_material
 	float d; //opacity
 	float Tr; //transparency (1 - d)
 	float roughness;
+	float metallic;
+	float scatter;
 	cl_float3 Tf; //transmission filter (ie color)
 	int illum; //flag for illumination model, raster only
 	cl_float3 Ka; //ambient mask
 	cl_float3 Kd; //diffuse mask
 	cl_float3 Ks; //specular mask
 	cl_float3 Ke; //emission mask
+	cl_float3 Kss; //subsurface color
 
 	char *map_Ka_path;
 	Map *map_Ka;
@@ -268,10 +268,13 @@ typedef struct s_gpu_mat
 	cl_float3 Ns;
 	cl_float3 Ks;
 	cl_float3 Ke;
+	cl_float3 Kss;
 	
 	cl_float Ni;
 	cl_float Tr;
 	cl_float roughness;
+	cl_float metallic;
+	cl_float scatter;
 
 	cl_int diff_ind;
 	cl_int diff_h;
@@ -446,6 +449,9 @@ typedef struct s_env
 	t_camera	cam;
 	Scene		*scene;
 
+	int			pt_dim;
+	int			ia_dim;
+
 	t_sdl		*ia;
 	t_sdl		*pt;
 	t_key		key;
@@ -575,4 +581,4 @@ void		init_sdl_ia(t_env *env);
 void		run_sdl(t_env *env);
 
 //save_img.c
-void		save_img(cl_float3 *image);
+void		save_img(cl_float3 *image, int dimension);

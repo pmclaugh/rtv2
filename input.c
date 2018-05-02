@@ -93,7 +93,7 @@ void		key_press(int key, t_env *env)
 	{
 		env->show_rays = (!env->show_rays) ? 1 : 0;
 		if (env->show_rays)
-			gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, 1, env);
+			gpu_render(env->scene, env->cam, env->pt_dim, env->pt_dim, 1, 1, env);
 	}
 	else if (key == SDLK_PAGEUP)
 		env->ray_density /= 2;
@@ -118,7 +118,7 @@ void		key_press(int key, t_env *env)
 	else if (key == SDLK_f)
 		env->show_fps = (!env->show_fps) ? 1 : 0;
 	else if (key == SDLK_z && env->pt)
-		save_img(env->pt->pixels);
+		save_img(env->pt->pixels, env->pt_dim);
 	if (MOVE_KEYS || ARR_KEYS)
 	{
 		if (MOVE_KEYS)
@@ -287,7 +287,7 @@ void		handle_input(t_env *env)
 
 void	mouse_press(int x, int y, t_env *env)
 {
-	if (x >= DIM_IA - 100 && x < DIM_IA && y < 100 && y >= 0)
+	if (x >= env->ia_dim - 100 && x < env->ia_dim && y < 100 && y >= 0)
 	{
 		env->view++;
 		if (env->view > 4)

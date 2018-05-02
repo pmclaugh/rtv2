@@ -21,17 +21,17 @@ void		path_tracer(t_env *env)
 		init_sdl_pt(env);
 	int first = (env->samples == 0) ? 1 : 0;
 	env->samples += 1;
-	set_camera(&env->cam, DIM_PT);
-	cl_float3 *pix = gpu_render(env->scene, env->cam, DIM_PT, DIM_PT, 1, first, env);
-	sum_color(env->pt->total_clr, pix, DIM_PT * DIM_PT);
+	set_camera(&env->cam, env->pt_dim);
+	cl_float3 *pix = gpu_render(env->scene, env->cam, env->pt_dim, env->pt_dim, 1, first, env);
+	sum_color(env->pt->total_clr, pix, env->pt_dim * env->pt_dim);
 	free(pix);
-	alt_composite(env->pt, DIM_PT * DIM_PT, env->samples);
+	alt_composite(env->pt, env->pt_dim * env->pt_dim, env->samples);
 	draw_pixels(env->pt);
 	if (env->samples >= env->spp)
 	{
 		env->samples = 0;
 		env->render = 0;
-		for (int i = 0; i < DIM_PT * DIM_PT; i++)
+		for (int i = 0; i < env->pt_dim * env->pt_dim; i++)
 		{
 			env->pt->total_clr[i].x = 0;
 			env->pt->total_clr[i].y = 0;
@@ -45,6 +45,8 @@ t_env		*init_env(void)
 	t_env	*env = malloc(sizeof(t_env));
 	env->cam = init_camera();
 	//load camera settings from config file and import scene
+	env->pt_dim = 512;
+	env->ia_dim = 400;
 	env->mode = PT;
 	env->view = 1;
 	env->show_rays = 0;
