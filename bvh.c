@@ -30,8 +30,8 @@ AABB sum_box(AABB a, AABB b)
 	return ret;
 }
 
-#define Ct 1.0f
-#define Ci 10.0f
+#define Ct 10.0f
+#define Ci 1.0f
 
 float SA(AABB *box)
 {
@@ -132,11 +132,13 @@ Split *fast_object_split(AABB *box)
 	return best_split;
 }
 
+
+
 void partition(AABB *box)
 {
-	Split *object = fast_object_split(box);
+	Split *object = fast_object_split(box); //figure out the best way to split the box
 
-	if (SAH(object, box) < Ci * box->member_count)
+	if (SAH(object, box) < Ci * box->member_count) //is that split worth it?
 	{
 		AABB **members = calloc(box->member_count, sizeof(AABB *));
 		AABB *b = box->members;
@@ -161,13 +163,6 @@ void partition(AABB *box)
 			}
 		}
 		free(members);
-	}
-	else
-	{
-		printf("choosing not to split because SAH is %f and check cost is %f\n", SAH(object, box), (float)(Ci * box->member_count));
-		//these should be null already but just making sure
-		box->left = NULL;
-		box->right = NULL;
 	}
 	
 	if (object)

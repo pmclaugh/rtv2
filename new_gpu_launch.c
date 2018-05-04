@@ -335,7 +335,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	//for simplicity assuming one platform for now. can easily be extended, see old gpu_launch.c
 
 	size_t worksize = xdim * ydim;
-	size_t localsize = 32;
+	size_t localsize = 64;
 	size_t sample_max = samples;
 	size_t width = xdim;
 
