@@ -65,9 +65,19 @@ cl_float3 vec_add(const cl_float3 a, const cl_float3 b)
 	return (cl_float3){a.x + b.x, a.y + b.y, a.z + b.z};
 }
 
+cl_float3 vec_mult(const cl_float3 a, const cl_float3 b)
+{
+	return (cl_float3){a.x * b.x, a.y * b.y, a.z * b.z};
+}
+
 cl_float3 vec_scale(const cl_float3 vec, const float scalar)
 {
 	return (cl_float3){vec.x * scalar, vec.y * scalar, vec.z * scalar};
+}
+
+cl_float3 vec_inverse(const cl_float3 vec)
+{
+	return (cl_float3){1.0f / vec.x, 1.0f / vec.y, 1.0f / vec.z};
 }
 
 cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec)

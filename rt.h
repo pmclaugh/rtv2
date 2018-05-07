@@ -510,6 +510,8 @@ float dot(const cl_float3 a, const cl_float3 b);
 cl_float3 cross(const cl_float3 a, const cl_float3 b);
 cl_float3 vec_sub(const cl_float3 a, const cl_float3 b);
 cl_float3 vec_add(const cl_float3 a, const cl_float3 b);
+cl_float3 vec_mult(const cl_float3 a, const cl_float3 b);
+cl_float3 vec_inverse(const cl_float3 vec);
 cl_float3 vec_scale(const cl_float3 vec, const float scalar);
 cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
 cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec);
@@ -577,3 +579,7 @@ void		run_sdl(t_env *env);
 
 //save_img.c
 void		save_img(cl_float3 *image);
+
+
+//bidirectional.c
+cl_float3	*bidirectional(t_env *env);

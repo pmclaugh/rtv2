@@ -21,7 +21,8 @@ SRC =	vec.c \
 		face.c \
 		sdl.c \
 		save_img.c \
-		3ds_import.c
+		3ds_import.c \
+		bidirectional.c \
 
 OBJ = $(SRC:.c=.o)
 
