@@ -171,13 +171,20 @@ void partition(AABB *box)
 
 void sbvh(t_env *env)
 {
-	//LL is best for this bvh. don't want to rearrange import for now, will do later
+	//some preprocessing
 	Face *faces = NULL;
 	for (int i = 0; i < env->scene->face_count; i++)
 	{
 		Face *f = calloc(1, sizeof(Face));
 		memcpy(f, &env->scene->faces[i], sizeof(Face));
 		f->next = faces;
+
+		for (int i = 0; i < 3; i++)
+		{
+			f->edges[i] = unit_vec(vec_sub(f->verts[i], f->verts[(i + 1) % 3]));
+			f->edge_t[i] = vec_mag(vec_sub(f->verts[i], f->verts[(i + 1) % 3]));
+		}
+
 		faces = f;
 	}
 	free(env->scene->faces);

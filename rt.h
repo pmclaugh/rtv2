@@ -144,6 +144,8 @@ typedef struct s_face
 	cl_int mat_ind;
 	cl_int smoothing;
 	cl_float3 verts[4];
+	cl_float3 edges[3];
+	float edge_t[3];
 	cl_float3 norms[4];
 	cl_float3 tex[4];
 	cl_float3 N;
