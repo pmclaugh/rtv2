@@ -58,11 +58,25 @@ void flex(Bin *bin, AABB *member)
 
 AABB *clip(AABB *member, Bin *bin, int axis)
 {
+	// printf("going to clip this face:\n");
+	// print_face(member->f);
+	// printf("bounded by\n");
+	// print_vec(member->min);
+	// print_vec(member->max);
+	// printf("with this bin (axis %d)\n", axis);
+	// print_vec(bin->bin_min);
+	// print_vec(bin->bin_max);
+	// getchar();
+
 	AABB *clipped = dupe_box(member);
 
 	//first, clipped = intersection(member, bin). only need to modify relevant axis (we know it's <= on the other axes)
 	((float *)&clipped->min)[axis] = fmax(((float *)&clipped->min)[axis], ((float *)&bin->bin_min)[axis]);
 	((float *)&clipped->max)[axis] = fmin(((float *)&clipped->max)[axis], ((float *)&bin->bin_max)[axis]);
+
+	// printf("box clipped to bin looks like:\n");
+	// print_box(clipped);
+	// getchar();
 
 	//now we need to see if we can shrink it more
 	float left = ((float *)&clipped->min)[axis];
@@ -76,6 +90,9 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 	for (int vert = 0; vert < 3; vert++)
 		if (point_in_box(member->f->verts[vert], clipped))
 			pt_cloud[pt_count++] = member->f->verts[vert];
+
+	// printf("%d of the vertices were actually inside clipped box\n", pt_count);
+	// getchar();
 
 	//for each edge, solve for t such that [axis] == left, [axis] == right, add to "point cloud"
 	for (int edge = 0; edge < 3; edge++)
@@ -95,64 +112,99 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 
 	if (pt_count > 6)
 		printf("too many points!\n");
-	if (pt_count == 0)
+	if (pt_count <= 2)
 	{
 		printf("not enough points!!\n");
 		print_face(member->f);
 		printf("bounded by\n");
 		print_vec(member->min);
 		print_vec(member->max);
-		printf("had no hits in\n");
+		printf("had only %d hits in\n", pt_count);
 		print_vec(clipped->min);
 		print_vec(clipped->max);
-		printf("we generated that from\n");
-		print_vec(member->min);
-		print_vec(member->max);
-		printf("and\n");
+		printf("bin was (axis %d)\n", axis);
 		print_vec(bin->bin_min);
 		print_vec(bin->bin_max);
 		getchar();
 	}
 
 	AABB *fit = box_from_points(pt_cloud, pt_count);
+	// printf("after edge-solving we have %d points\n", pt_count);
+	// printf("and the point cloud box looks like:\n");
+	// print_box(fit);
 
 	//now clipped should become intersection(clipped, fit)
-	((float *)&clipped->min)[axis] = fmax(((float *)&clipped->min)[axis], ((float *)&fit->min)[axis]);
-	((float *)&clipped->max)[axis] = fmin(((float *)&clipped->max)[axis], ((float *)&fit->max)[axis]);
+	for (int i = 0; i < 3; i++)
+	{
+		((float *)&clipped->min)[i] = fmax(((float *)&clipped->min)[i], ((float *)&fit->min)[i]);
+		((float *)&clipped->max)[i] = fmin(((float *)&clipped->max)[i], ((float *)&fit->max)[i]);
+	}
+
+	// printf("final box looks like\n");
+	// print_box(clipped);
+	// getchar();
 
 	free(fit);
 	return clipped;
 }
 
-int point_in_range_L(cl_float3 point, cl_float3 min, cl_float3 max)
+int point_in_range_L(cl_float3 point, cl_float3 min, cl_float3 max, int last)
 {
-	if (min.x <= point.x && point.x < max.x)
-		if (min.y <= point.y  && point.y < max.y)
-			if (min.z <= point.z && point.z < max.z)
-				return 1;
-	return 0;
+	if (last)
+	{
+		if (min.x <= point.x && point.x <= max.x)
+			if (min.y <= point.y  && point.y <= max.y)
+				if (min.z <= point.z && point.z <= max.z)
+					return 1;
+		return 0;
+	}
+	else
+	{
+		if (min.x <= point.x && point.x < max.x)
+			if (min.y <= point.y  && point.y < max.y)
+				if (min.z <= point.z && point.z < max.z)
+					return 1;
+		return 0;
+	}
 }
 
-int point_in_range_R(cl_float3 point, cl_float3 min, cl_float3 max)
+int point_in_range_R(cl_float3 point, cl_float3 min, cl_float3 max, int first)
 {
-	if (min.x < point.x && point.x <= max.x)
-		if (min.y < point.y  && point.y <= max.y)
-			if (min.z < point.z && point.z <= max.z)
-				return 1;
-	return 0;
+	if (first)
+	{
+		if (min.x <= point.x && point.x <= max.x)
+			if (min.y <= point.y  && point.y <= max.y)
+				if (min.z <= point.z && point.z <= max.z)
+					return 1;
+		return 0;
+	}
+	else
+	{
+		if (min.x < point.x && point.x <= max.x)
+			if (min.y < point.y  && point.y <= max.y)
+				if (min.z < point.z && point.z <= max.z)
+					return 1;
+		return 0;
+	}
 }
 
 void add_face(AABB *member, Bin_set *set, int axis, AABB *parent)
 {
-	//default values
+	// printf("adding face:\n");
+	// print_face(member->f);
+	// printf("bounded by box:\n");
+	// print_box(member);
+	// getchar();
+
+	//default values, should always get overwritten
 	int leftmost = 0;
 	int rightmost = set->counts[axis];
 
 	for (int i = 0; i <= set->counts[axis]; i++)
 	{
-		if (point_in_range_L(member->min, set->bins[axis][i].bin_min, set->bins[axis][i].bin_max))
+		if (point_in_range_L(member->min, set->bins[axis][i].bin_min, set->bins[axis][i].bin_max, i == set->counts[axis] ? 1 : 0))
 			leftmost = i;
-		if (point_in_range_R(member->max, set->bins[axis][i].bin_min, set->bins[axis][i].bin_max))
+		if (point_in_range_R(member->max, set->bins[axis][i].bin_min, set->bins[axis][i].bin_max, i == 0 ? 1 : 0))
 			rightmost = i;
 	}
 

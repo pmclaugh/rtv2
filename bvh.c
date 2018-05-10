@@ -3,7 +3,7 @@
 #define VERBOSE 0
 #define SPATIAL_ENABLE 1
 
-#define ALPHA 0.001f
+#define ALPHA 0.0001f
 #define LEAF_THRESHOLD 8
 
 // typedef struct s_split
@@ -226,6 +226,9 @@ void partition(AABB *box)
 		box->left = dupe_box(spatial->left_flex);
 		box->right = dupe_box(spatial->right_flex);
 
+		printf("we settled on this split:\n");
+		print_split(spatial);
+
 		//I built the clip function to work on Bins not AABBs so do a quick conversion
 		Bin left, right;
 		left.bin_min = spatial->left->min;
@@ -241,12 +244,12 @@ void partition(AABB *box)
 		{
 			AABB *tmp = b->next;
 
-			if (point_in_box(b->min, spatial->left) && point_in_box(b->max, spatial->left))
+			if (point_in_box(b->max, spatial->left))
 			{
 				push(&box->left->members, b);
 				box->left->member_count++;
 			}
-			else if (point_in_box(b->min, spatial->right) && point_in_box(b->max, spatial->right))
+			else if (point_in_box(b->min, spatial->right))
 			{
 				push(&box->right->members, b);
 				box->right->member_count++;
