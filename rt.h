@@ -348,14 +348,26 @@ typedef struct s_split
 	float ratio;
 }				Split;
 
-//bvh_util.c
+typedef struct s_bin
+{
+	cl_float3 bin_min;
+	cl_float3 bin_max;
+	cl_float3 bag_min;
+	cl_float3 bag_max;
+	int enter;
+	int exit;
+}				Bin;
+
+typedef struct s_bin_set
+{
+	Bin **bins;
+	int counts[3];
+	cl_float3 span;
+}				Bin_set;
+
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
-#define SPLIT_TEST_NUM 32
-#define LEAF_THRESHOLD 4
-#define BOOST_DEPTH 11
-#define ALPHA 0.01f
-#define SPLIT_SPOT ((float)i + 1.0f) / (SPLIT_TEST_NUM + 1.0f) 
+#define SPLIT_TEST_NUM 256
 
 cl_float3 center(const AABB *box);
 void push(AABB **stack, AABB *box);
@@ -429,6 +441,9 @@ float area(AABB *box);
 cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_int **counts);
 cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution, int **counts);
 int depth(AABB *box);
+
+Split *fast_spatial_split(AABB *box);
+AABB *clip(AABB *member, Bin *bin, int axis);
 
 Face *ply_import(char *ply_file, File_edits edit_info, int *face_count);
 Face *object_flatten(Face *faces, int *face_count);

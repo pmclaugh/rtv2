@@ -1,6 +1,9 @@
 #include "rt.h"
 
 #define VERBOSE 0
+#define SPATIAL_ENABLE 1
+
+#define ALPHA 0.01f
 
 // typedef struct s_split
 // {
@@ -66,7 +69,7 @@ Split *scan_tallies(AABB *ltr, AABB *rtl, int count, AABB *parent, enum axis ax)
 	best->left_flex = dupe_box(&ltr[best_ind]);
 	best->left_count = best_ind + 1;
 	best->right_flex = dupe_box(&rtl[best_ind + 1]);
-	best->right_count = count - best_ind;
+	best->right_count = count - best_ind - 1;
 	best->ratio = best_SAH; //I am going to rename this variable but it's fine for now
 	return best;
 }
@@ -88,19 +91,27 @@ Split *fast_object_split(AABB *box)
 	fast_axis_sort(members, count, X_AXIS);
 	memcpy(tallies_ltr, members, count * sizeof(AABB));
 	memcpy(tallies_rtl, members, count * sizeof(AABB));
+
 	for (int i = 1; i < count; i++)
 		tallies_ltr[i] = sum_box(tallies_ltr[i], tallies_ltr[i - 1]);
+	
 	for (int i = count - 2; i >= 0; i--)
 		tallies_rtl[i] = sum_box(tallies_rtl[i], tallies_rtl[i + 1]);
+	
 	best_split = scan_tallies(tallies_ltr, tallies_rtl, count, box, X_AXIS);
+	
+
 	//Y axis
 	fast_axis_sort(members, count, Y_AXIS);
 	memcpy(tallies_ltr, members, count * sizeof(AABB));
 	memcpy(tallies_rtl, members, count * sizeof(AABB));
-	for (int i = 1; i < count; i ++)
+	
+	for (int i = 1; i < count; i++)
 		tallies_ltr[i] = sum_box(tallies_ltr[i], tallies_ltr[i - 1]);
+	
 	for (int i = count - 2; i >= 0; i--)
 		tallies_rtl[i] = sum_box(tallies_rtl[i], tallies_rtl[i + 1]);
+	
 	Split *this_split = scan_tallies(tallies_ltr, tallies_rtl, count, box, Y_AXIS);
 	if (this_split->ratio < best_split->ratio)
 	{
@@ -110,14 +121,18 @@ Split *fast_object_split(AABB *box)
 	else
 		free(this_split);
 
+
 	//Z axis
 	fast_axis_sort(members, count, Z_AXIS);
 	memcpy(tallies_ltr, members, count * sizeof(AABB));
 	memcpy(tallies_rtl, members, count * sizeof(AABB));
-	for (int i = 1; i < count; i ++)
+
+	for (int i = 1; i < count; i++)
 		tallies_ltr[i] = sum_box(tallies_ltr[i], tallies_ltr[i - 1]);
+
 	for (int i = count - 2; i >= 0; i--)
 		tallies_rtl[i] = sum_box(tallies_rtl[i], tallies_rtl[i + 1]);
+
 	this_split = scan_tallies(tallies_ltr, tallies_rtl, count, box, Z_AXIS);
 	if (this_split->ratio < best_split->ratio)
 	{
@@ -132,45 +147,124 @@ Split *fast_object_split(AABB *box)
 	return best_split;
 }
 
-
+float root_SA;
 
 void partition(AABB *box)
 {
-	Split *object = fast_object_split(box); //figure out the best way to split the box
+	Split *object = fast_object_split(box);
+	Split *spatial = ((SA_overlap(object) / root_SA) > ALPHA) && SPATIAL_ENABLE ? fast_spatial_split(box) : NULL;
 
-	if (SAH(object, box) < Ci * box->member_count) //is that split worth it?
+	float object_sah = SAH(object, box);
+	float spatial_sah = spatial ? SAH(spatial, box) : FLT_MAX;
+
+	float best_sah;
+	Split *chosen;
+	if (object_sah <= spatial_sah)
 	{
-		AABB **members = calloc(box->member_count, sizeof(AABB *));
-		AABB *b = box->members;
-		for (int i = 0; b; b = b->next, i++)
-			members[i] = b;
+		best_sah = object_sah;
+		chosen = object;
+		//printf("OBJECT wins\n");
+	}
+	else
+	{
+		best_sah = spatial_sah;
+		chosen = spatial;
+		//printf("SPATIAL wins\n");
+	}
 
-		pointer_axis_sort(members, box->member_count, object->ax);
-
-		box->left = dupe_box(object->left_flex);
-		box->right = dupe_box(object->right_flex);
-		for (int i = 0; i < box->member_count; i++)
+	if (best_sah < Ci * box->member_count) //is it worth splitting at all?
+	{
+		if (chosen == object)
 		{
-			if (i < object->left_count)
+			AABB **members = calloc(box->member_count, sizeof(AABB *));
+			AABB *b = box->members;
+			for (int i = 0; b; b = b->next, i++)
+				members[i] = b;
+
+			pointer_axis_sort(members, box->member_count, object->ax);
+
+			box->left = dupe_box(object->left_flex);
+			box->right = dupe_box(object->right_flex);
+			for (int i = 0; i < box->member_count; i++)
 			{
-				push(&box->left->members, members[i]);
-				box->left->member_count++;
+				if (i < object->left_count)
+				{
+					push(&box->left->members, members[i]);
+					box->left->member_count++;
+				}
+				else
+				{
+					push(&box->right->members, members[i]);
+					box->right->member_count++;
+				}
 			}
-			else
+			free(members);
+		}
+		else
+		{
+			box->left = dupe_box(spatial->left_flex);
+			box->right = dupe_box(spatial->right_flex);
+
+			//I built the clip function to work on Bins not AABBs so do a quick conversion
+			Bin left, right;
+			left.bin_min = spatial->left->min;
+			left.bin_max = spatial->left->max;
+			right.bin_min = spatial->right->min;
+			right.bin_max = spatial->right->max;
+
+			int axis = spatial->ax - X_AXIS; //awkward, fix
+
+			//now distribute the members and re-clip on the chosen bounds if needed.
+			//seems a little inefficient but it's not that expensive and saves the hassle of tracking fragments from before.
+			for (AABB *b = box->members; b;)
 			{
-				push(&box->right->members, members[i]);
-				box->right->member_count++;
+				AABB *tmp = b->next;
+
+				if (point_in_box(b->min, spatial->left) && point_in_box(b->max, spatial->left))
+				{
+					push(&box->left->members, b);
+					box->left->member_count++;
+				}
+				else if (point_in_box(b->min, spatial->right) && point_in_box(b->max, spatial->right))
+				{
+					push(&box->right->members, b);
+					box->right->member_count++;
+				}
+				else
+				{
+					AABB *lclip, *rclip;
+					
+					lclip = clip(b, &left, axis);
+					rclip = clip(b, &right, axis);
+					
+					lclip->f = b->f;
+					rclip->f = b->f;
+
+					push(&box->left->members, lclip);
+					push(&box->right->members, rclip);
+					
+					box->left->member_count++;
+					box->right->member_count++;
+
+					free(b);
+				}
+
+				b = tmp;
 			}
 		}
-		free(members);
 	}
 	
 	if (object)
 		free_split(object);
+	if (spatial)
+		free_split(spatial);
 }
 
 void sbvh(t_env *env)
 {
+	printf("start bvh process\n");
+
+
 	//some preprocessing
 	Face *faces = NULL;
 	for (int i = 0; i < env->scene->face_count; i++)
@@ -181,8 +275,8 @@ void sbvh(t_env *env)
 
 		for (int i = 0; i < 3; i++)
 		{
-			f->edges[i] = unit_vec(vec_sub(f->verts[i], f->verts[(i + 1) % 3]));
-			f->edge_t[i] = vec_mag(vec_sub(f->verts[i], f->verts[(i + 1) % 3]));
+			f->edges[i] = unit_vec(vec_sub(f->verts[(i + 1) % 3], f->verts[i]));
+			f->edge_t[i] = vec_mag(vec_sub(f->verts[(i + 1) % 3], f->verts[i]));
 		}
 
 		faces = f;
@@ -200,6 +294,8 @@ void sbvh(t_env *env)
 
 	AABB *root_box = box_from_boxes(boxes);
 
+	root_SA = SA(root_box);
+
 	AABB *stack = root_box;
 	int count = 1;
 	int ref_count = 0;
@@ -208,7 +304,7 @@ void sbvh(t_env *env)
 	{
 		AABB *box = pop(&stack);
 		partition(box);
-		if (box->left)
+		if (box->left) // we always make 2 children or 0.
 		{
 			box->left->parent = box;
 			box->right->parent = box;
@@ -220,7 +316,7 @@ void sbvh(t_env *env)
 		else
 			ref_count += box->member_count;
 	}
-	printf("done. %d boxes", count);
+	printf("done. %d boxes\n", count);
 	printf("%d member references vs %d starting\n", ref_count, root_box->member_count);
 
 	env->scene->bins = root_box;

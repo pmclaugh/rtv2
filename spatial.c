@@ -1,23 +1,6 @@
 #include "rt.h"
 #include <limits.h>
 
-typedef struct s_bin
-{
-	cl_float3 bin_min;
-	cl_float3 bin_max;
-	cl_float3 bag_min;
-	cl_float3 bag_max;
-	int enter;
-	int exit;
-}				Bin;
-
-typedef struct s_bin_set
-{
-	Bin **bins;
-	int counts[3];
-	cl_float3 span;
-}				Bin_set;
-
 Bin new_bin(AABB *box, int axis, int index, int count, cl_float3 span)
 {
 	//represent a new split using the "bin/bag paradigm"
@@ -46,11 +29,16 @@ Bin_set *allocate_bins(AABB *box)
 	set->counts[1] = (int)((float)SPLIT_TEST_NUM * set->span.y / total);
 	set->counts[2] = SPLIT_TEST_NUM - set->counts[0] - set->counts[1];
 
+	// printf("x: %d y: %d z: %d\n", set->counts[0], set->counts[1], set->counts[2]);
+
 	//careful with counting, 3 splits yeilds 4 bins
-	set->bins = calloc(SPLIT_TEST_NUM + 3, sizeof(Bin));
+	set->bins = calloc(3, sizeof(Bin *));
 	for (int axis = 0; axis < 3; axis++)
+	{
+		set->bins[axis] = calloc(set->counts[axis] + 1, sizeof(Bin));
 		for (int j = 0; j <= set->counts[axis]; j++)
 			set->bins[axis][j] = new_bin(box, axis, j, set->counts[axis], set->span);
+	}
 
 	return set;
 }
@@ -70,38 +58,41 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 {
 	AABB *clipped = dupe_box(member);
 
-	//first, clipped = union(member, bin). only need to modify relevant axis (we know it fit on the other two)
+	//first, clipped = intersection(member, bin). only need to modify relevant axis (we know it's <= on the other axes)
 	((float *)&clipped->min)[axis] = fmax(((float *)&clipped->min)[axis], ((float *)&bin->bin_min)[axis]);
 	((float *)&clipped->max)[axis] = fmin(((float *)&clipped->max)[axis], ((float *)&bin->bin_max)[axis]);
 
 	//now we need to see if we can shrink it more
 	float left = ((float *)&clipped->min)[axis];
 	float right = ((float *)&clipped->max)[axis];
-	//for each edge, solve for [axis] == left, [axis] == right, add to "point cloud"
+	
 	cl_float3 pt_cloud[6];
 	bzero(&pt_cloud, sizeof(cl_float3) * 6);
 	int pt_count = 0;
+
+	//check for vertices actually inside this box
 	for (int vert = 0; vert < 3; vert++)
 		if (point_in_box(member->f->verts[vert], clipped))
 			pt_cloud[pt_count++] = member->f->verts[vert];
+	//for each edge, solve for t such that [axis] == left, [axis] == right, add to "point cloud"
 	for (int edge = 0; edge < 3; edge++)
 	{
 		float target = left - ((float *)&member->f->verts[edge])[axis];
 		float t = target / ((float *)&member->f->edges[edge])[axis];
 
-		if (t == t && t > 0.0f && t < member->f->edge_t[axis]) //might need more checks
+		if (t == t && t > 0.0f && t < member->f->edge_t[edge]) //might need more checks
 			pt_cloud[pt_count++] = vec_add(member->f->verts[edge], vec_scale(member->f->edges[edge], t));
 
 		target = right - ((float *)&member->f->verts[edge])[axis];
 		t = target / ((float *)&member->f->edges[edge])[axis];
 
-		if (t == t && t > 0.0f && t < member->f->edge_t[axis])
+		if (t == t && t > 0.0f && t < member->f->edge_t[edge])
 			pt_cloud[pt_count++] = vec_add(member->f->verts[edge], vec_scale(member->f->edges[edge], t));
 	}
-
+	
 	AABB *fit = box_from_points(pt_cloud, pt_count);
 
-	//now clipped should become union(clipped, fit)
+	//now clipped should become intersection(clipped, fit)
 	((float *)&clipped->min)[axis] = fmax(((float *)&clipped->min)[axis], ((float *)&fit->min)[axis]);
 	((float *)&clipped->max)[axis] = fmin(((float *)&clipped->max)[axis], ((float *)&fit->max)[axis]);
 
@@ -111,17 +102,21 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 
 void add_face(AABB *member, Bin_set *set, int axis, AABB *parent)
 {
-	int leftmost = INT_MAX;
-	int rightmost = INT_MIN;
+	int leftmost;
+	int rightmost;
 	float ratio;
 
-	ratio = (((float *)&member->min)[axis] -  ((float *)&parent->min)[axis]) / ((float *)&set->span)[axis];
-	leftmost = (int)floor(ratio * ((float *)&set->counts)[axis]);
-	
-	ratio = (((float *)&member->max)[axis] -  ((float *)&parent->min)[axis]) / ((float *)&set->span)[axis];
-	rightmost = (int)floor(ratio * ((float *)&set->counts)[axis]);
+	ratio = (((float *)&member->min)[axis] - ((float *)&parent->min)[axis]) / ((float *)&set->span)[axis];
+	ratio = fmin(fmax(0.0f, ratio), 1.0f);
+	leftmost = (int)floor(ratio * (float)(set->counts[axis] + 1));
 
-	if (rightmost == set->counts[axis])
+	ratio = (((float *)&member->max)[axis] - ((float *)&parent->min)[axis]) / ((float *)&set->span)[axis];
+	ratio = fmin(fmax(0.0f, ratio), 1.0f);
+	rightmost = (int)floor(ratio * (float)(set->counts[axis] + 1));
+
+	if (leftmost == set->counts[axis] + 1)
+		leftmost--;
+	if (rightmost == set->counts[axis] + 1)
 		rightmost--;
 
 	set->bins[axis][leftmost].enter++;
@@ -130,23 +125,153 @@ void add_face(AABB *member, Bin_set *set, int axis, AABB *parent)
 	if (leftmost == rightmost)
 		flex(&set->bins[axis][leftmost], member);
 	else
+	{
 		for (int bin = leftmost; bin <= rightmost; bin++)
 		{
 			AABB *clipped = clip(member, &set->bins[axis][bin], axis);
 			flex(&set->bins[axis][bin], clipped);
 			free(clipped);
 		}
+	}
+}
+
+Bin sum_bin(Bin a, Bin b)
+{
+	Bin ret;
+	bzero(&ret, sizeof(Bin));
+	ret.bag_min.x = fmin(a.bag_min.x, b.bag_min.x);
+	ret.bag_min.y = fmin(a.bag_min.y, b.bag_min.y);
+	ret.bag_min.z = fmin(a.bag_min.z, b.bag_min.z);
+
+	ret.bag_max.x = fmax(a.bag_max.x, b.bag_max.x);
+	ret.bag_max.y = fmax(a.bag_max.y, b.bag_max.y);
+	ret.bag_max.z = fmax(a.bag_max.z, b.bag_max.z);
+
+	ret.enter = a.enter + b.enter;
+	ret.exit = a.exit + b.exit;
+	return ret;
+}
+
+float bin_SA(Bin bin)
+{
+	cl_float3 span = vec_sub(bin.bag_max, bin.bag_min);
+	span = (cl_float3){fabs(span.x), fabs(span.y), fabs(span.z)};
+	return 2 * span.x * span.y + 2 * span.y * span.z + 2 * span.x * span.z;
+}
+
+float bin_SAH(Bin a, Bin b, AABB *parent)
+{
+	if (a.enter == parent->member_count || b.exit == parent->member_count)
+		return FLT_MAX;
+	return (bin_SA(a) * a.enter + bin_SA(b) * b.exit) / SA(parent);
+}
+
+AABB *box_from_range(cl_float3 min, cl_float3 max)
+{
+	AABB *box = empty_box();
+	box->min = min;
+	box->max = max;
+	return box;
+}
+
+Split *find_best_split(Bin_set *set, AABB *parent)
+{
+	Bin **ltr = calloc(3, sizeof(Bin *));
+	Bin **rtl = calloc(3, sizeof(Bin *));
+
+	//sum everything up
+	for (int axis = 0; axis < 3; axis++)
+	{
+		ltr[axis] = calloc(set->counts[axis] + 1, sizeof(Bin));
+		rtl[axis] = calloc(set->counts[axis] + 1, sizeof(Bin));
+
+		ltr[axis][0] = set->bins[axis][0];
+		for (int i = 1; i <= set->counts[axis]; i++)
+			ltr[axis][i] = sum_bin(ltr[axis][i - 1], set->bins[axis][i]);
+
+		rtl[axis][set->counts[axis]] = set->bins[axis][set->counts[axis]];
+		for (int i = set->counts[axis] - 1; i >= 0; i--)
+			rtl[axis][i] = sum_bin(rtl[axis][i + 1], set->bins[axis][i]);
+	}
+
+	//find the best split
+	int best_axis = -1;
+	int best_index = -1;
+	float best_sah = FLT_MAX;
+	for (int axis = 0; axis < 3; axis++)
+	{
+		for (int i = 0; i < set->counts[axis]; i++)
+		{
+			float this_sah = bin_SAH(ltr[axis][i], rtl[axis][i + 1], parent);
+			if (this_sah < best_sah)
+			{
+				best_axis = axis;
+				best_index = i;
+				best_sah = this_sah;
+			}
+		}
+	}
+
+	//turn that into a proper Split
+	Split *winner = calloc(1, sizeof(Split));
+	winner->left = box_from_range(set->bins[best_axis][0].bin_min, set->bins[best_axis][best_index].bin_max);
+	winner->right = box_from_range(set->bins[best_axis][best_index + 1].bin_min, set->bins[best_axis][set->counts[best_axis]].bin_max);
+
+	winner->left_flex = box_from_range(ltr[best_axis][best_index].bag_min, ltr[best_axis][best_index].bag_max);
+	winner->right_flex = box_from_range(rtl[best_axis][best_index + 1].bag_min, rtl[best_axis][best_index + 1].bag_max);
+
+	winner->left_count = ltr[best_axis][best_index].enter;
+	winner->right_count = rtl[best_axis][best_index + 1].exit;
+	winner->both_count = winner->left_count + winner->right_count - parent->member_count;
+
+	winner->ax = X_AXIS + best_axis; //awkward, fix this
+
+	//clean up
+	for (int axis = 0; axis < 3; axis++)
+	{
+		free(ltr[axis]);
+		free(rtl[axis]);
+		free(set->bins[axis]);
+	}
+	free(ltr);
+	free(rtl);
+	free(set->bins);
+	free(set);
+
+	return winner;
+}
+
+void print_set(Bin_set *set)
+{
+	printf("======print_set=======\n");
+	for (int axis = 0; axis < 3; axis++)
+	{
+		printf("axis %d\n", axis);
+		for (int i = 0; i <= set->counts[axis]; i++)
+		{
+			printf("bin, bag %d\n", i);
+			print_vec(set->bins[axis][i].bin_min);
+			print_vec(set->bins[axis][i].bin_max);
+			print_vec(set->bins[axis][i].bag_min);
+			print_vec(set->bins[axis][i].bag_max);
+			printf("enter %d exit %d\n", set->bins[axis][i].enter, set->bins[axis][i].exit);
+		}
+	}
 }
 
 Split *fast_spatial_split(AABB *box)
 {
-	
+	printf("enter spatial with mc %d\n", box->member_count);
 	// allocate split_count splits along axes in proportion
 	Bin_set *set = allocate_bins(box);
 
-
+	//add the faces to the bins
 	for (int axis = 0; axis < 3; axis++)
 		for (AABB *member = box->members; member; member = member->next)
 			add_face(member, set, axis, box);
-	
+
+	//pick the best one
+	Split *best = find_best_split(set, box);
+
+	return best;
 }
