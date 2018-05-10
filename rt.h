@@ -154,16 +154,6 @@ typedef struct s_face
 	struct s_face *next;
 }				Face;
 
-typedef struct s_Box
-{
-	cl_float3 min; //spatial bounds of box
-	cl_float3 max;
-	cl_int start; //indices in Faces[] that this box contains
-	cl_int end;
-	cl_int children[8];
-	cl_int children_count;
-}				Box;
-
 typedef struct s_gpu_bin
 {
 	cl_float minx;
@@ -175,20 +165,6 @@ typedef struct s_gpu_bin
 	cl_float maxz;
 	cl_int rind;
 }				gpu_bin;
-
-typedef struct bvh_struct
-{
-	cl_float3 min; //spatial boundary
-	cl_float3 max; //spatial boundary
-	struct bvh_struct *left; 
-	struct bvh_struct *right;
-	gpu_bin *parent;
-	Face *faces;
-	int face_ind;
-	int count;
-	//maybe more?
-	struct bvh_struct *next; //for tree building not for tracing
-}				tree_box;
 
 typedef struct s_AABB
 {
@@ -459,10 +435,6 @@ void	alt_composite(t_mlx_data *data, int resolution, cl_int *count);
 cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int samples, int min_bounces, int first, cl_int **count_out);
 //Scene *scene_from_obj(char *rel_path, char *filename);
 //cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
-
-void old_bvh(Scene *S);
-Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
-void gpu_ready_bvh(Scene *S, int *counts, int obj_count);
 
 uint64_t splitBy3(const unsigned int a);
 uint64_t mortonEncode_magicbits(const unsigned int x, const unsigned int y, const unsigned int z);

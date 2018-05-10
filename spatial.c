@@ -1,6 +1,8 @@
 #include "rt.h"
 #include <limits.h>
 
+#define EPSILON 0.0001f
+
 Bin new_bin(AABB *box, int axis, int index, int count, cl_float3 span)
 {
 	//represent a new split using the "bin/bag paradigm"
@@ -31,7 +33,7 @@ Bin_set *allocate_bins(AABB *box)
 
 	// printf("x: %d y: %d z: %d\n", set->counts[0], set->counts[1], set->counts[2]);
 
-	//careful with counting, 3 splits yeilds 4 bins
+	//careful with counting, n splits yeilds n+1 bins
 	set->bins = calloc(3, sizeof(Bin *));
 	for (int axis = 0; axis < 3; axis++)
 	{
@@ -74,6 +76,7 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 	for (int vert = 0; vert < 3; vert++)
 		if (point_in_box(member->f->verts[vert], clipped))
 			pt_cloud[pt_count++] = member->f->verts[vert];
+
 	//for each edge, solve for t such that [axis] == left, [axis] == right, add to "point cloud"
 	for (int edge = 0; edge < 3; edge++)
 	{
@@ -89,7 +92,28 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 		if (t == t && t > 0.0f && t < member->f->edge_t[edge])
 			pt_cloud[pt_count++] = vec_add(member->f->verts[edge], vec_scale(member->f->edges[edge], t));
 	}
-	
+
+	if (pt_count > 6)
+		printf("too many points!\n");
+	if (pt_count == 0)
+	{
+		printf("not enough points!!\n");
+		print_face(member->f);
+		printf("bounded by\n");
+		print_vec(member->min);
+		print_vec(member->max);
+		printf("had no hits in\n");
+		print_vec(clipped->min);
+		print_vec(clipped->max);
+		printf("we generated that from\n");
+		print_vec(member->min);
+		print_vec(member->max);
+		printf("and\n");
+		print_vec(bin->bin_min);
+		print_vec(bin->bin_max);
+		getchar();
+	}
+
 	AABB *fit = box_from_points(pt_cloud, pt_count);
 
 	//now clipped should become intersection(clipped, fit)
@@ -100,24 +124,37 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 	return clipped;
 }
 
+int point_in_range_L(cl_float3 point, cl_float3 min, cl_float3 max)
+{
+	if (min.x <= point.x && point.x < max.x)
+		if (min.y <= point.y  && point.y < max.y)
+			if (min.z <= point.z && point.z < max.z)
+				return 1;
+	return 0;
+}
+
+int point_in_range_R(cl_float3 point, cl_float3 min, cl_float3 max)
+{
+	if (min.x < point.x && point.x <= max.x)
+		if (min.y < point.y  && point.y <= max.y)
+			if (min.z < point.z && point.z <= max.z)
+				return 1;
+	return 0;
+}
+
 void add_face(AABB *member, Bin_set *set, int axis, AABB *parent)
 {
-	int leftmost;
-	int rightmost;
-	float ratio;
+	//default values
+	int leftmost = 0;
+	int rightmost = set->counts[axis];
 
-	ratio = (((float *)&member->min)[axis] - ((float *)&parent->min)[axis]) / ((float *)&set->span)[axis];
-	ratio = fmin(fmax(0.0f, ratio), 1.0f);
-	leftmost = (int)floor(ratio * (float)(set->counts[axis] + 1));
-
-	ratio = (((float *)&member->max)[axis] - ((float *)&parent->min)[axis]) / ((float *)&set->span)[axis];
-	ratio = fmin(fmax(0.0f, ratio), 1.0f);
-	rightmost = (int)floor(ratio * (float)(set->counts[axis] + 1));
-
-	if (leftmost == set->counts[axis] + 1)
-		leftmost--;
-	if (rightmost == set->counts[axis] + 1)
-		rightmost--;
+	for (int i = 0; i <= set->counts[axis]; i++)
+	{
+		if (point_in_range_L(member->min, set->bins[axis][i].bin_min, set->bins[axis][i].bin_max))
+			leftmost = i;
+		if (point_in_range_R(member->max, set->bins[axis][i].bin_min, set->bins[axis][i].bin_max))
+			rightmost = i;
+	}
 
 	set->bins[axis][leftmost].enter++;
 	set->bins[axis][rightmost].exit++;
@@ -156,14 +193,12 @@ float bin_SA(Bin bin)
 {
 	cl_float3 span = vec_sub(bin.bag_max, bin.bag_min);
 	span = (cl_float3){fabs(span.x), fabs(span.y), fabs(span.z)};
-	return 2 * span.x * span.y + 2 * span.y * span.z + 2 * span.x * span.z;
+	return 2.0f * span.x * span.y + 2.0f * span.y * span.z + 2.0f * span.x * span.z;
 }
 
 float bin_SAH(Bin a, Bin b, AABB *parent)
 {
-	if (a.enter == parent->member_count || b.exit == parent->member_count)
-		return FLT_MAX;
-	return (bin_SA(a) * a.enter + bin_SA(b) * b.exit) / SA(parent);
+	return (bin_SA(a) * (float)a.enter + bin_SA(b) * (float)b.exit) / SA(parent);
 }
 
 AABB *box_from_range(cl_float3 min, cl_float3 max)
@@ -261,7 +296,6 @@ void print_set(Bin_set *set)
 
 Split *fast_spatial_split(AABB *box)
 {
-	printf("enter spatial with mc %d\n", box->member_count);
 	// allocate split_count splits along axes in proportion
 	Bin_set *set = allocate_bins(box);
 
