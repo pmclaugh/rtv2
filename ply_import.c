@@ -46,6 +46,7 @@ Scene	*scene_from_ply(char *rel_path, char *filename, File_edits edit_info)
     S->materials[0].Kd = edit_info.Kd; //diffuse mask
     S->materials[0].Ks = edit_info.Ks;
     S->materials[0].Ke = edit_info.Ke;
+	S->emissive = (nonzero(edit_info.Ke)) ? 1 : 0;
 	return S;
 }
 

@@ -3,27 +3,31 @@
 static Scene	*combine_scenes(Scene **S, int num_files)
 {
 	Scene *all = calloc(1, sizeof(Scene));
-	int		mat_count[num_files];
-	int		face_count[num_files];
 	int		m_total = 0;
 	int		f_total = 0;
+	int		l_total = 0;
 
 	if (num_files == 0)
 		exit(0);
 	for (int j = 0; j < num_files; j++)
 	{
-		mat_count[j] = S[j]->mat_count;
-		face_count[j] = S[j]->face_count;
-		m_total += mat_count[j];
-		f_total += face_count[j];
+		m_total += S[j]->mat_count;
+		f_total += S[j]->face_count;
+		if (S[j]->emissive)
+			l_total += S[j]->face_count;
 	}
 	all->materials = calloc(m_total, sizeof(Material));
 	all->mat_count = m_total;
 	all->faces = calloc(f_total, sizeof(Face));
 	all->face_count = f_total;
+	all->lights = calloc(l_total, sizeof(Face));
+	all->light_count = l_total;
+	all->light_area = calloc(l_total, sizeof(float));
+	all->emissive = 0;
 	int mat_i = 0;
 	int new_mat_ind = 0;
 	int face_i = 0;
+	int	light_i = 0;
 	for (int j = 0; j < num_files; j++)
 	{
 		for (int k = 0; k < S[j]->mat_count; k++)
@@ -34,6 +38,14 @@ static Scene	*combine_scenes(Scene **S, int num_files)
 		{
 			memcpy((void*)&all->faces[face_i], (void*)&S[j]->faces[k], sizeof(Face));
 			all->faces[face_i++].mat_ind += new_mat_ind;
+			if (S[j]->emissive)
+			{
+				memcpy((void*)&all->lights[light_i], (void*)&S[j]->faces[k], sizeof(Face));
+				all->light_area[light_i] = triangle_area(all->lights[light_i].verts[0], all->lights[light_i].verts[1], all->lights[light_i].verts[2]);
+				if (light_i > 0)
+					all->light_area[light_i] += all->light_area[light_i - 1];
+				light_i++;
+			}
 		}
 		new_mat_ind += S[j]->mat_count;
 		free(S[j]->faces);

@@ -223,8 +223,12 @@ typedef struct s_new_scene
 	int mat_count;
 	Face *faces;
 	int face_count;
+	Face *lights;
+	int	light_count;
+	float *light_area;
 	AABB *bins;
 	int bin_count;
+	_Bool	emissive;
 }				Scene;
 
 typedef struct s_gpu_context
@@ -523,6 +527,9 @@ cl_float3	vec_rotate_xyz(const cl_float3 a, const float angle_x, const float ang
 cl_float3 vec_rev(cl_float3 v);
 void vec_rot(const cl_float3 rotate, cl_float3 *V);
 void	clr_avg(cl_double3 *a, cl_double3 *b, int samples, int size);
+////////////////////////////////////////
+int		nonzero(const cl_float3 v);
+float	triangle_area(const cl_float3 v0, const cl_float3 v1, const cl_float3 v2);
 
 //utility functions
 char *strtrim(char const *s);

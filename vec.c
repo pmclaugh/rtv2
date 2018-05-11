@@ -170,3 +170,27 @@ void vec_rot(const cl_float3 rotate, cl_float3 *V)
 	V->x = tmp[0];
 	V->y = tmp[1];
 }
+
+int nonzero(const cl_float3 v)
+{
+	if (v.x == 0.0f && v.y == 0.0f && v.z == 0.0f)
+		return 0;
+	else
+		return 1;
+}
+
+float	triangle_area(const cl_float3 v0, const cl_float3 v1, const cl_float3 v2)
+{
+	cl_float3 vec_a, vec_b, vec_c;
+	vec_a = vec_sub(v1, v0);
+	vec_b = vec_sub(v2, v0);
+	vec_c = vec_sub(v2, v1);
+
+	float angle = acos(dot(unit_vec(vec_b), unit_vec(vec_c)));
+	
+	float b, c;
+	b = vec_mag(vec_b);
+	c = vec_mag(vec_c);
+
+	return ((b * c) / 2) * sin(angle);
+}

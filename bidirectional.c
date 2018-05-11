@@ -2,6 +2,7 @@
 
 #define NORMAL_SHIFT 0.0003f
 #define SUN_BRIGHTNESS 60000.0f
+#define stop_prob 0.3f
 
 typedef struct	s_ray
 {
@@ -12,21 +13,44 @@ typedef struct	s_ray
 	cl_float3	color;
 	cl_float3	mask;
 
+	//surface data
+	Face		*f;
+	cl_float3	N;
+	cl_float3	sample_N;
+	float		u;
+	float		v;
+	float		t;
 	cl_float3	bump;
 	cl_float3	diff;
 	cl_float3	spec;
 	cl_float3	trans;
 
-	Face		*f;
-	float		u;
-	float		v;
-	cl_float3	sample_N;
-
-	cl_float3	N;
-	float		t;
 	int			bounce;
 	_Bool		status;
+	struct s_ray	*next;
 }				t_ray;
+
+void	init_ray(t_ray *ray)
+{
+	ray->color = BLACK;
+	ray->mask = WHITE;
+
+	ray->f = NULL;
+	ray->N = ray->direction;
+	ray->sample_N = ORIGIN;
+	ray->u = 0;
+	ray->v = 0;
+	ray->t = FLT_MAX;
+	ray->bump = BLACK;
+	ray->diff = BLACK;
+	ray->spec = BLACK;
+	ray->trans = BLACK;
+
+	ray->bounce = 0;
+	ray->status = 1;
+
+	ray->next = NULL;
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -167,10 +191,10 @@ void	cam_traverse(t_env *env, t_ray *ray)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static cl_float3 fetch_tex(Map *map, const cl_float3 txcrd)
+static cl_float3 fetch_tex(Map *map, const cl_float3 txcrd, const cl_float3 flat)
 {
 	if (!map || map->width == 0 || map->height == 0)
-		return BLACK;
+		return flat;
 	int x = floor((float)map->width * txcrd.x);
 	int y = floor((float)map->height * txcrd.y);
 
@@ -185,8 +209,9 @@ void	fetch(t_env *env, t_ray *ray)
 {
 	if (!ray->f)
 	{
-		ray->color = vec_scale(ray->mask, SUN_BRIGHTNESS);
+		// ray->color = vec_scale(ray->mask, SUN_BRIGHTNESS);
 		// fabs(pow(dot(ray->direction, UNIT_Y), 1.0f)
+		ray->color = BLACK;
 		ray->status = 0;
 		return ;
 	}
@@ -215,29 +240,97 @@ void	fetch(t_env *env, t_ray *ray)
 		txcrd.y = 1.0f + txcrd.y;
 
 	Material mat = env->scene->materials[ray->f->mat_ind];
-	// printf("%f\t%f\n", txcrd.x, txcrd.y);
-	ray->diff = fetch_tex(mat.map_Kd, txcrd);
-	ray->spec = fetch_tex(mat.map_Ks, txcrd);
-	ray->trans = fetch_tex(mat.map_d, txcrd);
-	ray->bump = fetch_tex(mat.map_bump, txcrd);
+	if (mat.Ke.x > 0)
+	{
+		// ray->color = vec_scale(ray->mask, SUN_BRIGHTNESS);
+		ray->status = 0;
+	}
+	else
+	{
+		// printf("%f\t%f\n", txcrd.x, txcrd.y);
+		ray->diff = fetch_tex(mat.map_Kd, txcrd, mat.Kd);
+		ray->spec = fetch_tex(mat.map_Ks, txcrd, mat.Ks);
+		ray->trans = fetch_tex(mat.map_d, txcrd, mat.Kd);
+		ray->bump = fetch_tex(mat.map_bump, txcrd, mat.Kd);
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void	bounce(t_env *env, t_ray *ray)
+_Bool	check_visibility(t_env *env, t_ray *ray, t_ray *light_path_vertex)
+{
+	cl_float3	dir = vec_sub(light_path_vertex->origin, ray->origin);
+	float		t = vec_mag(dir);
+
+	t_ray		edge;
+	edge.origin = ray->origin;
+	edge.direction = unit_vec(dir);
+	edge.inv_dir = vec_inverse(edge.direction);
+	init_ray(&edge);
+	edge.t = t;
+
+	AABB *stack = env->scene->bins;
+	stack->next = NULL;
+	while (stack)
+	{
+		AABB *box = stack_pop(&stack);
+		if (intersect_boxes(&edge, box, NULL))
+		{
+			if (box->left) //boxes have either 0 or 2 children
+			{
+				float tleft, tright;
+				int lret = intersect_boxes(ray, box->left, &tleft);
+				int rret = intersect_boxes(ray, box->right, &tright);
+				if (lret && tleft >= tright)
+                    push(&stack, box->left);
+                if (rret)
+                    push(&stack, box->right);
+                if (lret && tleft < tright)
+                    push(&stack, box->left);
+			}
+			else
+			{
+				check_tri(ray, box);
+				if (edge.t < t)
+					return 0;
+			}
+		}
+	}
+	return 1;
+}
+
+void	multi_sample_estimator(t_ray *ray, t_ray *light_path_vertex)
+{
+	ray->color = vec_add(ray->color, vec_mult(ray->mask, light_path_vertex->mask));
+}
+
+void	sample_light_path(t_env *env, t_ray *ray, t_ray *light_path)
+{
+	t_ray	*light_path_vertex = light_path;
+	while (light_path_vertex)
+	{
+		if (check_visibility(env, ray, light_path_vertex))
+			multi_sample_estimator(ray, light_path_vertex);
+		light_path_vertex = light_path_vertex->next;
+	}
+}
+
+void	bounce(t_env *env, t_ray *ray, t_ray *light_path)
 {	
 	ray->bounce++;
 
-	if (!ray->status || ray->bounce >= env->depth)
+	if (ray->bounce >= env->depth && ((float)rand() / (float)RAND_MAX) > stop_prob)
 	{
 		ray->status = 0;
 		return ;
 	}
+	if (!ray->status)
+		return ;
 
 	float	r1 = (float)rand() / (float)RAND_MAX;
 	float	r2 = (float)rand() / (float)RAND_MAX;
 
-	// float3 weight = WHITE;
+	// cl_float3 weight = WHITE;
 	//Cosine-weighted pure diffuse reflection
 	//local orthonormal system
 	cl_float3 axis = fabs(ray->N.x) > fabs(ray->N.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
@@ -253,7 +346,7 @@ void	bounce(t_env *env, t_ray *ray)
 	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
 	cl_float3	tmp3 = vec_scale(ray->N, sqrt(fmax(0.0f, 1.0f - r1)));
 	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
-	float weight = acos(dot(ray->N, o));
+	float weight = dot(ray->N, o);
 
 	float o_sign = dot(ray->N, o) > 0.0f ? 1.0f : -1.0f;
 	ray->mask = vec_mult(ray->mask, vec_scale(ray->diff, weight));
@@ -262,38 +355,129 @@ void	bounce(t_env *env, t_ray *ray)
 	ray->inv_dir = vec_inverse(o);
 	if (dot(ray->mask, ray->mask) == 0.0f)
 		ray->status = 0;
+	sample_light_path(env, ray, light_path);
 
-	ray->bounce++;
+	ray->f = NULL;
+	ray->t = FLT_MAX;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void	light_bounce(t_env *env, t_ray *ray_in)
+{	
+	if (ray_in->bounce >= env->depth && ((float)rand() / (float)RAND_MAX) > stop_prob)
+	{
+		ray_in->status = 0;
+		ray_in->next = NULL;
+		return ;
+	}
+	if (!ray_in->status)
+		return ;
+
+	t_ray	*ray_out = malloc(sizeof(t_ray));
+	init_ray(ray_out);
+
+	ray_out->bounce = ray_in->bounce + 1;
+
+
+	float	r1 = (float)rand() / (float)RAND_MAX;
+	float	r2 = (float)rand() / (float)RAND_MAX;
+
+	// float3 weight = WHITE;
+	//Cosine-weighted pure diffuse reflection
+	//local orthonormal system
+	cl_float3 axis = fabs(ray_in->N.x) > fabs(ray_in->N.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
+	cl_float3 hem_x = cross(axis, ray_in->N);
+	cl_float3 hem_y = cross(ray_in->N, hem_x);
+
+	//generate random direction on the unit hemisphere (cosine-weighted)
+	float r = sqrt(r1);
+	float theta = 2.0f * M_PI * r2;
+
+	//combine for new direction
+	cl_float3	tmp1 = vec_scale(vec_scale(hem_x, r), cos(theta));
+	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
+	cl_float3	tmp3 = vec_scale(ray_in->N, sqrt(fmax(0.0f, 1.0f - r1)));
+	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
+	float weight = dot(ray_in->N, o);
+
+	float o_sign = dot(ray_in->N, o) > 0.0f ? 1.0f : -1.0f;
+	ray_out->mask = vec_mult(ray_in->mask, vec_scale(ray_in->diff, weight));
+	ray_out->origin = vec_add(vec_add(ray_in->origin, vec_scale(ray_in->direction, ray_in->t)), vec_scale(ray_in->N, o_sign * NORMAL_SHIFT));
+	ray_out->direction = o;
+	ray_out->inv_dir = vec_inverse(o);
+	if (dot(ray_out->mask, ray_out->mask) == 0.0f)
+		ray_out->status = 0;
+
+	ray_out->f = NULL;
+	ray_out->t = FLT_MAX;
+	ray_in->next = ray_out;
+}
+
+t_ray	*light_path(t_env *env)
+{
+	Scene	*scene = env->scene;
+
+	float	total_light_area = scene->light_area[scene->light_count];
+	float	light_area_interval = ((float)rand() / (float)RAND_MAX) * total_light_area;
+
+	int light_i = 0;
+	while (light_i < scene->light_count)
+	{
+		if (light_area_interval <= scene->light_area[light_i])
+			break ;
+		light_i++;
+	}
+
+	Face	light_source = scene->lights[light_i];
+	cl_float3	v0 = light_source.verts[0];
+	cl_float3	v1 = light_source.verts[1];
+	cl_float3	v2 = light_source.verts[2];
+	cl_float3	n = unit_vec(light_source.norms[0]);
+
+	float	r1, r2, r3;
+	r1 = (float)rand() / (float)RAND_MAX;
+	r2 = (float)rand() / (float)RAND_MAX;
+
+	cl_float3	p = vec_add(vec_add(vec_scale(v0, (1.0f - sqrt(r1))), vec_scale(v1, (sqrt(r1) * (1.0f - r2)))), vec_scale(v2, (r2 * sqrt(r1))));
+	// print_vec(p);
+
+	r1 = (((float)rand() / (float)RAND_MAX) - 0.5) * 2;
+	r2 = (float)rand() / (float)-RAND_MAX;
+	r3 = (((float)rand() / (float)RAND_MAX) - 0.5) * 2;
+	cl_float3	dir = (cl_float3){r1, r2, r3};
+
+	t_ray	*light_path = malloc(sizeof(t_ray));
+	t_ray	*light_path_vertex = light_path;
+	light_path_vertex->origin = p;
+	light_path_vertex->direction = dir;
+	init_ray(light_path_vertex);
+	light_path_vertex->mask = vec_scale(WHITE, SUN_BRIGHTNESS);
+	while (light_path_vertex && light_path_vertex->status)
+	{
+		cam_traverse(env, light_path_vertex);
+		fetch(env, light_path_vertex);
+		light_bounce(env, light_path_vertex);
+		light_path_vertex = light_path_vertex->next;
+	}
+	return light_path;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 t_ray	generate_rays(t_env *env, float x, float y)
 {
-	t_ray ray;
+	t_ray	ray;
+
 	ray.origin = env->cam.focus;
-	x += rand() / RAND_MAX;
-	y += rand() / RAND_MAX;
-	// printf("%f\t%f\n", x, y);
+	x += (float)rand() / (float)RAND_MAX;
+	y += (float)rand() / (float)RAND_MAX;
 	cl_float3 through = vec_add(env->cam.origin, vec_add(vec_scale(env->cam.d_x, x), vec_scale(env->cam.d_y, y)));
 	ray.direction = unit_vec(vec_sub(env->cam.focus, through));
 	ray.inv_dir.x = 1.0f / ray.direction.x;
 	ray.inv_dir.y = 1.0f / ray.direction.y;
 	ray.inv_dir.z = 1.0f / ray.direction.z;
-	ray.N = ray.direction;
-	ray.t = FLT_MAX;
-	
-	ray.mask = WHITE;
-	ray.color = BLACK;
-
-	ray.bump = BLACK;
-	ray.diff = BLACK;
-	ray.spec = BLACK;
-	ray.trans = BLACK;
-
-	ray.bounce = 0;
-	ray.status = 1;
-
+	init_ray(&ray);
 	return ray;
 }
 
@@ -307,13 +491,12 @@ cl_float3	*bidirectional(t_env *env)
 		for (int x = 0; x < DIM_PT; x++)
 		{
 			t_ray ray = generate_rays(env, x, y);
+			t_ray *light_ray = light_path(env);
 			while (ray.status)
 			{
-				ray.t = FLT_MAX;
-				ray.f = NULL;
 				cam_traverse(env, &ray);
 				fetch(env, &ray);
-				bounce(env, &ray);
+				bounce(env, &ray, light_ray);
 			}
 			out[x + (y * DIM_PT)] = ray.color;
 		}

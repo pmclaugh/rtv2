@@ -294,9 +294,9 @@ void	alt_composite(t_sdl *sdl, int resolution, unsigned int samples)
 
 	for (int i = 0; i < resolution; i++)
 	{
-		sdl->pixels[i].x = sdl->pixels[i].x * 0.36 / Lw;
-		sdl->pixels[i].y = sdl->pixels[i].y * 0.36 / Lw;
-		sdl->pixels[i].z = sdl->pixels[i].z * 0.36 / Lw;
+		sdl->pixels[i].x = sdl->pixels[i].x * 0.64 / Lw;
+		sdl->pixels[i].y = sdl->pixels[i].y * 0.64 / Lw;
+		sdl->pixels[i].z = sdl->pixels[i].z * 0.64 / Lw;
 
 		sdl->pixels[i].x = sdl->pixels[i].x / (sdl->pixels[i].x + 1.0);
 		sdl->pixels[i].y = sdl->pixels[i].y / (sdl->pixels[i].y + 1.0);
