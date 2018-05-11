@@ -166,7 +166,7 @@ static inline int intersect_box(const float3 origin, const float3 inv_dir, Box b
 static inline void intersect_triangle(const float3 origin, const float3 direction, __global float3 *V, int test_i, int *best_i, float *t, float *u, float *v)
 {
 	float this_t, this_u, this_v;
-	constfloat3 v0 = V[test_i];
+	float3 v0 = V[test_i];
 	float3 v1 = V[test_i + 1];
 	float3 v2 = V[test_i + 2];
 
