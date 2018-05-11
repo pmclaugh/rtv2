@@ -167,17 +167,11 @@ int box_contains_box(AABB *big, AABB *little)
 
 void partition(AABB *box)
 {
-	// printf("trying to split a box with mc %d\n", box->member_count);
 	Split *object = fast_object_split(box);
 	Split *spatial = NULL;
 
 	if(((SA_overlap(object) / root_SA) > ALPHA) && SPATIAL_ENABLE)
-	{
 		spatial = fast_spatial_split(box);
-		// printf("overlap was %f, overlap/root_SA %f\n", SA_overlap(object), SA_overlap(object) / root_SA);
-	}
-	// else
-	// 	printf("skipped spatial\n");
 
 	float object_sah = SAH(object, box);
 	float spatial_sah = spatial ? SAH(spatial, box) : FLT_MAX;
@@ -188,13 +182,11 @@ void partition(AABB *box)
 	{
 		best_sah = object_sah;
 		chosen = object;
-		// printf("chose OBJECT (%.2f < %.2f)\n", object_sah, spatial_sah);
 	}
 	else
 	{
 		best_sah = spatial_sah;
 		chosen = spatial;
-		// printf("chose SPATIAL(%.2f < %.2f)\n", spatial_sah, object_sah);
 	}
 
 	if (best_sah < Ci * box->member_count) //make sure it's worth splitting at all (dynamic termination)
@@ -298,22 +290,26 @@ void partition(AABB *box)
 		{
 			printf("member out of bounds!!!\n");
 			print_box(b);
-			printf("is not in\n");
+			printf("is not in (left)\n");
 			print_box(box->left);
-			getchar();
+			printf("assuming error is small, flexing\n");
+			flex_box(box->left, b);
+			printf("new box\n");
+			print_box(box->left);
 		}
 	for (AABB *b = box->right->members; b; b = b->next)
 		if (!box_contains_box(box->right, b))
 		{
 			printf("member out of bounds!!!\n");
 			print_box(b);
-			printf("is not in\n");
+			printf("is not in (right)\n");
 			print_box(box->right);
-			getchar();
+			printf("assuming error is small, flexing\n");
+			flex_box(box->right, b);
+			printf("new box\n");
+			print_box(box->right);
 		}
 	}
-	
-
 
 	if (object)
 		free_split(object);
@@ -368,7 +364,6 @@ void sbvh(t_env *env)
 		partition(box);
 		if (box->left)
 		{
-			printf("split %d into %d and %d\n", box->member_count, box->left->member_count, box->right->member_count);
 			box->left->parent = box;
 			box->right->parent = box;
 			count += 2;
@@ -377,10 +372,7 @@ void sbvh(t_env *env)
 			push(&stack, box->right);
 		}
 		else
-		{
 			ref_count += box->member_count;
-			printf("LEAF: %d faces\n", box->member_count);
-		}
 	}
 	printf("done. %d boxes\n", count);
 	printf("%d member references vs %d starting\n", ref_count, root_box->member_count);

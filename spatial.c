@@ -12,7 +12,6 @@ Bin new_bin(AABB *box, int axis, int index, int count, cl_float3 span)
 	bin.enter = 0;
 	bin.exit = 0;
 
-	//I hope this works the way I think it does.
 	((float *)&bin.bin_min)[axis] = ((float *)&box->min)[axis] + ((float *)&span)[axis] * (float)(index) / (float)(count + 1);
 	((float *)&bin.bin_max)[axis] = ((float *)&box->min)[axis] + ((float *)&span)[axis] * (float)(index + 1) / (float)(count + 1);
 
@@ -28,8 +27,6 @@ Bin_set *allocate_bins(AABB *box)
 	set->counts[0] = (int)ceil((float)SPLIT_TEST_NUM * set->span.x / total);
 	set->counts[1] = (int)((float)SPLIT_TEST_NUM * set->span.y / total);
 	set->counts[2] = SPLIT_TEST_NUM - set->counts[0] - set->counts[1];
-
-	// printf("x: %d y: %d z: %d\n", set->counts[0], set->counts[1], set->counts[2]);
 
 	//careful with counting, n splits yeilds n+1 bins
 	set->bins = calloc(3, sizeof(Bin *));
@@ -56,30 +53,17 @@ void flex(Bin *bin, AABB *member)
 
 AABB *clip(AABB *member, Bin *bin, int axis)
 {
-	// printf("going to clip this face:\n");
-	// print_face(member->f);
-	// printf("bounded by\n");
-	// print_vec(member->min);
-	// print_vec(member->max);
-	// printf("with this bin (axis %d)\n", axis);
-	// print_vec(bin->bin_min);
-	// print_vec(bin->bin_max);
-	// getchar();
-
 	AABB *clipped = dupe_box(member);
 
 	//first, clipped = intersection(member, bin). only need to modify relevant axis (we know it's <= on the other axes)
 	((float *)&clipped->min)[axis] = fmax(((float *)&clipped->min)[axis], ((float *)&bin->bin_min)[axis]);
 	((float *)&clipped->max)[axis] = fmin(((float *)&clipped->max)[axis], ((float *)&bin->bin_max)[axis]);
 
-	// printf("box clipped to bin looks like:\n");
-	// print_box(clipped);
-	// getchar();
-
 	//now we need to see if we can shrink it more
 	float left = ((float *)&clipped->min)[axis];
 	float right = ((float *)&clipped->max)[axis];
 	
+	//we will assemble a "point cloud" that describes the portion of the (whole) triangle in this range on the given axis
 	cl_float3 pt_cloud[6];
 	bzero(&pt_cloud, sizeof(cl_float3) * 6);
 	int pt_count = 0;
@@ -89,9 +73,6 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 		if (((float *)&member->f->verts[vert])[axis] >= left && ((float *)&member->f->verts[vert])[axis] <= right)
 			pt_cloud[pt_count++] = member->f->verts[vert];
 
-	// printf("%d of the vertices were inside clipped box's range\n", pt_count);
-	// getchar();
-
 	//for each edge, solve for t such that [axis] == left, [axis] == right, add to "point cloud"
 	for (int edge = 0; edge < 3; edge++)
 	{
@@ -99,22 +80,17 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 		float target = left - ((float *)&member->f->verts[edge])[axis];
 		float t = target / ((float *)&member->f->edges[edge])[axis];
 
-		if (t == t && t > 0.0f && t < member->f->edge_t[edge]) //might need more checks
-		{
-			// printf("good hit on 'left' bound with edge %d\n", edge);
+		if (t == t && t > 0.0f && t < member->f->edge_t[edge])
 			pt_cloud[pt_count++] = vec_add(member->f->verts[edge], vec_scale(member->f->edges[edge], t));
-		}
 
 		target = right - ((float *)&member->f->verts[edge])[axis];
 		t = target / ((float *)&member->f->edges[edge])[axis];
 
 		if (t == t && t > 0.0f && t < member->f->edge_t[edge])
-		{
-			// printf("good hit on 'right' bound with edge %d\n", edge);
 			pt_cloud[pt_count++] = vec_add(member->f->verts[edge], vec_scale(member->f->edges[edge], t));
-		}
 	}
 
+	//error checking
 	if (pt_count > 6)
 	{
 		printf("too many points!\n");
@@ -137,26 +113,19 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 	}
 
 	AABB *fit = box_from_points(pt_cloud, pt_count);
-	// printf("after edge-solving we have %d points\n", pt_count);
-	// printf("and the point cloud box looks like:\n");
-	// print_box(fit);
 
 	//now clipped should become intersection(clipped, fit)
-	for (int i = 0; i < 3; i++)
+	for (int axis = 0; axis < 3; axis++)
 	{
-		((float *)&clipped->min)[i] = fmax(((float *)&clipped->min)[i], ((float *)&fit->min)[i]);
-		((float *)&clipped->max)[i] = fmin(((float *)&clipped->max)[i], ((float *)&fit->max)[i]);
+		((float *)&clipped->min)[axis] = fmax(((float *)&clipped->min)[axis], ((float *)&fit->min)[axis]);
+		((float *)&clipped->max)[axis] = fmin(((float *)&clipped->max)[axis], ((float *)&fit->max)[axis]);
 	}
-
-	// printf("final box looks like\n");
-	// print_box(clipped);
-	// getchar();
 
 	free(fit);
 	return clipped;
 }
 
-int point_in_range_L(cl_float3 point, cl_float3 min, cl_float3 max, int last)
+int point_in_range_L(cl_float3 point, cl_float3 min, cl_float3 max, int last, int axis)
 {
 	if (last)
 	{
@@ -168,15 +137,15 @@ int point_in_range_L(cl_float3 point, cl_float3 min, cl_float3 max, int last)
 	}
 	else
 	{
-		if (min.x <= point.x && point.x < max.x)
-			if (min.y <= point.y  && point.y < max.y)
-				if (min.z <= point.z && point.z < max.z)
+		if (min.x <= point.x && (point.x < max.x || (point.x == max.x && axis != 0)))
+			if (min.y <= point.y  && (point.y < max.y || (point.y == max.y && axis != 1)))
+				if (min.z <= point.z && (point.z < max.z || (point.z == max.z && axis != 2)))
 					return 1;
 		return 0;
 	}
 }
 
-int point_in_range_R(cl_float3 point, cl_float3 min, cl_float3 max, int first)
+int point_in_range_R(cl_float3 point, cl_float3 min, cl_float3 max, int first, int axis)
 {
 	if (first)
 	{
@@ -188,9 +157,9 @@ int point_in_range_R(cl_float3 point, cl_float3 min, cl_float3 max, int first)
 	}
 	else
 	{
-		if (min.x < point.x && point.x <= max.x)
-			if (min.y < point.y  && point.y <= max.y)
-				if (min.z < point.z && point.z <= max.z)
+		if ((min.x < point.x || (point.x == min.x && axis != 0)) && point.x <= max.x)
+			if ((min.y < point.y || (point.y == min.y && axis != 1)) && point.y <= max.y)
+				if ((min.z < point.z || (point.z == min.z && axis != 2)) && point.z <= max.z)
 					return 1;
 		return 0;
 	}
@@ -198,21 +167,15 @@ int point_in_range_R(cl_float3 point, cl_float3 min, cl_float3 max, int first)
 
 void add_face(AABB *member, Bin_set *set, int axis, AABB *parent)
 {
-	// printf("adding face:\n");
-	// print_face(member->f);
-	// printf("bounded by box:\n");
-	// print_box(member);
-	// getchar();
-
 	//default values, should always get overwritten
 	int leftmost = 0;
 	int rightmost = set->counts[axis];
 
 	for (int i = 0; i <= set->counts[axis]; i++)
 	{
-		if (point_in_range_L(member->min, set->bins[axis][i].bin_min, set->bins[axis][i].bin_max, i == set->counts[axis] ? 1 : 0))
+		if (point_in_range_L(member->min, set->bins[axis][i].bin_min, set->bins[axis][i].bin_max, i == set->counts[axis] ? 1 : 0, axis))
 			leftmost = i;
-		if (point_in_range_R(member->max, set->bins[axis][i].bin_min, set->bins[axis][i].bin_max, i == 0 ? 1 : 0))
+		if (point_in_range_R(member->max, set->bins[axis][i].bin_min, set->bins[axis][i].bin_max, i == 0 ? 1 : 0, axis))
 			rightmost = i;
 	}
 
