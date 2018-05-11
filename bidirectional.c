@@ -1,7 +1,7 @@
 #include "rt.h"
 
 #define NORMAL_SHIFT 0.0003f
-#define SUN_BRIGHTNESS 60000.0f
+#define SUN_BRIGHTNESS 1000.0f
 #define stop_prob 0.3f
 
 typedef struct	s_ray
@@ -301,7 +301,12 @@ _Bool	check_visibility(t_env *env, t_ray *ray, t_ray *light_path_vertex)
 
 void	multi_sample_estimator(t_ray *ray, t_ray *light_path_vertex)
 {
-	ray->color = vec_add(ray->color, vec_mult(ray->mask, light_path_vertex->mask));
+	cl_float3 cam_to_light = vec_sub(light_path_vertex->origin, ray->origin);
+	cam_to_light = unit_vec(cam_to_light);
+
+	float geom_term = fmax(dot(cam_to_light, ray->N), 0.0f) * fmax(dot(vec_scale(cam_to_light, -1.0f), light_path_vertex->N), 0.0f);
+
+	ray->color = vec_add(ray->color, vec_scale(vec_mult(ray->mask, light_path_vertex->mask), geom_term));
 }
 
 void	sample_light_path(t_env *env, t_ray *ray, t_ray *light_path)
@@ -346,7 +351,7 @@ void	bounce(t_env *env, t_ray *ray, t_ray *light_path)
 	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
 	cl_float3	tmp3 = vec_scale(ray->N, sqrt(fmax(0.0f, 1.0f - r1)));
 	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
-	float weight = dot(ray->N, o);
+	float weight = 1.0f; //dot(ray->N, o);
 
 	float o_sign = dot(ray->N, o) > 0.0f ? 1.0f : -1.0f;
 	ray->mask = vec_mult(ray->mask, vec_scale(ray->diff, weight));
@@ -399,7 +404,7 @@ void	light_bounce(t_env *env, t_ray *ray_in)
 	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
 	cl_float3	tmp3 = vec_scale(ray_in->N, sqrt(fmax(0.0f, 1.0f - r1)));
 	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
-	float weight = dot(ray_in->N, o);
+	float weight = 1.0f; //dot(ray_in->N, o);
 
 	float o_sign = dot(ray_in->N, o) > 0.0f ? 1.0f : -1.0f;
 	ray_out->mask = vec_mult(ray_in->mask, vec_scale(ray_in->diff, weight));
@@ -442,17 +447,28 @@ t_ray	*light_path(t_env *env)
 	cl_float3	p = vec_add(vec_add(vec_scale(v0, (1.0f - sqrt(r1))), vec_scale(v1, (sqrt(r1) * (1.0f - r2)))), vec_scale(v2, (r2 * sqrt(r1))));
 	// print_vec(p);
 
-	r1 = (((float)rand() / (float)RAND_MAX) - 0.5) * 2;
-	r2 = (float)rand() / (float)-RAND_MAX;
-	r3 = (((float)rand() / (float)RAND_MAX) - 0.5) * 2;
-	cl_float3	dir = (cl_float3){r1, r2, r3};
+	r1 = (float)rand() / (float)RAND_MAX;
+	r2 = (float)rand() / (float)RAND_MAX;
+
+	cl_float3 axis = fabs(n.x) > fabs(n.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
+	cl_float3 hem_x = cross(axis, n);
+	cl_float3 hem_y = cross(n, hem_x);
+	float r = sqrt(r1);
+	float theta = 2.0f * M_PI * r2;
+
+	//combine for new direction
+	cl_float3	tmp1 = vec_scale(vec_scale(hem_x, r), cos(theta));
+	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
+	cl_float3	tmp3 = vec_scale(n, sqrt(fmax(0.0f, 1.0f - r1)));
+	cl_float3	dir = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
+	//this is cosine-weighted, which I think is good, but we could consider uniform.
 
 	t_ray	*light_path = malloc(sizeof(t_ray));
 	t_ray	*light_path_vertex = light_path;
 	light_path_vertex->origin = p;
 	light_path_vertex->direction = dir;
 	init_ray(light_path_vertex);
-	light_path_vertex->mask = vec_scale(WHITE, SUN_BRIGHTNESS);
+	light_path_vertex->mask = vec_scale(WHITE, SUN_BRIGHTNESS * fmax(0.0f, dot(n, dir)));
 	while (light_path_vertex && light_path_vertex->status)
 	{
 		cam_traverse(env, light_path_vertex);
