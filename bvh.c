@@ -4,7 +4,9 @@
 #define SPATIAL_ENABLE 1
 
 #define ALPHA 0.0001f
-#define LEAF_THRESHOLD 8
+
+#define Ci 1.0f
+#define Ct 10.0f
 
 // typedef struct s_split
 // {
@@ -43,7 +45,7 @@ float SA(AABB *box)
 
 float SAH(Split *split, AABB *parent)
 {
-	return (SA(split->left_flex) * split->left_count + SA(split->right_flex) * split->right_count) / SA(parent);
+	return Ct + Ci * (SA(split->left_flex) * split->left_count + SA(split->right_flex) * split->right_count) / SA(parent);
 }
 
 Split *scan_tallies(AABB *ltr, AABB *rtl, int count, AABB *parent, enum axis ax)
@@ -165,17 +167,17 @@ int box_contains_box(AABB *big, AABB *little)
 
 void partition(AABB *box)
 {
-	printf("trying to split a box with mc %d\n", box->member_count);
+	// printf("trying to split a box with mc %d\n", box->member_count);
 	Split *object = fast_object_split(box);
 	Split *spatial = NULL;
 
 	if(((SA_overlap(object) / root_SA) > ALPHA) && SPATIAL_ENABLE)
 	{
 		spatial = fast_spatial_split(box);
-		printf("overlap was %f, overlap/root_SA %f\n", SA_overlap(object), SA_overlap(object) / root_SA);
+		// printf("overlap was %f, overlap/root_SA %f\n", SA_overlap(object), SA_overlap(object) / root_SA);
 	}
-	else
-		printf("skipped spatial\n");
+	// else
+	// 	printf("skipped spatial\n");
 
 	float object_sah = SAH(object, box);
 	float spatial_sah = spatial ? SAH(spatial, box) : FLT_MAX;
@@ -186,98 +188,100 @@ void partition(AABB *box)
 	{
 		best_sah = object_sah;
 		chosen = object;
-		printf("chose OBJECT (%.2f < %.2f)\n", object_sah, spatial_sah);
+		// printf("chose OBJECT (%.2f < %.2f)\n", object_sah, spatial_sah);
 	}
 	else
 	{
 		best_sah = spatial_sah;
 		chosen = spatial;
-		printf("chose SPATIAL(%.2f < %.2f)\n", spatial_sah, object_sah);
+		// printf("chose SPATIAL(%.2f < %.2f)\n", spatial_sah, object_sah);
 	}
 
-	if (chosen == object)
+	if (best_sah < Ci * box->member_count) //make sure it's worth splitting at all (dynamic termination)
 	{
-		AABB **members = calloc(box->member_count, sizeof(AABB *));
-		AABB *b = box->members;
-		for (int i = 0; b; b = b->next, i++)
-			members[i] = b;
-
-		pointer_axis_sort(members, box->member_count, object->ax);
-
-		box->left = dupe_box(object->left_flex);
-		box->right = dupe_box(object->right_flex);
-		for (int i = 0; i < box->member_count; i++)
+		if (chosen == object)
 		{
-			if (i < object->left_count)
+			AABB **members = calloc(box->member_count, sizeof(AABB *));
+			AABB *b = box->members;
+			for (int i = 0; b; b = b->next, i++)
+				members[i] = b;
+
+			pointer_axis_sort(members, box->member_count, object->ax);
+
+			box->left = dupe_box(object->left_flex);
+			box->right = dupe_box(object->right_flex);
+			for (int i = 0; i < box->member_count; i++)
 			{
-				push(&box->left->members, members[i]);
-				box->left->member_count++;
+				if (i < object->left_count)
+				{
+					push(&box->left->members, members[i]);
+					box->left->member_count++;
+				}
+				else
+				{
+					push(&box->right->members, members[i]);
+					box->right->member_count++;
+				}
 			}
-			else
+			free(members);
+		}
+		else
+		{
+			box->left = dupe_box(spatial->left_flex);
+			box->right = dupe_box(spatial->right_flex);
+
+			// printf("we settled on this split:\n");
+			// print_split(spatial);
+
+			//I built the clip function to work on Bins not AABBs so do a quick conversion
+			Bin left, right;
+			left.bin_min = spatial->left->min;
+			left.bin_max = spatial->left->max;
+			right.bin_min = spatial->right->min;
+			right.bin_max = spatial->right->max;
+
+			int axis = spatial->ax - X_AXIS; //awkward, fix
+
+			//now distribute the members and re-clip on the chosen bounds if needed.
+			//seems a little inefficient but it's not that expensive and saves the hassle of tracking fragments from before.
+			for (AABB *b = box->members; b;)
 			{
-				push(&box->right->members, members[i]);
-				box->right->member_count++;
+				AABB *tmp = b->next;
+
+				if (point_in_box(b->max, spatial->left))
+				{
+					push(&box->left->members, b);
+					box->left->member_count++;
+				}
+				else if (point_in_box(b->min, spatial->right))
+				{
+					push(&box->right->members, b);
+					box->right->member_count++;
+				}
+				else
+				{
+					AABB *lclip, *rclip;
+					
+					lclip = clip(b, &left, axis);
+					rclip = clip(b, &right, axis);
+					
+					lclip->f = b->f;
+					rclip->f = b->f;
+
+					push(&box->left->members, lclip);
+					push(&box->right->members, rclip);
+					
+					box->left->member_count++;
+					box->right->member_count++;
+
+					free(b);
+				}
+
+				b = tmp;
 			}
 		}
-		free(members);
-	}
-	else
-	{
-		box->left = dupe_box(spatial->left_flex);
-		box->right = dupe_box(spatial->right_flex);
-
-		printf("we settled on this split:\n");
-		print_split(spatial);
-
-		//I built the clip function to work on Bins not AABBs so do a quick conversion
-		Bin left, right;
-		left.bin_min = spatial->left->min;
-		left.bin_max = spatial->left->max;
-		right.bin_min = spatial->right->min;
-		right.bin_max = spatial->right->max;
-
-		int axis = spatial->ax - X_AXIS; //awkward, fix
-
-		//now distribute the members and re-clip on the chosen bounds if needed.
-		//seems a little inefficient but it's not that expensive and saves the hassle of tracking fragments from before.
-		for (AABB *b = box->members; b;)
-		{
-			AABB *tmp = b->next;
-
-			if (point_in_box(b->max, spatial->left))
-			{
-				push(&box->left->members, b);
-				box->left->member_count++;
-			}
-			else if (point_in_box(b->min, spatial->right))
-			{
-				push(&box->right->members, b);
-				box->right->member_count++;
-			}
-			else
-			{
-				AABB *lclip, *rclip;
-				
-				lclip = clip(b, &left, axis);
-				rclip = clip(b, &right, axis);
-				
-				lclip->f = b->f;
-				rclip->f = b->f;
-
-				push(&box->left->members, lclip);
-				push(&box->right->members, rclip);
-				
-				box->left->member_count++;
-				box->right->member_count++;
-
-				free(b);
-			}
-
-			b = tmp;
-		}
-	}
-	
 	//verify assumptions
+	
 	if (chosen->left_count != box->left->member_count)
 	{
 		printf("left count %d, expected %d\n", box->left->member_count, spatial->left_count);
@@ -307,6 +311,9 @@ void partition(AABB *box)
 			print_box(box->right);
 			getchar();
 		}
+	}
+	
+
 
 	if (object)
 		free_split(object);
@@ -359,20 +366,21 @@ void sbvh(t_env *env)
 	{
 		AABB *box = pop(&stack);
 		partition(box);
-		printf("split %d into %d and %d\n", box->member_count, box->left->member_count, box->right->member_count);
-		box->left->parent = box;
-		box->right->parent = box;
-		count += 2;
+		if (box->left)
+		{
+			printf("split %d into %d and %d\n", box->member_count, box->left->member_count, box->right->member_count);
+			box->left->parent = box;
+			box->right->parent = box;
+			count += 2;
 
-		if (box->left->member_count > LEAF_THRESHOLD)
 			push(&stack, box->left);
-		else
-			ref_count += box->left->member_count;
-
-		if (box->right->member_count > LEAF_THRESHOLD)
 			push(&stack, box->right);
+		}
 		else
-			ref_count += box->right->member_count;
+		{
+			ref_count += box->member_count;
+			printf("LEAF: %d faces\n", box->member_count);
+		}
 	}
 	printf("done. %d boxes\n", count);
 	printf("%d member references vs %d starting\n", ref_count, root_box->member_count);

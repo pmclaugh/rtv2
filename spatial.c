@@ -1,8 +1,6 @@
 #include "rt.h"
 #include <limits.h>
 
-#define EPSILON 0.0001f
-
 Bin new_bin(AABB *box, int axis, int index, int count, cl_float3 span)
 {
 	//represent a new split using the "bin/bag paradigm"
@@ -86,32 +84,42 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 	bzero(&pt_cloud, sizeof(cl_float3) * 6);
 	int pt_count = 0;
 
-	//check for vertices actually inside this box
+	//check for vertices inside the range
 	for (int vert = 0; vert < 3; vert++)
-		if (point_in_box(member->f->verts[vert], clipped))
+		if (((float *)&member->f->verts[vert])[axis] >= left && ((float *)&member->f->verts[vert])[axis] <= right)
 			pt_cloud[pt_count++] = member->f->verts[vert];
 
-	// printf("%d of the vertices were actually inside clipped box\n", pt_count);
+	// printf("%d of the vertices were inside clipped box's range\n", pt_count);
 	// getchar();
 
 	//for each edge, solve for t such that [axis] == left, [axis] == right, add to "point cloud"
 	for (int edge = 0; edge < 3; edge++)
 	{
+		int old_pt_count = pt_count;
 		float target = left - ((float *)&member->f->verts[edge])[axis];
 		float t = target / ((float *)&member->f->edges[edge])[axis];
 
 		if (t == t && t > 0.0f && t < member->f->edge_t[edge]) //might need more checks
+		{
+			// printf("good hit on 'left' bound with edge %d\n", edge);
 			pt_cloud[pt_count++] = vec_add(member->f->verts[edge], vec_scale(member->f->edges[edge], t));
+		}
 
 		target = right - ((float *)&member->f->verts[edge])[axis];
 		t = target / ((float *)&member->f->edges[edge])[axis];
 
 		if (t == t && t > 0.0f && t < member->f->edge_t[edge])
+		{
+			// printf("good hit on 'right' bound with edge %d\n", edge);
 			pt_cloud[pt_count++] = vec_add(member->f->verts[edge], vec_scale(member->f->edges[edge], t));
+		}
 	}
 
 	if (pt_count > 6)
+	{
 		printf("too many points!\n");
+		getchar();
+	}
 	if (pt_count <= 2)
 	{
 		printf("not enough points!!\n");
