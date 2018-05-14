@@ -26,6 +26,7 @@ typedef struct	s_ray
 	cl_float3	trans;
 
 	int			bounce;
+	int 		subsample_count;
 	_Bool		status;
 	struct s_ray	*next;
 }				t_ray;
@@ -36,7 +37,7 @@ void	init_ray(t_ray *ray)
 	ray->mask = WHITE;
 
 	ray->f = NULL;
-	ray->N = ray->direction;
+	ray->N = ray->direction; //???
 	ray->sample_N = ORIGIN;
 	ray->u = 0;
 	ray->v = 0;
@@ -48,6 +49,7 @@ void	init_ray(t_ray *ray)
 
 	ray->bounce = 0;
 	ray->status = 1;
+	ray->subsample_count = 1; //avoid nans this way
 
 	ray->next = NULL;
 }
@@ -189,6 +191,50 @@ void	cam_traverse(t_env *env, t_ray *ray)
 	}
 }
 
+cl_float3 cos_weight_dir(cl_float3 N)
+{
+	float	r1 = (float)rand() / (float)RAND_MAX;
+	float	r2 = (float)rand() / (float)RAND_MAX;
+
+	//local orthonormal system
+	cl_float3 axis = fabs(N.x) > fabs(N.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
+	cl_float3 hem_x = cross(axis, N);
+	cl_float3 hem_y = cross(N, hem_x);
+
+	//generate random direction on the unit hemisphere (cosine-weighted)
+	float r = sqrt(r1);
+	float theta = 2.0f * M_PI * r2;
+
+	//combine for new direction
+	cl_float3	tmp1 = vec_scale(vec_scale(hem_x, r), cos(theta));
+	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
+	cl_float3	tmp3 = vec_scale(N, sqrt(fmax(0.0f, 1.0f - r1)));
+	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
+	return o;
+}
+
+cl_float3 uniform_dir(cl_float3 N)
+{
+	float	r1 = (float)rand() / (float)RAND_MAX;
+	float	r2 = (float)rand() / (float)RAND_MAX;
+
+	//local orthonormal system
+	cl_float3 axis = fabs(N.x) > fabs(N.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
+	cl_float3 hem_x = cross(axis, N);
+	cl_float3 hem_y = cross(N, hem_x);
+
+	//generate random direction on the unit hemisphere (cosine-weighted)
+	float r = sqrt(1.0f - r1 * r1);
+	float theta = 2.0f * M_PI * r2;
+
+	//combine for new direction
+	cl_float3	tmp1 = vec_scale(vec_scale(hem_x, r), cos(theta));
+	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
+	cl_float3	tmp3 = vec_scale(N, r1);
+	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
+	return o;
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static cl_float3 fetch_tex(Map *map, const cl_float3 txcrd, const cl_float3 flat)
@@ -218,15 +264,17 @@ void	fetch(t_env *env, t_ray *ray)
 
 	cl_float3	tmp1, tmp2, tmp3;
 
-	// cl_float3	v0 = ray->f->verts[0];
-	// cl_float3	v1 = ray->f->verts[1];
-	// cl_float3	v2 = ray->f->verts[2];
-	// cl_float3	geom_N = unit_vec(cross(vec_sub(v1, v0), vec_sub(v2, v0)));
+	cl_float3	v0 = ray->f->verts[0];
+	cl_float3	v1 = ray->f->verts[1];
+	cl_float3	v2 = ray->f->verts[2];
+	cl_float3	geom_N = unit_vec(cross(vec_sub(v1, v0), vec_sub(v2, v0)));
 
 	tmp1 = vec_scale(ray->f->norms[0], (1.0f - ray->u - ray->v));
 	tmp2 = vec_scale(ray->f->norms[1], ray->u);
 	tmp3 = vec_scale(ray->f->norms[2], ray->v);
 	ray->sample_N = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
+
+	ray->sample_N = dot(ray->sample_N, geom_N) > 0.0f ? ray->sample_N : vec_scale(ray->sample_N, -1.0f);
 
 	tmp1 = vec_scale(ray->f->tex[0], (1.0f - ray->u - ray->v));
 	tmp2 = vec_scale(ray->f->tex[1], ray->u);
@@ -314,6 +362,7 @@ void	sample_light_path(t_env *env, t_ray *ray, t_ray *light_path)
 	t_ray	*light_path_vertex = light_path;
 	while (light_path_vertex)
 	{
+		//ray->subsample_count++;
 		if (check_visibility(env, ray, light_path_vertex))
 			multi_sample_estimator(ray, light_path_vertex);
 		light_path_vertex = light_path_vertex->next;
@@ -332,25 +381,7 @@ void	bounce(t_env *env, t_ray *ray, t_ray *light_path)
 	if (!ray->status)
 		return ;
 
-	float	r1 = (float)rand() / (float)RAND_MAX;
-	float	r2 = (float)rand() / (float)RAND_MAX;
-
-	// cl_float3 weight = WHITE;
-	//Cosine-weighted pure diffuse reflection
-	//local orthonormal system
-	cl_float3 axis = fabs(ray->N.x) > fabs(ray->N.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
-	cl_float3 hem_x = cross(axis, ray->N);
-	cl_float3 hem_y = cross(ray->N, hem_x);
-
-	//generate random direction on the unit hemisphere (cosine-weighted)
-	float r = sqrt(r1);
-	float theta = 2.0f * M_PI * r2;
-
-	//combine for new direction
-	cl_float3	tmp1 = vec_scale(vec_scale(hem_x, r), cos(theta));
-	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
-	cl_float3	tmp3 = vec_scale(ray->N, sqrt(fmax(0.0f, 1.0f - r1)));
-	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
+	cl_float3	o = cos_weight_dir(ray->N);
 	float weight = 1.0f; //dot(ray->N, o);
 
 	float o_sign = dot(ray->N, o) > 0.0f ? 1.0f : -1.0f;
@@ -384,27 +415,8 @@ void	light_bounce(t_env *env, t_ray *ray_in)
 
 	ray_out->bounce = ray_in->bounce + 1;
 
-
-	float	r1 = (float)rand() / (float)RAND_MAX;
-	float	r2 = (float)rand() / (float)RAND_MAX;
-
-	// float3 weight = WHITE;
-	//Cosine-weighted pure diffuse reflection
-	//local orthonormal system
-	cl_float3 axis = fabs(ray_in->N.x) > fabs(ray_in->N.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
-	cl_float3 hem_x = cross(axis, ray_in->N);
-	cl_float3 hem_y = cross(ray_in->N, hem_x);
-
-	//generate random direction on the unit hemisphere (cosine-weighted)
-	float r = sqrt(r1);
-	float theta = 2.0f * M_PI * r2;
-
-	//combine for new direction
-	cl_float3	tmp1 = vec_scale(vec_scale(hem_x, r), cos(theta));
-	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
-	cl_float3	tmp3 = vec_scale(ray_in->N, sqrt(fmax(0.0f, 1.0f - r1)));
-	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
-	float weight = 1.0f; //dot(ray_in->N, o);
+	cl_float3	o = uniform_dir(ray_in->N);
+	float weight = fmax(0.0f, dot(ray_in->N, ray_in->direction));
 
 	float o_sign = dot(ray_in->N, o) > 0.0f ? 1.0f : -1.0f;
 	ray_out->mask = vec_mult(ray_in->mask, vec_scale(ray_in->diff, weight));
@@ -447,28 +459,17 @@ t_ray	*light_path(t_env *env)
 	cl_float3	p = vec_add(vec_add(vec_scale(v0, (1.0f - sqrt(r1))), vec_scale(v1, (sqrt(r1) * (1.0f - r2)))), vec_scale(v2, (r2 * sqrt(r1))));
 	// print_vec(p);
 
-	r1 = (float)rand() / (float)RAND_MAX;
-	r2 = (float)rand() / (float)RAND_MAX;
-
-	cl_float3 axis = fabs(n.x) > fabs(n.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
-	cl_float3 hem_x = cross(axis, n);
-	cl_float3 hem_y = cross(n, hem_x);
-	float r = sqrt(r1);
-	float theta = 2.0f * M_PI * r2;
-
-	//combine for new direction
-	cl_float3	tmp1 = vec_scale(vec_scale(hem_x, r), cos(theta));
-	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
-	cl_float3	tmp3 = vec_scale(n, sqrt(fmax(0.0f, 1.0f - r1)));
-	cl_float3	dir = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
-	//this is cosine-weighted, which I think is good, but we could consider uniform.
+	cl_float3	dir = cos_weight_dir(n);
+	dir = (cl_float3){0.0, -1.0, 0.0};
 
 	t_ray	*light_path = malloc(sizeof(t_ray));
 	t_ray	*light_path_vertex = light_path;
 	light_path_vertex->origin = p;
 	light_path_vertex->direction = dir;
 	init_ray(light_path_vertex);
-	light_path_vertex->mask = vec_scale(WHITE, SUN_BRIGHTNESS * fmax(0.0f, dot(n, dir)));
+	//light_path_vertex->N = n;
+	cl_float3 Ke = scene->materials[light_source.mat_ind].Ke;
+	light_path_vertex->mask = vec_mult(Ke, vec_scale(WHITE, SUN_BRIGHTNESS));
 	while (light_path_vertex && light_path_vertex->status)
 	{
 		cam_traverse(env, light_path_vertex);
@@ -514,7 +515,7 @@ cl_float3	*bidirectional(t_env *env)
 				fetch(env, &ray);
 				bounce(env, &ray, light_ray);
 			}
-			out[x + (y * DIM_PT)] = ray.color;
+			out[x + (y * DIM_PT)] = vec_scale(ray.color, 1.0f / (float)ray.subsample_count);
 		}
 	}
 	return out;
