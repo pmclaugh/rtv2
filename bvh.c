@@ -8,20 +8,6 @@
 #define Ci 1.0f
 #define Ct 10.0f
 
-// typedef struct s_split
-// {
-// 	AABB *left;
-// 	AABB *left_flex;
-// 	AABB *right;
-// 	AABB *right_flex;
-// 	int left_count;
-// 	int right_count;
-// 	int both_count;
-
-// 	enum axis ax;
-// 	float ratio;
-// }				Split;
-
 AABB sum_box(AABB a, AABB b)
 {
 	AABB ret;
@@ -150,6 +136,7 @@ Split *fast_object_split(AABB *box)
 	else
 		free(this_split);
 
+	free(members);
 	free(tallies_ltr);
 	free(tallies_rtl);
 	return best_split;

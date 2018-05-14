@@ -144,10 +144,6 @@ int point_in_range_L(cl_float3 point, cl_float3 min, cl_float3 max, int last, in
 {
 	if (last)
 	{
-		// printf("last\n");
-		// print_vec(point);
-		// print_vec(min);
-		// print_vec(max);
 		if (min.x <= point.x && point.x <= max.x)
 			if (min.y <= point.y  && point.y <= max.y)
 				if (min.z <= point.z && point.z <= max.z)
@@ -340,8 +336,6 @@ void print_set(Bin_set *set)
 
 Split *fast_spatial_split(AABB *box)
 {
-	// printf("spatial split on box:\n");
-	// print_box(box);
 	// allocate split_count splits along axes in proportion
 	Bin_set *set = allocate_bins(box);
 
