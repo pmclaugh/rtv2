@@ -6,16 +6,18 @@
 
 typedef struct	s_ray
 {
+	//vertex data
 	cl_float3	origin;
 	cl_float3	direction;
 	cl_float3	inv_dir;
+	cl_float3	N;
 
 	cl_float3	color;
 	cl_float3	mask;
 
-	//surface data
+	//hit surface data
 	Face		*f;
-	cl_float3	N;
+	cl_float3	hit_N;
 	cl_float3	sample_N;
 	float		u;
 	float		v;
@@ -25,9 +27,11 @@ typedef struct	s_ray
 	cl_float3	spec;
 	cl_float3	trans;
 
+	//misc
 	int			bounce;
 	int 		subsample_count;
 	_Bool		status;
+	_Bool		light;
 	struct s_ray	*next;
 }				t_ray;
 
@@ -37,7 +41,7 @@ void	init_ray(t_ray *ray)
 	ray->mask = WHITE;
 
 	ray->f = NULL;
-	ray->N = ray->direction; //???
+	ray->hit_N = ORIGIN;
 	ray->sample_N = ORIGIN;
 	ray->u = 0;
 	ray->v = 0;
@@ -48,8 +52,9 @@ void	init_ray(t_ray *ray)
 	ray->trans = BLACK;
 
 	ray->bounce = 0;
-	ray->status = 1;
 	ray->subsample_count = 1; //avoid nans this way
+	ray->status = 1;
+	ray->light = 0;
 
 	ray->next = NULL;
 }
@@ -65,7 +70,7 @@ static int inside_box(t_ray *ray, AABB *box)
 	return 0;
 }
 
-static int intersect_boxes(t_ray *ray, AABB *box, float *t_out)
+static int intersect_box(t_ray *ray, AABB *box, float *t_out)
 {
 	float tx0 = (box->min.x - ray->origin.x) * ray->inv_dir.x;
 	float tx1 = (box->max.x - ray->origin.x) * ray->inv_dir.x;
@@ -104,7 +109,7 @@ static int intersect_boxes(t_ray *ray, AABB *box, float *t_out)
 	return (1);
 }
 
-void	intersect_tri(t_ray *ray, Face *face)
+static void	intersect_tri(t_ray *ray, Face *face)
 {
 	const cl_float3 v0 = face->verts[0], v1 = face->verts[1], v2 = face->verts[2];
 	float t, u, v;
@@ -126,10 +131,14 @@ void	intersect_tri(t_ray *ray, Face *face)
 	if (v < 0.0 || u + v > 1.0)
 		return ;
 	t = f * dot(e2, q);
+	// if (ray->light)
+	// 	printf("%f\n", t);
 	if (t > 0 && t < ray->t)
 	{
+		// if (ray->light)
+		// 	printf("%f\n", t);
 		ray->t = t;
-		ray->N = unit_vec(cross(vec_sub(v1, v0), vec_sub(v2, v0)));
+		ray->hit_N = unit_vec(cross(vec_sub(v1, v0), vec_sub(v2, v0)));
 		ray->f = face;
 		ray->u = u;
 		ray->v = v;
@@ -140,26 +149,11 @@ void check_tri(t_ray *ray, AABB *box)
 {
 	for (AABB *member = box->members; member; member = member->next)
 		intersect_tri(ray, member->f);
+	// if (ray->light)
+	// 	print_vec(ray->hit_N);
 }
 
-static void stack_push(AABB **stack, AABB *box)
-{
-	box->next = *stack;
-	*stack = box;
-}
-
-static AABB *stack_pop(AABB **stack)
-{
-	AABB *popped = NULL;
-	if (*stack)
-	{
-		popped = *stack;
-		*stack = popped->next;
-	}
-	return popped;
-}
-
-void	cam_traverse(t_env *env, t_ray *ray)
+static void	traverse(t_env *env, t_ray *ray)
 {
 	if (!ray->status)
 		return ;
@@ -168,14 +162,14 @@ void	cam_traverse(t_env *env, t_ray *ray)
 
 	while(stack)
 	{
-		AABB *box = stack_pop(&stack);
-		if (intersect_boxes(ray, box, NULL))
+		AABB *box = pop(&stack);
+		if (intersect_box(ray, box, NULL))
 		{
 			if (box->left) //boxes have either 0 or 2 children
 			{
 				float tleft, tright;
-				int lret = intersect_boxes(ray, box->left, &tleft);
-				int rret = intersect_boxes(ray, box->right, &tright);
+				int lret = intersect_box(ray, box->left, &tleft);
+				int rret = intersect_box(ray, box->right, &tright);
 				if (lret && tleft >= tright)
                     push(&stack, box->left);
                 if (rret)
@@ -189,50 +183,6 @@ void	cam_traverse(t_env *env, t_ray *ray)
 			}
 		}
 	}
-}
-
-cl_float3 cos_weight_dir(cl_float3 N)
-{
-	float	r1 = (float)rand() / (float)RAND_MAX;
-	float	r2 = (float)rand() / (float)RAND_MAX;
-
-	//local orthonormal system
-	cl_float3 axis = fabs(N.x) > fabs(N.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
-	cl_float3 hem_x = cross(axis, N);
-	cl_float3 hem_y = cross(N, hem_x);
-
-	//generate random direction on the unit hemisphere (cosine-weighted)
-	float r = sqrt(r1);
-	float theta = 2.0f * M_PI * r2;
-
-	//combine for new direction
-	cl_float3	tmp1 = vec_scale(vec_scale(hem_x, r), cos(theta));
-	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
-	cl_float3	tmp3 = vec_scale(N, sqrt(fmax(0.0f, 1.0f - r1)));
-	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
-	return o;
-}
-
-cl_float3 uniform_dir(cl_float3 N)
-{
-	float	r1 = (float)rand() / (float)RAND_MAX;
-	float	r2 = (float)rand() / (float)RAND_MAX;
-
-	//local orthonormal system
-	cl_float3 axis = fabs(N.x) > fabs(N.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
-	cl_float3 hem_x = cross(axis, N);
-	cl_float3 hem_y = cross(N, hem_x);
-
-	//generate random direction on the unit hemisphere (cosine-weighted)
-	float r = sqrt(1.0f - r1 * r1);
-	float theta = 2.0f * M_PI * r2;
-
-	//combine for new direction
-	cl_float3	tmp1 = vec_scale(vec_scale(hem_x, r), cos(theta));
-	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
-	cl_float3	tmp3 = vec_scale(N, r1);
-	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
-	return o;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -253,7 +203,7 @@ static cl_float3 fetch_tex(Map *map, const cl_float3 txcrd, const cl_float3 flat
 
 void	fetch(t_env *env, t_ray *ray)
 {
-	if (!ray->f)
+	if (!ray->status || !ray->f)
 	{
 		// ray->color = vec_scale(ray->mask, SUN_BRIGHTNESS);
 		// fabs(pow(dot(ray->direction, UNIT_Y), 1.0f)
@@ -295,7 +245,6 @@ void	fetch(t_env *env, t_ray *ray)
 	}
 	else
 	{
-		// printf("%f\t%f\n", txcrd.x, txcrd.y);
 		ray->diff = fetch_tex(mat.map_Kd, txcrd, mat.Kd);
 		ray->spec = fetch_tex(mat.map_Ks, txcrd, mat.Ks);
 		ray->trans = fetch_tex(mat.map_d, txcrd, mat.Kd);
@@ -321,14 +270,14 @@ _Bool	check_visibility(t_env *env, t_ray *ray, t_ray *light_path_vertex)
 	stack->next = NULL;
 	while (stack)
 	{
-		AABB *box = stack_pop(&stack);
-		if (intersect_boxes(&edge, box, NULL))
+		AABB *box = pop(&stack);
+		if (intersect_box(&edge, box, NULL))
 		{
 			if (box->left) //boxes have either 0 or 2 children
 			{
 				float tleft, tright;
-				int lret = intersect_boxes(ray, box->left, &tleft);
-				int rret = intersect_boxes(ray, box->right, &tright);
+				int lret = intersect_box(ray, box->left, &tleft);
+				int rret = intersect_box(ray, box->right, &tright);
 				if (lret && tleft >= tright)
                     push(&stack, box->left);
                 if (rret)
@@ -352,7 +301,7 @@ void	multi_sample_estimator(t_ray *ray, t_ray *light_path_vertex)
 	cl_float3 cam_to_light = vec_sub(light_path_vertex->origin, ray->origin);
 	cam_to_light = unit_vec(cam_to_light);
 
-	float geom_term = fmax(dot(cam_to_light, ray->N), 0.0f) * fmax(dot(vec_scale(cam_to_light, -1.0f), light_path_vertex->N), 0.0f);
+	float geom_term = fmax(dot(cam_to_light, ray->hit_N), 0.0f) * fmax(dot(vec_scale(cam_to_light, -1.0f), light_path_vertex->N), 0.0f);
 
 	ray->color = vec_add(ray->color, vec_scale(vec_mult(ray->mask, light_path_vertex->mask), geom_term));
 }
@@ -371,22 +320,15 @@ void	sample_light_path(t_env *env, t_ray *ray, t_ray *light_path)
 
 void	bounce(t_env *env, t_ray *ray, t_ray *light_path)
 {	
-	ray->bounce++;
-
-	if (ray->bounce >= env->depth && ((float)rand() / (float)RAND_MAX) > stop_prob)
-	{
-		ray->status = 0;
-		return ;
-	}
 	if (!ray->status)
 		return ;
 
-	cl_float3	o = cos_weight_dir(ray->N);
-	float weight = 1.0f; //dot(ray->N, o);
+	cl_float3	o = cos_weight_dir(ray->hit_N);
+	float weight = 1.0f; //dot(ray->hit_N, o);
 
-	float o_sign = dot(ray->N, o) > 0.0f ? 1.0f : -1.0f;
+	float o_sign = dot(ray->hit_N, o) > 0.0f ? 1.0f : -1.0f;
 	ray->mask = vec_mult(ray->mask, vec_scale(ray->diff, weight));
-	ray->origin = vec_add(vec_add(ray->origin, vec_scale(ray->direction, ray->t)), vec_scale(ray->N, o_sign * NORMAL_SHIFT));
+	ray->origin = vec_add(vec_add(ray->origin, vec_scale(ray->direction, ray->t)), vec_scale(ray->hit_N, o_sign * NORMAL_SHIFT));
 	ray->direction = o;
 	ray->inv_dir = vec_inverse(o);
 	if (dot(ray->mask, ray->mask) == 0.0f)
@@ -395,32 +337,24 @@ void	bounce(t_env *env, t_ray *ray, t_ray *light_path)
 
 	ray->f = NULL;
 	ray->t = FLT_MAX;
+	ray->bounce++;
+	if (ray->bounce >= env->depth && ((float)rand() / (float)RAND_MAX) > stop_prob)
+		ray->status = 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void	light_bounce(t_env *env, t_ray *ray_in)
 {	
-	if (ray_in->bounce >= env->depth && ((float)rand() / (float)RAND_MAX) > stop_prob)
-	{
-		ray_in->status = 0;
-		ray_in->next = NULL;
-		return ;
-	}
-	if (!ray_in->status)
-		return ;
-
 	t_ray	*ray_out = malloc(sizeof(t_ray));
 	init_ray(ray_out);
 
-	ray_out->bounce = ray_in->bounce + 1;
+	cl_float3	o = uniform_dir(ray_in->hit_N);
+	float weight = fmax(0.0f, dot(ray_in->hit_N, ray_in->direction));
 
-	cl_float3	o = uniform_dir(ray_in->N);
-	float weight = fmax(0.0f, dot(ray_in->N, ray_in->direction));
-
-	float o_sign = dot(ray_in->N, o) > 0.0f ? 1.0f : -1.0f;
+	float o_sign = dot(ray_in->hit_N, o) > 0.0f ? 1.0f : -1.0f;
 	ray_out->mask = vec_mult(ray_in->mask, vec_scale(ray_in->diff, weight));
-	ray_out->origin = vec_add(vec_add(ray_in->origin, vec_scale(ray_in->direction, ray_in->t)), vec_scale(ray_in->N, o_sign * NORMAL_SHIFT));
+	ray_out->origin = vec_add(vec_add(ray_in->origin, vec_scale(ray_in->direction, ray_in->t)), vec_scale(ray_in->hit_N, o_sign * NORMAL_SHIFT));
 	ray_out->direction = o;
 	ray_out->inv_dir = vec_inverse(o);
 	if (dot(ray_out->mask, ray_out->mask) == 0.0f)
@@ -428,6 +362,13 @@ void	light_bounce(t_env *env, t_ray *ray_in)
 
 	ray_out->f = NULL;
 	ray_out->t = FLT_MAX;
+	ray_out->light = 1;
+	ray_out->bounce = ray_in->bounce + 1;
+	if (ray_out->bounce >= env->depth && ((float)rand() / (float)RAND_MAX) > stop_prob)
+	{
+		ray_out->status = 0;
+		ray_out->next = NULL;
+	}
 	ray_in->next = ray_out;
 }
 
@@ -461,18 +402,23 @@ t_ray	*light_path(t_env *env)
 
 	cl_float3	dir = cos_weight_dir(n);
 	dir = (cl_float3){0.0, -1.0, 0.0};
+	p = vec_add(p, vec_scale(dir, NORMAL_SHIFT));
 
 	t_ray	*light_path = malloc(sizeof(t_ray));
 	t_ray	*light_path_vertex = light_path;
+	init_ray(light_path_vertex);
 	light_path_vertex->origin = p;
 	light_path_vertex->direction = dir;
-	init_ray(light_path_vertex);
-	//light_path_vertex->N = n;
+	light_path_vertex->N = n;
 	cl_float3 Ke = scene->materials[light_source.mat_ind].Ke;
 	light_path_vertex->mask = vec_mult(Ke, vec_scale(WHITE, SUN_BRIGHTNESS));
+	light_path_vertex->light = 1;
 	while (light_path_vertex && light_path_vertex->status)
 	{
-		cam_traverse(env, light_path_vertex);
+		traverse(env, light_path_vertex);
+		// printf("%f\n", light_path_vertex->t);
+		// print_vec(light_path_vertex->hit_N);
+		// printf("-----------------------------------\n");
 		fetch(env, light_path_vertex);
 		light_bounce(env, light_path_vertex);
 		light_path_vertex = light_path_vertex->next;
@@ -507,15 +453,15 @@ cl_float3	*bidirectional(t_env *env)
 	{
 		for (int x = 0; x < DIM_PT; x++)
 		{
-			t_ray ray = generate_rays(env, x, y);
+			t_ray cam_ray = generate_rays(env, x, y);
 			t_ray *light_ray = light_path(env);
-			while (ray.status)
+			while (cam_ray.status)
 			{
-				cam_traverse(env, &ray);
-				fetch(env, &ray);
-				bounce(env, &ray, light_ray);
+				traverse(env, &cam_ray);
+				fetch(env, &cam_ray);
+				bounce(env, &cam_ray, light_ray);
 			}
-			out[x + (y * DIM_PT)] = vec_scale(ray.color, 1.0f / (float)ray.subsample_count);
+			out[x + (y * DIM_PT)] = vec_scale(cam_ray.color, 1.0f / (float)cam_ray.subsample_count);
 		}
 	}
 	return out;

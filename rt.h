@@ -530,6 +530,8 @@ void	clr_avg(cl_double3 *a, cl_double3 *b, int samples, int size);
 ////////////////////////////////////////
 int		nonzero(const cl_float3 v);
 float	triangle_area(const cl_float3 v0, const cl_float3 v1, const cl_float3 v2);
+cl_float3 cos_weight_dir(cl_float3 N);
+cl_float3 uniform_dir(cl_float3 N);
 
 //utility functions
 char *strtrim(char const *s);

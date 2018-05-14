@@ -194,3 +194,47 @@ float	triangle_area(const cl_float3 v0, const cl_float3 v1, const cl_float3 v2)
 
 	return ((b * c) / 2) * sin(angle);
 }
+
+cl_float3 cos_weight_dir(cl_float3 N)
+{
+	float	r1 = (float)rand() / (float)RAND_MAX;
+	float	r2 = (float)rand() / (float)RAND_MAX;
+
+	//local orthonormal system
+	cl_float3 axis = fabs(N.x) > fabs(N.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
+	cl_float3 hem_x = cross(axis, N);
+	cl_float3 hem_y = cross(N, hem_x);
+
+	//generate random direction on the unit hemisphere (cosine-weighted)
+	float r = sqrt(r1);
+	float theta = 2.0f * M_PI * r2;
+
+	//combine for new direction
+	cl_float3	tmp1 = vec_scale(vec_scale(hem_x, r), cos(theta));
+	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
+	cl_float3	tmp3 = vec_scale(N, sqrt(fmax(0.0f, 1.0f - r1)));
+	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
+	return o;
+}
+
+cl_float3 uniform_dir(cl_float3 N)
+{
+	float	r1 = (float)rand() / (float)RAND_MAX;
+	float	r2 = (float)rand() / (float)RAND_MAX;
+
+	//local orthonormal system
+	cl_float3 axis = fabs(N.x) > fabs(N.y) ? (cl_float3){0.0f, 1.0f, 0.0f} : (cl_float3){1.0f, 0.0f, 0.0f};
+	cl_float3 hem_x = cross(axis, N);
+	cl_float3 hem_y = cross(N, hem_x);
+
+	//generate random direction on the unit hemisphere (cosine-weighted)
+	float r = sqrt(1.0f - r1 * r1);
+	float theta = 2.0f * M_PI * r2;
+
+	//combine for new direction
+	cl_float3	tmp1 = vec_scale(vec_scale(hem_x, r), cos(theta));
+	cl_float3	tmp2 = vec_scale(vec_scale(hem_y, r), sin(theta));
+	cl_float3	tmp3 = vec_scale(N, r1);
+	cl_float3	o = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
+	return o;
+}
