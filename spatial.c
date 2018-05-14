@@ -1,6 +1,17 @@
 #include "rt.h"
 #include <limits.h>
 
+void print_bin(Bin *bin, int bag)
+{
+	print_vec(bin->bin_min);
+	print_vec(bin->bin_max);
+	if (bag)
+	{
+		print_vec(bin->bag_min);
+		print_vec(bin->bag_max);
+	}
+}
+
 Bin new_bin(AABB *box, int axis, int index, int count, cl_float3 span)
 {
 	//represent a new split using the "bin/bag paradigm"
@@ -35,6 +46,10 @@ Bin_set *allocate_bins(AABB *box)
 		set->bins[axis] = calloc(set->counts[axis] + 1, sizeof(Bin));
 		for (int j = 0; j <= set->counts[axis]; j++)
 			set->bins[axis][j] = new_bin(box, axis, j, set->counts[axis], set->span);
+
+		//should help rounding issues
+		set->bins[axis][0].bin_min = box->min;
+		set->bins[axis][set->counts[axis]].bin_max = box->max;	
 	}
 
 	return set;
@@ -129,6 +144,10 @@ int point_in_range_L(cl_float3 point, cl_float3 min, cl_float3 max, int last, in
 {
 	if (last)
 	{
+		// printf("last\n");
+		// print_vec(point);
+		// print_vec(min);
+		// print_vec(max);
 		if (min.x <= point.x && point.x <= max.x)
 			if (min.y <= point.y  && point.y <= max.y)
 				if (min.z <= point.z && point.z <= max.z)
@@ -178,6 +197,8 @@ void add_face(AABB *member, Bin_set *set, int axis, AABB *parent)
 		if (point_in_range_R(member->max, set->bins[axis][i].bin_min, set->bins[axis][i].bin_max, i == 0 ? 1 : 0, axis))
 			rightmost = i;
 	}
+
+	//printf("leftmost %d rightmost %d\n", leftmost, rightmost);
 
 	set->bins[axis][leftmost].enter++;
 	set->bins[axis][rightmost].exit++;
@@ -319,6 +340,8 @@ void print_set(Bin_set *set)
 
 Split *fast_spatial_split(AABB *box)
 {
+	// printf("spatial split on box:\n");
+	// print_box(box);
 	// allocate split_count splits along axes in proportion
 	Bin_set *set = allocate_bins(box);
 

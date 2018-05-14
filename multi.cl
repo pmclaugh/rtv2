@@ -437,36 +437,36 @@ __kernel void bounce( 	__global Ray *rays,
 		o = diffuse_direction(ray.N, &seed0, &seed1);
 		weight = ray.diff;
 	}
-	else if SUBSURFACE
-	{
-		ray.t = log(subsurface) / (-1.0f * SCATTER);
-		o = unweighted_direction(&seed0, &seed1);
-		weight = ray.diff; //will be ray.subsurf
-	}
-	else if REFLECT
-	{
-		o = normalize(2.0f * dot(i,m) * m - i);
-		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
-	}
-	else if TRANSMIT
-	{
-		float index = ni / nt;
-		float c = dot(i, m);
-		float radicand = 1.0f + index * (c * c - 1.0f);
-		if (radicand < 0.0f)
-		{
-			//Total internal reflection
-			o = normalize(2.0f * dot(i,m) * m - i);
-			weight = WHITE;
-		}
-		else
-		{
-			//transmission
-			float coeff = index * c - sqrt(radicand);
-			o = normalize(coeff * -1.0f * m - index * i);
-			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.diff;
-		}
-	}
+	// else if SUBSURFACE
+	// {
+	// 	ray.t = log(subsurface) / (-1.0f * SCATTER);
+	// 	o = unweighted_direction(&seed0, &seed1);
+	// 	weight = ray.diff; //will be ray.subsurf
+	// }
+	// else if REFLECT
+	// {
+	// 	o = normalize(2.0f * dot(i,m) * m - i);
+	// 	weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
+	// }
+	// else if TRANSMIT
+	// {
+	// 	float index = ni / nt;
+	// 	float c = dot(i, m);
+	// 	float radicand = 1.0f + index * (c * c - 1.0f);
+	// 	if (radicand < 0.0f)
+	// 	{
+	// 		//Total internal reflection
+	// 		o = normalize(2.0f * dot(i,m) * m - i);
+	// 		weight = WHITE;
+	// 	}
+	// 	else
+	// 	{
+	// 		//transmission
+	// 		float coeff = index * c - sqrt(radicand);
+	// 		o = normalize(coeff * -1.0f * m - index * i);
+	// 		weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.diff;
+	// 	}
+	// }
 	else
 	{
 		o = diffuse_direction(ray.N, &seed0, &seed1);
