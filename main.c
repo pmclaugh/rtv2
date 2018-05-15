@@ -21,6 +21,53 @@ void add_counts(int *total, int *new, int size)
 		total[i] += new[i];
 }
 
+void save_file(t_env *env, int frame_no)
+{
+	char *filename;
+	asprintf(&filename, "frame-%d.ppm", frame_no);
+	FILE *f = fopen(filename, "w");
+	fprintf(f, "P3\n%d %d\n%d\n ",DIM_PT,DIM_PT,255);
+	for (int row=0;row<DIM_PT;row++) {
+		for (int col=DIM_PT - 1;col>=0;col--) {
+			fprintf(f,"%d %d %d ", (int)(env->pt->pixels[col + DIM_PT * row].x * 255.0f), (int)(env->pt->pixels[col + DIM_PT * row].y * 255.0f), (int)(env->pt->pixels[col + DIM_PT * row].z * 255.0f));
+		}
+		fprintf(f, "\n");
+	}
+	fclose(f);
+}
+
+void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
+{
+	double Lw = 0.0;
+	for (int i = 0; i < resolution; i++)
+	{
+		double scale = count[i] > 0 ? 1.0 / (double)(count[i]) : 1;
+		data->pixels[i].x = data->total_clr[i].x * scale;
+		data->pixels[i].y = data->total_clr[i].y * scale;
+		data->pixels[i].z = data->total_clr[i].z * scale;
+
+		double this_lw = log(0.1 + 0.2126 * data->pixels[i].x + 0.7152 * data->pixels[i].y + 0.0722 * data->pixels[i].z);
+		if (this_lw == this_lw)
+			Lw += this_lw;
+		else
+			printf("NaN alert\n");
+	}
+
+	Lw /= (double)resolution;
+	Lw = exp(Lw);
+
+	for (int i = 0; i < resolution; i++)
+	{
+		data->pixels[i].x = data->pixels[i].x * 0.64 / Lw;
+		data->pixels[i].y = data->pixels[i].y * 0.64 / Lw;
+		data->pixels[i].z = data->pixels[i].z * 0.64 / Lw;
+
+		data->pixels[i].x = data->pixels[i].x / (data->pixels[i].x + 1.0);
+		data->pixels[i].y = data->pixels[i].y / (data->pixels[i].y + 1.0);
+		data->pixels[i].z = data->pixels[i].z / (data->pixels[i].z + 1.0);
+	}
+}
+
 void		path_tracer(t_env *env)
 {
 	int first = (env->samples == 0) ? 1 : 0;
@@ -36,6 +83,7 @@ void		path_tracer(t_env *env)
 	draw_pixels(env->pt, DIM_PT, DIM_PT);
 	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
 	mlx_key_hook(env->pt->win, exit_hook, env);
+	// save_file(env, env->samples);
 	if (env->samples >= env->spp)
 	{
 		env->samples = 0;
@@ -115,39 +163,19 @@ int 		main(int ac, char **av)
 {
 	srand(time(NULL));
 
-	//Initialize environment with scene and intial configurations
+	//Initialize environment with scene and intial configurations, load files
 	t_env	*env = init_env();
 
-	//LL is best for this bvh. don't want to rearrange import for now, will do later
-	Face *face_list = NULL;
-	for (int i = 0; i < env->scene->face_count; i++)
-	{
-		Face *f = calloc(1, sizeof(Face));
-		memcpy(f, &env->scene->faces[i], sizeof(Face));
-		f->next = face_list;
-		face_list = f;
-	}
-	free(env->scene->faces);
-
 	//Build BVH
-	int box_count, ref_count;
-	AABB *tree = sbvh(face_list, &box_count, &ref_count);
-	printf("finished with %d boxes\n", box_count);
-	study_tree(tree, 100000);
+	sbvh(env);
+
+	//Performance metrics on BVH
+	study_tree(env->scene->bins, 100000);
 
 	//Flatten BVH
-	env->scene->bins = tree;
-	env->scene->bin_count = box_count;
-	env->scene->face_count = ref_count;
 	flatten_faces(env->scene);
 
-	// for (int i = 0; i < env->scene->face_count; i++)
-	// {
-	// 	Face *tmp = face_list->next;
-	// 	free(face_list);
-	// 	face_list = tmp;
-	// }
-
+	//launch core loop
 	init_mlx_data(env);
 	
 	return 0;

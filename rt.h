@@ -26,7 +26,7 @@
 #define UNIT_Z (cl_float3){0, 0, 1}
 
 #define DIM_IA		400
-#define DIM_PT		1024
+#define DIM_PT		512
 
 #define H_FOV M_PI_2 * 60.0 / 90.0
 
@@ -144,6 +144,8 @@ typedef struct s_face
 	cl_int mat_ind;
 	cl_int smoothing;
 	cl_float3 verts[4];
+	cl_float3 edges[3];
+	float edge_t[3];
 	cl_float3 norms[4];
 	cl_float3 tex[4];
 	cl_float3 N;
@@ -151,16 +153,6 @@ typedef struct s_face
 	cl_float3 center;
 	struct s_face *next;
 }				Face;
-
-typedef struct s_Box
-{
-	cl_float3 min; //spatial bounds of box
-	cl_float3 max;
-	cl_int start; //indices in Faces[] that this box contains
-	cl_int end;
-	cl_int children[8];
-	cl_int children_count;
-}				Box;
 
 typedef struct s_gpu_bin
 {
@@ -173,20 +165,6 @@ typedef struct s_gpu_bin
 	cl_float maxz;
 	cl_int rind;
 }				gpu_bin;
-
-typedef struct bvh_struct
-{
-	cl_float3 min; //spatial boundary
-	cl_float3 max; //spatial boundary
-	struct bvh_struct *left; 
-	struct bvh_struct *right;
-	gpu_bin *parent;
-	Face *faces;
-	int face_ind;
-	int count;
-	//maybe more?
-	struct bvh_struct *next; //for tree building not for tracing
-}				tree_box;
 
 typedef struct s_AABB
 {
@@ -346,14 +324,26 @@ typedef struct s_split
 	float ratio;
 }				Split;
 
-//bvh_util.c
+typedef struct s_bin
+{
+	cl_float3 bin_min;
+	cl_float3 bin_max;
+	cl_float3 bag_min;
+	cl_float3 bag_max;
+	int enter;
+	int exit;
+}				Bin;
+
+typedef struct s_bin_set
+{
+	Bin **bins;
+	int counts[3];
+	cl_float3 span;
+}				Bin_set;
+
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
-#define SPLIT_TEST_NUM 32
-#define LEAF_THRESHOLD 4
-#define BOOST_DEPTH 11
-#define ALPHA 0.01f
-#define SPLIT_SPOT ((float)i + 1.0f) / (SPLIT_TEST_NUM + 1.0f) 
+#define SPLIT_TEST_NUM 256
 
 cl_float3 center(const AABB *box);
 void push(AABB **stack, AABB *box);
@@ -381,6 +371,8 @@ int x_sort(const void *arg1, const void *arg2);
 int y_sort(const void *arg1, const void *arg2);
 int z_sort(const void *arg1, const void *arg2);
 float SA_overlap(Split *split);
+void pointer_axis_sort(AABB **boxes, int count, enum axis ax);
+void fast_axis_sort(AABB *boxes, int count, enum axis ax);
 
 Face *stl_import(char *stl_file);
 
@@ -417,7 +409,7 @@ typedef struct s_env
 	int			min_bounces;
 }				t_env;
 
-AABB *sbvh(Face *faces, int *box_count, int *ref_count);
+void sbvh(t_env *env);
 void study_tree(AABB *tree, int ray_count);
 void flatten_faces(Scene *scene);
 gpu_bin *flatten_bvh(Scene *scene);
@@ -425,6 +417,9 @@ float area(AABB *box);
 cl_double3 *composite(cl_float3 **outputs, int numDevices, int resolution, cl_int **counts);
 cl_double3 *debug_composite(cl_float3 **outputs, int numDevices, int resolution, int **counts);
 int depth(AABB *box);
+
+Split *fast_spatial_split(AABB *box);
+AABB *clip(AABB *member, Bin *bin, int axis);
 
 Face *ply_import(char *ply_file, File_edits edit_info, int *face_count);
 Face *object_flatten(Face *faces, int *face_count);
@@ -440,10 +435,6 @@ void	alt_composite(t_mlx_data *data, int resolution, cl_int *count);
 cl_float3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int samples, int min_bounces, int first, cl_int **count_out);
 //Scene *scene_from_obj(char *rel_path, char *filename);
 //cl_double3 *gpu_render(Scene *scene, t_camera cam, int xdim, int ydim, int SPP);
-
-void old_bvh(Scene *S);
-Box *bvh_obj(Face *Faces, int start, int end, int *boxcount);
-void gpu_ready_bvh(Scene *S, int *counts, int obj_count);
 
 uint64_t splitBy3(const unsigned int a);
 uint64_t mortonEncode_magicbits(const unsigned int x, const unsigned int y, const unsigned int z);

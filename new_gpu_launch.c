@@ -268,38 +268,6 @@ void recompile(gpu_context *gpu)
 	printf("good compile\n");
 }
 
-void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
-{
-	double Lw = 0.0;
-	for (int i = 0; i < resolution; i++)
-	{
-		double scale = 1.0 / (double)(count[i]);
-		data->pixels[i].x = data->total_clr[i].x * scale;
-		data->pixels[i].y = data->total_clr[i].y * scale;
-		data->pixels[i].z = data->total_clr[i].z * scale;
-
-		double this_lw = log(0.1 + 0.2126 * data->pixels[i].x + 0.7152 * data->pixels[i].y + 0.0722 * data->pixels[i].z);
-		if (this_lw == this_lw)
-			Lw += this_lw;
-		else
-			printf("NaN alert\n");
-	}
-
-	Lw /= (double)resolution;
-	Lw = exp(Lw);
-
-	for (int i = 0; i < resolution; i++)
-	{
-		data->pixels[i].x = data->pixels[i].x * 0.36 / Lw;
-		data->pixels[i].y = data->pixels[i].y * 0.36 / Lw;
-		data->pixels[i].z = data->pixels[i].z * 0.36 / Lw;
-
-		data->pixels[i].x = data->pixels[i].x / (data->pixels[i].x + 1.0);
-		data->pixels[i].y = data->pixels[i].y / (data->pixels[i].y + 1.0);
-		data->pixels[i].z = data->pixels[i].z / (data->pixels[i].z + 1.0);
-	}
-}
-
 typedef struct s_gpu_ray {
 	cl_float3 origin;
 	cl_float3 direction;
@@ -313,6 +281,7 @@ typedef struct s_gpu_ray {
 	cl_float roughness;
 	cl_float transparency;
 	cl_float3 N;
+	cl_float3 geom_N;
 	cl_float t;
 	cl_float u;
 	cl_float v;
@@ -366,7 +335,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	//for simplicity assuming one platform for now. can easily be extended, see old gpu_launch.c
 
 	size_t worksize = xdim * ydim;
-	size_t localsize = 32;
+	size_t localsize = 64;
 	size_t sample_max = samples;
 	size_t width = xdim;
 
