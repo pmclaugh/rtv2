@@ -322,7 +322,6 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 									angle = 0.0f;
 								avg = vec_add(avg, vec_scale(vec_scale(t->f->norms[j], angle), SA));
 							}
-					smoothed[i] = unit_vec(avg);
 				}
 			//then overwrite old normals with them and also correctly populate verts
 			for (int i = 0; i < v_total; i++)

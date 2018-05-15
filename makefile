@@ -8,7 +8,6 @@ SRC =	vec.c \
 		new_gpu_launch.c \
 		bvh.c \
 		bvh_lab.c \
-		spatial.c \
 		interactive.c \
 		key_command.c \
 		import.c \
