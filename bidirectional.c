@@ -6,7 +6,6 @@
 
 typedef struct	s_ray
 {
-	//vertex data
 	cl_float3	origin;
 	cl_float3	direction;
 	cl_float3	inv_dir;
@@ -15,7 +14,7 @@ typedef struct	s_ray
 	cl_float3	color;
 	cl_float3	mask;
 
-	//hit surface data
+	//surface data
 	Face		*f;
 	cl_float3	hit_N;
 	cl_float3	sample_N;
@@ -27,11 +26,8 @@ typedef struct	s_ray
 	cl_float3	spec;
 	cl_float3	trans;
 
-	//misc
 	int			bounce;
-	int 		subsample_count;
 	_Bool		status;
-	_Bool		light;
 	struct s_ray	*next;
 }				t_ray;
 
@@ -52,9 +48,7 @@ void	init_ray(t_ray *ray)
 	ray->trans = BLACK;
 
 	ray->bounce = 0;
-	ray->subsample_count = 1; //avoid nans this way
 	ray->status = 1;
-	ray->light = 0;
 
 	ray->next = NULL;
 }
@@ -70,7 +64,7 @@ static int inside_box(t_ray *ray, AABB *box)
 	return 0;
 }
 
-static int intersect_box(t_ray *ray, AABB *box, float *t_out)
+static int intersect_boxes(t_ray *ray, AABB *box, float *t_out)
 {
 	float tx0 = (box->min.x - ray->origin.x) * ray->inv_dir.x;
 	float tx1 = (box->max.x - ray->origin.x) * ray->inv_dir.x;
@@ -109,7 +103,7 @@ static int intersect_box(t_ray *ray, AABB *box, float *t_out)
 	return (1);
 }
 
-static void	intersect_tri(t_ray *ray, Face *face)
+void	intersect_tri(t_ray *ray, Face *face)
 {
 	const cl_float3 v0 = face->verts[0], v1 = face->verts[1], v2 = face->verts[2];
 	float t, u, v;
@@ -131,12 +125,8 @@ static void	intersect_tri(t_ray *ray, Face *face)
 	if (v < 0.0 || u + v > 1.0)
 		return ;
 	t = f * dot(e2, q);
-	// if (ray->light)
-	// 	printf("%f\n", t);
 	if (t > 0 && t < ray->t)
 	{
-		// if (ray->light)
-		// 	printf("%f\n", t);
 		ray->t = t;
 		ray->hit_N = unit_vec(cross(vec_sub(v1, v0), vec_sub(v2, v0)));
 		ray->f = face;
@@ -149,11 +139,26 @@ void check_tri(t_ray *ray, AABB *box)
 {
 	for (AABB *member = box->members; member; member = member->next)
 		intersect_tri(ray, member->f);
-	// if (ray->light)
-	// 	print_vec(ray->hit_N);
 }
 
-static void	traverse(t_env *env, t_ray *ray)
+static void stack_push(AABB **stack, AABB *box)
+{
+	box->next = *stack;
+	*stack = box;
+}
+
+static AABB *stack_pop(AABB **stack)
+{
+	AABB *popped = NULL;
+	if (*stack)
+	{
+		popped = *stack;
+		*stack = popped->next;
+	}
+	return popped;
+}
+
+static void		traverse(t_env *env, t_ray *ray)
 {
 	if (!ray->status)
 		return ;
@@ -162,14 +167,14 @@ static void	traverse(t_env *env, t_ray *ray)
 
 	while(stack)
 	{
-		AABB *box = pop(&stack);
-		if (intersect_box(ray, box, NULL))
+		AABB *box = stack_pop(&stack);
+		if (intersect_boxes(ray, box, NULL))
 		{
 			if (box->left) //boxes have either 0 or 2 children
 			{
 				float tleft, tright;
-				int lret = intersect_box(ray, box->left, &tleft);
-				int rret = intersect_box(ray, box->right, &tright);
+				int lret = intersect_boxes(ray, box->left, &tleft);
+				int rret = intersect_boxes(ray, box->right, &tright);
 				if (lret && tleft >= tright)
                     push(&stack, box->left);
                 if (rret)
@@ -203,7 +208,7 @@ static cl_float3 fetch_tex(Map *map, const cl_float3 txcrd, const cl_float3 flat
 
 void	fetch(t_env *env, t_ray *ray)
 {
-	if (!ray->status || !ray->f)
+	if (!ray->f)
 	{
 		// ray->color = vec_scale(ray->mask, SUN_BRIGHTNESS);
 		// fabs(pow(dot(ray->direction, UNIT_Y), 1.0f)
@@ -214,17 +219,15 @@ void	fetch(t_env *env, t_ray *ray)
 
 	cl_float3	tmp1, tmp2, tmp3;
 
-	cl_float3	v0 = ray->f->verts[0];
-	cl_float3	v1 = ray->f->verts[1];
-	cl_float3	v2 = ray->f->verts[2];
-	cl_float3	geom_N = unit_vec(cross(vec_sub(v1, v0), vec_sub(v2, v0)));
+	// cl_float3	v0 = ray->f->verts[0];
+	// cl_float3	v1 = ray->f->verts[1];
+	// cl_float3	v2 = ray->f->verts[2];
+	// cl_float3	geom_N = unit_vec(cross(vec_sub(v1, v0), vec_sub(v2, v0)));
 
 	tmp1 = vec_scale(ray->f->norms[0], (1.0f - ray->u - ray->v));
 	tmp2 = vec_scale(ray->f->norms[1], ray->u);
 	tmp3 = vec_scale(ray->f->norms[2], ray->v);
 	ray->sample_N = unit_vec(vec_add(vec_add(tmp1, tmp2), tmp3));
-
-	ray->sample_N = dot(ray->sample_N, geom_N) > 0.0f ? ray->sample_N : vec_scale(ray->sample_N, -1.0f);
 
 	tmp1 = vec_scale(ray->f->tex[0], (1.0f - ray->u - ray->v));
 	tmp2 = vec_scale(ray->f->tex[1], ray->u);
@@ -240,11 +243,12 @@ void	fetch(t_env *env, t_ray *ray)
 	Material mat = env->scene->materials[ray->f->mat_ind];
 	if (mat.Ke.x > 0)
 	{
-		// ray->color = vec_scale(ray->mask, SUN_BRIGHTNESS);
+		ray->color = vec_scale(ray->mask, SUN_BRIGHTNESS);
 		ray->status = 0;
 	}
 	else
 	{
+		// printf("%f\t%f\n", txcrd.x, txcrd.y);
 		ray->diff = fetch_tex(mat.map_Kd, txcrd, mat.Kd);
 		ray->spec = fetch_tex(mat.map_Ks, txcrd, mat.Ks);
 		ray->trans = fetch_tex(mat.map_d, txcrd, mat.Kd);
@@ -270,14 +274,14 @@ _Bool	check_visibility(t_env *env, t_ray *ray, t_ray *light_path_vertex)
 	stack->next = NULL;
 	while (stack)
 	{
-		AABB *box = pop(&stack);
-		if (intersect_box(&edge, box, NULL))
+		AABB *box = stack_pop(&stack);
+		if (intersect_boxes(&edge, box, NULL))
 		{
 			if (box->left) //boxes have either 0 or 2 children
 			{
 				float tleft, tright;
-				int lret = intersect_box(ray, box->left, &tleft);
-				int rret = intersect_box(ray, box->right, &tright);
+				int lret = intersect_boxes(ray, box->left, &tleft);
+				int rret = intersect_boxes(ray, box->right, &tright);
 				if (lret && tleft >= tright)
                     push(&stack, box->left);
                 if (rret)
@@ -296,14 +300,14 @@ _Bool	check_visibility(t_env *env, t_ray *ray, t_ray *light_path_vertex)
 	return 1;
 }
 
-void	multi_sample_estimator(t_ray *ray, t_ray *light_path_vertex)
+void	multi_sample_estimator(t_ray *cam_ray, t_ray *light_path_vertex)
 {
-	cl_float3 cam_to_light = vec_sub(light_path_vertex->origin, ray->origin);
+	cl_float3 cam_to_light = vec_sub(light_path_vertex->origin, cam_ray->origin);
 	cam_to_light = unit_vec(cam_to_light);
 
-	float geom_term = fmax(dot(cam_to_light, ray->hit_N), 0.0f) * fmax(dot(vec_scale(cam_to_light, -1.0f), light_path_vertex->N), 0.0f);
+	float geom_term = fmax(dot(cam_to_light, cam_ray->hit_N), 0.0f) * fmax(dot(vec_scale(cam_to_light, -1.0f), light_path_vertex->N), 0.0f);
 
-	ray->color = vec_add(ray->color, vec_scale(vec_mult(ray->mask, light_path_vertex->mask), geom_term));
+	cam_ray->color = vec_add(cam_ray->color, vec_scale(vec_mult(cam_ray->mask, light_path_vertex->mask), geom_term));
 }
 
 void	sample_light_path(t_env *env, t_ray *ray, t_ray *light_path)
@@ -311,7 +315,6 @@ void	sample_light_path(t_env *env, t_ray *ray, t_ray *light_path)
 	t_ray	*light_path_vertex = light_path;
 	while (light_path_vertex)
 	{
-		//ray->subsample_count++;
 		if (check_visibility(env, ray, light_path_vertex))
 			multi_sample_estimator(ray, light_path_vertex);
 		light_path_vertex = light_path_vertex->next;
@@ -323,8 +326,8 @@ void	bounce(t_env *env, t_ray *ray, t_ray *light_path)
 	if (!ray->status)
 		return ;
 
-	cl_float3	o = cos_weight_dir(ray->hit_N);
-	float weight = 1.0f; //dot(ray->hit_N, o);
+	cl_float3	o = uniform_dir(ray->hit_N);
+	float 		weight = 1.0f;
 
 	float o_sign = dot(ray->hit_N, o) > 0.0f ? 1.0f : -1.0f;
 	ray->mask = vec_mult(ray->mask, vec_scale(ray->diff, weight));
@@ -339,30 +342,36 @@ void	bounce(t_env *env, t_ray *ray, t_ray *light_path)
 	ray->t = FLT_MAX;
 	ray->bounce++;
 	if (ray->bounce >= env->depth && ((float)rand() / (float)RAND_MAX) > stop_prob)
+	{
 		ray->status = 0;
+		ray->next = NULL;
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void	light_bounce(t_env *env, t_ray *ray_in)
 {	
+	if (!ray_in->status)
+		return ;
+
 	t_ray	*ray_out = malloc(sizeof(t_ray));
 	init_ray(ray_out);
 
 	cl_float3	o = uniform_dir(ray_in->hit_N);
-	float weight = fmax(0.0f, dot(ray_in->hit_N, ray_in->direction));
+	float weight = fmax(0.0f, pow(dot(ray_in->hit_N, ray_in->direction), 1.0f));
 
-	float o_sign = dot(ray_in->hit_N, o) > 0.0f ? 1.0f : -1.0f;
+	float o_sign = dot(ray_in->N, o) > 0.0f ? 1.0f : -1.0f;
 	ray_out->mask = vec_mult(ray_in->mask, vec_scale(ray_in->diff, weight));
 	ray_out->origin = vec_add(vec_add(ray_in->origin, vec_scale(ray_in->direction, ray_in->t)), vec_scale(ray_in->hit_N, o_sign * NORMAL_SHIFT));
 	ray_out->direction = o;
 	ray_out->inv_dir = vec_inverse(o);
+	ray_out->N = ray_in->hit_N;
 	if (dot(ray_out->mask, ray_out->mask) == 0.0f)
 		ray_out->status = 0;
 
 	ray_out->f = NULL;
 	ray_out->t = FLT_MAX;
-	ray_out->light = 1;
 	ray_out->bounce = ray_in->bounce + 1;
 	if (ray_out->bounce >= env->depth && ((float)rand() / (float)RAND_MAX) > stop_prob)
 	{
@@ -393,16 +402,13 @@ t_ray	*light_path(t_env *env)
 	cl_float3	v2 = light_source.verts[2];
 	cl_float3	n = unit_vec(light_source.norms[0]);
 
-	float	r1, r2, r3;
+	float	r1, r2;
 	r1 = (float)rand() / (float)RAND_MAX;
 	r2 = (float)rand() / (float)RAND_MAX;
 
 	cl_float3	p = vec_add(vec_add(vec_scale(v0, (1.0f - sqrt(r1))), vec_scale(v1, (sqrt(r1) * (1.0f - r2)))), vec_scale(v2, (r2 * sqrt(r1))));
-	// print_vec(p);
-
 	cl_float3	dir = cos_weight_dir(n);
 	dir = (cl_float3){0.0, -1.0, 0.0};
-	p = vec_add(p, vec_scale(dir, NORMAL_SHIFT));
 
 	t_ray	*light_path = malloc(sizeof(t_ray));
 	t_ray	*light_path_vertex = light_path;
@@ -410,15 +416,10 @@ t_ray	*light_path(t_env *env)
 	light_path_vertex->origin = p;
 	light_path_vertex->direction = dir;
 	light_path_vertex->N = n;
-	cl_float3 Ke = scene->materials[light_source.mat_ind].Ke;
-	light_path_vertex->mask = vec_mult(Ke, vec_scale(WHITE, SUN_BRIGHTNESS));
-	light_path_vertex->light = 1;
+	light_path_vertex->mask = vec_scale(WHITE, SUN_BRIGHTNESS * fmax(0.0f, dot(n, dir)));
 	while (light_path_vertex && light_path_vertex->status)
 	{
 		traverse(env, light_path_vertex);
-		// printf("%f\n", light_path_vertex->t);
-		// print_vec(light_path_vertex->hit_N);
-		// printf("-----------------------------------\n");
 		fetch(env, light_path_vertex);
 		light_bounce(env, light_path_vertex);
 		light_path_vertex = light_path_vertex->next;
@@ -428,7 +429,7 @@ t_ray	*light_path(t_env *env)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-t_ray	generate_rays(t_env *env, float x, float y)
+t_ray	generate_cam_ray(t_env *env, float x, float y)
 {
 	t_ray	ray;
 
@@ -453,7 +454,7 @@ cl_float3	*bidirectional(t_env *env)
 	{
 		for (int x = 0; x < DIM_PT; x++)
 		{
-			t_ray cam_ray = generate_rays(env, x, y);
+			t_ray cam_ray = generate_cam_ray(env, x, y);
 			t_ray *light_ray = light_path(env);
 			while (cam_ray.status)
 			{
@@ -461,7 +462,7 @@ cl_float3	*bidirectional(t_env *env)
 				fetch(env, &cam_ray);
 				bounce(env, &cam_ray, light_ray);
 			}
-			out[x + (y * DIM_PT)] = vec_scale(cam_ray.color, 1.0f / (float)cam_ray.subsample_count);
+			out[x + (y * DIM_PT)] = cam_ray.color;
 		}
 	}
 	return out;
