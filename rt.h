@@ -246,6 +246,9 @@ typedef struct s_gpu_scene
 	cl_float3 *BTN;
 	cl_uint tri_count;
 
+	cl_int3 *lights;
+	cl_uint light_poly_count;
+
 	gpu_bin *bins;
 	cl_uint bin_count;
 
