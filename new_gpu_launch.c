@@ -489,7 +489,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		{
 			clEnqueueNDRangeKernel(CL->commands[i], init_paths[i], 1, 0, &worksize, &localsize, 0, NULL, j == 0 ? &begin : NULL);
 			clEnqueueNDRangeKernel(CL->commands[i], trace_paths[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
-			// clEnqueueNDRangeKernel(CL->commands[i], connect_paths[i], 1, 0, &half_worksize, &localsize, 0, NULL, j == samples - 1 ? &finish : NULL);
+			clEnqueueNDRangeKernel(CL->commands[i], connect_paths[i], 1, 0, &half_worksize, &localsize, 0, NULL, j == samples - 1 ? &finish : NULL);
 		}
 
 	for (int i = 0; i < d; i++)
@@ -500,11 +500,11 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 
 	printf("made it out of kernel\n");
 
-	// clGetEventProfilingInfo(begin, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-	// clGetEventProfilingInfo(finish, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-	// printf("took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
-	// clReleaseEvent(begin);
-	// clReleaseEvent(finish);
+	clGetEventProfilingInfo(begin, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+	clGetEventProfilingInfo(finish, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+	printf("took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
+	clReleaseEvent(begin);
+	clReleaseEvent(finish);
 
 	printf("timer\n");
 	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
@@ -554,18 +554,24 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	free(d_counts);
 	cl_float3 *output = calloc(half_worksize, sizeof(cl_float3));
 	cl_int *count = calloc(half_worksize, sizeof(cl_int));
+	cl_int light_count, camera_count;
 	for (int i = 0; i < d; i++)
 		for (int j = 0; j < half_worksize; j++)
 		{
 			output[j] = vec_add(output[j], outputs[i][j]);
-			count[j] += counts[i][2 * j];
+			count[j] += counts[i][2 * j] * counts[i][2 * j + 1];
+			camera_count += counts[i][2 * j];
+			light_count += counts[i][2 * j + 1];
 		}
+
+	printf("average camera path length, %f\n", (float)camera_count / (float)half_worksize);
+	printf("average light path length, %f\n", (float)light_count / (float)half_worksize);
 	for (int i = 0; i < CL->numDevices; i++)
 	{
 		free(counts[i]);
 		free(outputs[i]);
 	}
-	//free(count);
+
 	free(counts);
 	free(outputs);
 
