@@ -252,7 +252,9 @@ __kernel void init_paths(const Camera cam,
 		v2 = V[light.z];
 		normal = normalize(N[light.x]);
 		direction = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
-		mask = WHITE * dot(direction, normal);
+		//direction override
+		// direction = normal;
+		mask = WHITE * dot(direction, normal);		
 
 		//pick random point just off of that triangle
 		float r1 = get_random(&seed0, &seed1);
@@ -371,9 +373,11 @@ __kernel void connect_paths(__global Path *paths,
 
 	int camera_length = path_lengths[2 * index];
 	int light_length = path_lengths[2 * index + 1];
+	
+	// return;
 
 	float3 sum = 0.0f;
-	for (int s = 0; s < camera_length; s++)
+	for (int s = 1; s < camera_length; s++)
 	{
 		Path camera_vertex = paths[2 * index + row_size * s];
 		for (int t = 0; t < light_length; t++)
@@ -389,7 +393,7 @@ __kernel void connect_paths(__global Path *paths,
 			float camera_cos = dot(camera_vertex.normal, direction);
 			float light_cos = dot(light_vertex.normal, -1.0f * direction);
 
-			if (camera_cos <= 0.0f || light_cos <= 0.0f)
+			if (camera_cos * light_cos <= 0.0f)
 				continue ;
 			if (!visibility_test(origin, direction, t, boxes, V))
 				continue ;
@@ -412,7 +416,7 @@ static void surface_vectors(__global float3 *V, __global float3 *N, __global flo
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-	*N_out = copysign(sample_N, dot(geom_N, sample_N));
+	*N_out = sample_N; //dot(geom_N, sample_N) > 0.0f ? sample_N : -1.0f * sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
 	txcrd.x -= floor(txcrd.x);
@@ -459,7 +463,8 @@ static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float
 	return normalize(tangent * bump.x + bitangent * bump.y + sample_N * bump.z);
 }
 
-#define BOUNCE_LIMIT 4
+#define CAMERA_BOUNCES 3
+#define LIGHT_BOUNCES 3
 
 __kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -477,23 +482,26 @@ __kernel void trace_paths(__global Path *paths,
 {
 	int index = get_global_id(0);
 	int row_size = get_global_size(0);
-
 	
 	uint seed0, seed1;
 	seed0 = seeds[2 * index];
 	seed1 = seeds[2 * index + 1];
 
 	int stack[32];
-	float3 origin, direction, inv_dir, mask;
+	float3 origin, direction, inv_dir, mask, old_dir;
 
 	//fetch initial data
 	origin = paths[index].origin;
 	direction = paths[index].direction;
 	mask = paths[index].mask;
 	path_lengths[index] = 1;
+	old_dir = direction;
+	
+	int way = index % 2;
+	int limit = way ? LIGHT_BOUNCES : CAMERA_BOUNCES;
 
-	int length;
-	for (length = 1; length <= BOUNCE_LIMIT; length++)
+	int length = 1;
+	for (length = 1; length <= limit; length++)
 	{
 		inv_dir = 1.0f / direction;
 		//reset stack and results
@@ -541,8 +549,7 @@ __kernel void trace_paths(__global Path *paths,
 		//check for miss
 		if (ind == -1)
 			break ;
-		
-		int way = index % 2;
+
 
 		//get normal and texture coordinate
 		float3 normal, txcrd;
@@ -552,30 +559,30 @@ __kernel void trace_paths(__global Path *paths,
 		float3 diff, spec, bump, trans, Ke;
 		fetch_all_tex(M, mats, tex, ind, txcrd, &diff, &spec, &bump, &trans, &Ke);
 
-		//did we hit a light?
-		// if (dot(Ke, Ke) > 0.0f)
-		// 	break ;
+		// did we hit a light?
+		if (dot(Ke, Ke) > 0.0f)
+			break ;
 
-		//bump map (malfunctioning)
-		//normal = bump_map(TN, BTN, ind, normal, bump);
+		// bump map (malfunctioning)
+		// normal = bump_map(TN, BTN, ind, normal, bump);
 
 		//color
 		mask *= diff;
 
 		//sample and evaluate BRDF
 		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
-		if (way == 1)
-			mask *= dot(-1.0f * direction, normal);
+		// if (way == 1)
+		// 	mask *= dot(-1.0f * direction, normal);
 
 		//update stuff
-		paths[index + row_size * length].origin = origin + direction * t + normal * NORMAL_SHIFT;
-		paths[index + row_size * length].direction = out;
+		origin = origin + direction * t + normal * NORMAL_SHIFT;
+		direction = out;
+		paths[index + row_size * length].origin = origin;
+		paths[index + row_size * length].direction = direction;
 		paths[index + row_size * length].mask = mask;
 		paths[index + row_size * length].normal = normal;
-		
-		//loop
-		path_lengths[index] = length + 1;
 	}
+	path_lengths[index] = length;
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
 }

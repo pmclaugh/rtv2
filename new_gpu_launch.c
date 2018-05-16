@@ -364,7 +364,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	cl_mem *d_paths = 	calloc(CL->numDevices, sizeof(cl_mem));
 	cl_mem *d_counts = 	calloc(CL->numDevices, sizeof(cl_mem));
 	
-	cl_float3 *blank_output = calloc(worksize, sizeof(cl_float3));
+	cl_float3 *blank_output = calloc(half_worksize, sizeof(cl_float3));
 	gpu_path *empty_rays = calloc(worksize * 10, sizeof(gpu_path));
 	cl_int *zero_counts = calloc(worksize, sizeof(cl_int));
 
@@ -374,7 +374,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	for (int i = 0; i < d; i++)
 	{
 		d_seeds[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_uint) * 2 * worksize, &scene->seeds[2 * worksize * i], NULL);
-		d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * worksize, blank_output, NULL);
+		d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * half_worksize, blank_output, NULL);
 		d_paths[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(gpu_path) * worksize * 10, empty_rays, NULL);
 		d_counts[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * worksize, zero_counts, NULL);
 	}
@@ -389,11 +389,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	printf("everything should be alloced and copied\n");
 
 	cl_int err;
-
-	// cl_kernel *collect = calloc(d, sizeof(cl_kernel));
-	// cl_kernel *traverse = calloc(d, sizeof(cl_kernel));
-	// cl_kernel *fetch = calloc(d, sizeof(cl_kernel));
-	// cl_kernel *bounce = calloc(d, sizeof(cl_kernel));
 
 	cl_kernel *init_paths = calloc(d, sizeof(cl_kernel));
 	cl_kernel *trace_paths = calloc(d, sizeof(cl_kernel));
@@ -445,7 +440,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 						__global uchar *tex,
 						__global int *path_lengths,
 						__global Box *boxes,
-						__global uint *seeds.
+						__global uint *seeds,
 						__global float3 *output)
 		*/
 		clSetKernelArg(trace_paths[i], 0, sizeof(cl_mem), &d_paths[i]);
@@ -506,7 +501,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	clReleaseEvent(begin);
 	clReleaseEvent(finish);
 
-	printf("timer\n");
 	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
 	for (int i = 0; i < CL->numDevices; i++)
 		outputs[i] = calloc(half_worksize, sizeof(cl_float3));
@@ -520,6 +514,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_TRUE, 0, half_worksize * sizeof(cl_float3), outputs[i], 0, NULL, NULL);
 		clEnqueueReadBuffer(CL->commands[i], d_counts[i], CL_TRUE, 0, worksize * sizeof(cl_int), counts[i], 0, NULL, NULL);
 	}
+	for (int i = 0; i < d; i++)
+		clFinish(CL->commands[i]);
 	//printf("read complete\n");
 
 	clReleaseMemObject(d_vertexes);
@@ -554,7 +550,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	free(d_counts);
 	cl_float3 *output = calloc(half_worksize, sizeof(cl_float3));
 	cl_int *count = calloc(half_worksize, sizeof(cl_int));
-	cl_int light_count, camera_count;
+	cl_int light_count = 0;
+	cl_int camera_count = 0;
 	for (int i = 0; i < d; i++)
 		for (int j = 0; j < half_worksize; j++)
 		{
