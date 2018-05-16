@@ -1,7 +1,8 @@
 #include "rt.h"
 
 #define NORMAL_SHIFT 0.0003f
-#define SUN_BRIGHTNESS 1000.0f
+#define SUN_BRIGHTNESS 60000.0f
+#define LIGHT_DIR 5.0f
 #define stop_prob 0.3f
 
 typedef struct	s_ray
@@ -28,6 +29,7 @@ typedef struct	s_ray
 
 	int			bounce;
 	_Bool		status;
+	_Bool		light;
 	struct s_ray	*next;
 }				t_ray;
 
@@ -49,6 +51,7 @@ void	init_ray(t_ray *ray)
 
 	ray->bounce = 0;
 	ray->status = 1;
+	ray->light = 0;
 
 	ray->next = NULL;
 }
@@ -125,6 +128,8 @@ void	intersect_tri(t_ray *ray, Face *face)
 	if (v < 0.0 || u + v > 1.0)
 		return ;
 	t = f * dot(e2, q);
+	// if (ray->light)
+		// printf("%f\n", t);
 	if (t > 0 && t < ray->t)
 	{
 		ray->t = t;
@@ -132,6 +137,8 @@ void	intersect_tri(t_ray *ray, Face *face)
 		ray->f = face;
 		ray->u = u;
 		ray->v = v;
+		// if (ray->light)
+		// 	printf("%p\n", ray);
 	}
 }
 
@@ -304,8 +311,10 @@ void	multi_sample_estimator(t_ray *cam_ray, t_ray *light_path_vertex)
 {
 	cl_float3 cam_to_light = vec_sub(light_path_vertex->origin, cam_ray->origin);
 	cam_to_light = unit_vec(cam_to_light);
+	float	cam_vert_weight = fmax(pow(dot(cam_to_light, cam_ray->hit_N), LIGHT_DIR), 0.0f);
+	float	light_vert_weight = fmax(pow(dot(vec_scale(cam_to_light, -1.0f), light_path_vertex->N), LIGHT_DIR), 0.0f);
 
-	float geom_term = fmax(dot(cam_to_light, cam_ray->hit_N), 0.0f) * fmax(dot(vec_scale(cam_to_light, -1.0f), light_path_vertex->N), 0.0f);
+	float geom_term = cam_vert_weight * light_vert_weight;
 
 	cam_ray->color = vec_add(cam_ray->color, vec_scale(vec_mult(cam_ray->mask, light_path_vertex->mask), geom_term));
 }
@@ -359,7 +368,8 @@ void	light_bounce(t_env *env, t_ray *ray_in)
 	init_ray(ray_out);
 
 	cl_float3	o = uniform_dir(ray_in->hit_N);
-	float weight = fmax(0.0f, pow(dot(ray_in->hit_N, ray_in->direction), 1.0f));
+	float weight = fmax(0.0f, pow(dot(ray_in->hit_N, vec_scale(ray_in->direction, -1.0f)), LIGHT_DIR));
+	// printf("%f\n", weight);
 
 	float o_sign = dot(ray_in->N, o) > 0.0f ? 1.0f : -1.0f;
 	ray_out->mask = vec_mult(ray_in->mask, vec_scale(ray_in->diff, weight));
@@ -372,11 +382,14 @@ void	light_bounce(t_env *env, t_ray *ray_in)
 
 	ray_out->f = NULL;
 	ray_out->t = FLT_MAX;
+	ray_out->light = 1;
 	ray_out->bounce = ray_in->bounce + 1;
 	if (ray_out->bounce >= env->depth && ((float)rand() / (float)RAND_MAX) > stop_prob)
 	{
 		ray_out->status = 0;
 		ray_out->next = NULL;
+		ray_in->next = NULL;
+		return ;
 	}
 	ray_in->next = ray_out;
 }
@@ -406,19 +419,23 @@ t_ray	*light_path(t_env *env)
 	r1 = (float)rand() / (float)RAND_MAX;
 	r2 = (float)rand() / (float)RAND_MAX;
 
-	cl_float3	p = vec_add(vec_add(vec_scale(v0, (1.0f - sqrt(r1))), vec_scale(v1, (sqrt(r1) * (1.0f - r2)))), vec_scale(v2, (r2 * sqrt(r1))));
+	cl_float3	p = vec_add(vec_add(vec_scale(v0, (1.0f - sqrt(r1))), vec_scale(v1, (sqrt(r1) * (1.0f - r2)))), vec_scale(v0, (r2 * sqrt(r1))));
 	cl_float3	dir = cos_weight_dir(n);
-	dir = (cl_float3){0.0, -1.0, 0.0};
+	// dir = (cl_float3){0, -1, 0};
+	float		weight = fmax(0.0f, pow(dot(n, dir), LIGHT_DIR));
 
 	t_ray	*light_path = malloc(sizeof(t_ray));
 	t_ray	*light_path_vertex = light_path;
 	init_ray(light_path_vertex);
+	light_path_vertex->light = 1;
 	light_path_vertex->origin = p;
 	light_path_vertex->direction = dir;
+	light_path_vertex->inv_dir = vec_inverse(dir);
 	light_path_vertex->N = n;
-	light_path_vertex->mask = vec_scale(WHITE, SUN_BRIGHTNESS * fmax(0.0f, dot(n, dir)));
-	while (light_path_vertex && light_path_vertex->status)
+	light_path_vertex->mask = vec_scale(WHITE, SUN_BRIGHTNESS * weight);
+	while (light_path_vertex)
 	{
+		// printf("%d\n", light_path_vertex->bounce);
 		traverse(env, light_path_vertex);
 		fetch(env, light_path_vertex);
 		light_bounce(env, light_path_vertex);
