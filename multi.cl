@@ -123,7 +123,6 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 	return (res.f - 2.0f) / 2.0f;
 }
 
-//intersect_box
 static inline int intersect_box(const float3 origin, const float3 inv_dir, Box b, float t, float *t_out)
 {
 	float tx0 = (b.minx - origin.x) * inv_dir.x;

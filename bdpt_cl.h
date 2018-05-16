@@ -9,16 +9,13 @@
 #define BLUE (float3)(0.2f, 0.2f, 0.8f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
-#define SUN_BRIGHTNESS 10000.0f
+#define BRIGHTNESS 10000.0f
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
 #define RR_PROB 0.1f
-
-#define LIGHT_PATH 1
-#define CAMERA_PATH 2
 
 typedef struct s_ray {
 	float3 origin;
@@ -34,12 +31,12 @@ typedef struct s_ray {
 	int type;
 }				Ray;
 
-typedef struct s_vertex {
-	float3 point;
-	float3 in_dir;
-	float3 out_dir;
+typedef struct s_path {
+	float3 origin;
+	float3 direction;
+	float3 normal;
 	float3 mask;
-}
+}				Path;
 
 typedef struct s_material
 {
