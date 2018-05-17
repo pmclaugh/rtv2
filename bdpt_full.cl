@@ -9,7 +9,7 @@
 #define BLUE (float3)(0.2f, 0.2f, 0.8f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
-#define BRIGHTNESS 1000.0f
+#define BRIGHTNESS 10000000.0f
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
@@ -361,6 +361,14 @@ static inline int visibility_test(float3 origin, float3 direction, float t, __gl
 	return 0;
 }
 
+// float geometry_term(Path a, path b)
+// {
+// 	float3 origin, direction, distance;
+// 	float t;
+
+
+// }
+
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
 							__global Box *boxes,
@@ -376,35 +384,36 @@ __kernel void connect_paths(__global Path *paths,
 
 	float3 sum = BLACK;
 	int count = 0;
-	for (int s = 1; s < camera_length; s++)
+
+	for (int t = 1; t < camera_length; t++)
 	{
-		Path camera_vertex = paths[2 * index + row_size * s];
-		for (int t = 0; t < light_length; t++)
+		Path camera_vertex = paths[(2 * index) + (row_size * t)];
+		for (int s = 0; s < light_length; s++)
 		{
 			count++;
-			Path light_vertex = paths[2 * index + 1 + row_size * t];
+			Path light_vertex = paths[(2 * index + 1) + (row_size * s)];
 
 			float3 origin, direction, distance;
 			origin = camera_vertex.origin;
 			distance = light_vertex.origin - origin;
-			t = native_sqrt(dot(distance, distance));
+			float d = native_sqrt(dot(distance, distance));
 			direction = normalize(distance);
 
-			float camera_cos = fmax(0.0f, dot(camera_vertex.normal, direction));
-			float light_cos = fmax(0.0f, dot(light_vertex.normal, -1.0f * direction));
+			float camera_cos = max(0.0f, dot(camera_vertex.normal, direction));
+			float light_cos = max(0.0f, dot(light_vertex.normal, -1.0f * direction));
 
 			if (camera_cos * light_cos <= 0.0f)
 				continue ;
-			if (!visibility_test(origin, direction, t, boxes, V))
+			if (!visibility_test(origin, direction, d, boxes, V))
 				continue ;
 			if (dot(light_vertex.mask, light_vertex.mask) == 0.0f)
 				break ;
-			sum += light_vertex.mask * camera_vertex.mask * BRIGHTNESS * camera_cos * light_cos;
+
+			sum += light_vertex.mask * camera_vertex.mask * BRIGHTNESS * camera_cos * camera_cos * light_cos / (d * d);
 		}
 	}
-	output[index] = sum / (float)count;
+	output[index] = sum;
 }
-
 
 static void surface_vectors(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
 {
@@ -465,8 +474,8 @@ static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float
 	return normalize(tangent * bump.x + bitangent * bump.y + sample_N * bump.z);
 }
 
-#define CAMERA_BOUNCES 5
-#define LIGHT_BOUNCES 5
+#define CAMERA_BOUNCES 3
+#define LIGHT_BOUNCES 3
 
 __kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -573,7 +582,7 @@ __kernel void trace_paths(__global Path *paths,
 		//sample and evaluate BRDF
 		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 		if (way == 1)
-			mask *= dot(-1.0f * direction, normal);
+			mask *= max(0.0f, dot(-1.0f * direction, normal));
 
 		//update stuff
 		origin = origin + direction * t + normal * NORMAL_SHIFT;
