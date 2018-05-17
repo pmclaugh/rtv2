@@ -319,7 +319,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	else
 		reseed(scene);
 
-	printf("prep done\n");
+	// printf("prep done\n");
 
 	gpu_camera gcam;
 	gcam.pos = cam.pos;
@@ -386,7 +386,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	for (int i = 0; i < d; i++)
 		clFinish(CL->commands[i]);
 
-	printf("everything should be alloced and copied\n");
+	// printf("everything should be alloced and copied\n");
 
 	cl_int err;
 
@@ -428,6 +428,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		clSetKernelArg(init_paths[i], 6, sizeof(cl_mem), &d_vertexes);
 		clSetKernelArg(init_paths[i], 7, sizeof(cl_mem), &d_normal);
 		clSetKernelArg(init_paths[i], 8, sizeof(cl_mem), &d_outputs[i]);
+		clSetKernelArg(init_paths[i], 9, sizeof(cl_mem), &d_material_indices);
+		clSetKernelArg(init_paths[i], 10, sizeof(cl_mem), &d_materials);
 		/*
 		__kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -473,7 +475,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	}
 
 
-	printf("any key to launch\n");
+	// printf("any key to launch\n");
 	// getchar();
 	//ACTUAL LAUNCH TIME
 	cl_event begin, finish;
@@ -493,7 +495,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	for (int i = 0; i < d; i++)
 		clFinish(CL->commands[i]);
 
-	printf("made it out of kernel\n");
+	// printf("made it out of kernel\n");
 
 	clGetEventProfilingInfo(begin, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
 	clGetEventProfilingInfo(finish, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
@@ -556,7 +558,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		for (int j = 0; j < half_worksize; j++)
 		{
 			output[j] = vec_add(output[j], outputs[i][j]);
-			count[j] += counts[i][2 * j] * counts[i][2 * j + 1];
+			count[j] += 1;//counts[i][2 * j] * counts[i][2 * j + 1];
 			camera_count += counts[i][2 * j];
 			light_count += counts[i][2 * j + 1];
 		}

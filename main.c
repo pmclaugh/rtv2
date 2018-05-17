@@ -95,6 +95,7 @@ void		path_tracer(t_env *env)
 			env->pt->total_clr[i].z = 0;
 		}
 	}
+	printf("sample %d done\n", env->samples);
 }
 
 void		init_mlx_data(t_env *env)

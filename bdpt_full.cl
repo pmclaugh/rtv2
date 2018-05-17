@@ -9,7 +9,7 @@
 #define BLUE (float3)(0.2f, 0.2f, 0.8f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
-#define BRIGHTNESS 100.0f
+#define BRIGHTNESS 1000.0f
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
@@ -230,7 +230,9 @@ __kernel void init_paths(const Camera cam,
 						const uint light_poly_count,
 						__global float3 *V,
 						__global float3 *N,
-						__global float3 *output
+						__global float3 *output,
+						__global int *M,
+						__global Material *mats
 						)
 {
 	int index = get_global_id(0);
@@ -254,7 +256,9 @@ __kernel void init_paths(const Camera cam,
 		direction = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 		//direction override
 		// direction = normal;
-		mask = WHITE * dot(direction, normal);		
+
+		float3 Ke = mats[M[light.x / 3]].Ke;
+		mask = Ke * dot(direction, normal);		
 
 		//pick random point just off of that triangle
 		float r1 = get_random(&seed0, &seed1);
@@ -322,8 +326,7 @@ static inline int visibility_test(float3 origin, float3 direction, float t, __gl
 
 		float this_t;
 		int result = intersect_box(origin, inv_dir, box, t, &this_t);
-		int inside = inside_box(origin, box);
-		if (result && (inside || this_t < t))
+		if (result)
 		{
 			if (box.r_ind < 0)
 			{
@@ -342,15 +345,12 @@ static inline int visibility_test(float3 origin, float3 direction, float t, __gl
                 float t_r = FLT_MAX;
                 int lhit = intersect_box(origin, inv_dir, l, t, &t_l);
                 int rhit = intersect_box(origin, inv_dir, r, t, &t_r);
-                int linside = inside_box(origin, l);
-                int rinside = inside_box(origin, r);
 
-                //this can be further improved
-                if (lhit && (linside || t_l < t) && t_l >= t_r)
+                if (lhit && t_l >= t_r)
                     stack[s_i++] = box.l_ind;
-                if (rhit && (rinside || t_r < t))
+                if (rhit && t_r < t)
                     stack[s_i++] = box.r_ind;
-                if (lhit && (linside || t_l < t) && t_l < t_r)
+                if (lhit && t_l < t_r)
                     stack[s_i++] = box.l_ind;
 			}
 		}
@@ -373,15 +373,15 @@ __kernel void connect_paths(__global Path *paths,
 
 	int camera_length = path_lengths[2 * index];
 	int light_length = path_lengths[2 * index + 1];
-	
-	// return;
 
-	float3 sum = 0.0f;
+	float3 sum = BLACK;
+	int count = 0;
 	for (int s = 1; s < camera_length; s++)
 	{
 		Path camera_vertex = paths[2 * index + row_size * s];
 		for (int t = 0; t < light_length; t++)
 		{
+			count++;
 			Path light_vertex = paths[2 * index + 1 + row_size * t];
 
 			float3 origin, direction, distance;
@@ -390,17 +390,19 @@ __kernel void connect_paths(__global Path *paths,
 			t = native_sqrt(dot(distance, distance));
 			direction = normalize(distance);
 
-			float camera_cos = dot(camera_vertex.normal, direction);
-			float light_cos = dot(light_vertex.normal, -1.0f * direction);
+			float camera_cos = fmax(0.0f, dot(camera_vertex.normal, direction));
+			float light_cos = fmax(0.0f, dot(light_vertex.normal, -1.0f * direction));
 
 			if (camera_cos * light_cos <= 0.0f)
 				continue ;
 			if (!visibility_test(origin, direction, t, boxes, V))
 				continue ;
+			if (dot(light_vertex.mask, light_vertex.mask) == 0.0f)
+				break ;
 			sum += light_vertex.mask * camera_vertex.mask * BRIGHTNESS * camera_cos * light_cos;
 		}
 	}
-	output[index] = sum;
+	output[index] = sum / (float)count;
 }
 
 
@@ -463,8 +465,8 @@ static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float
 	return normalize(tangent * bump.x + bitangent * bump.y + sample_N * bump.z);
 }
 
-#define CAMERA_BOUNCES 3
-#define LIGHT_BOUNCES 3
+#define CAMERA_BOUNCES 5
+#define LIGHT_BOUNCES 5
 
 __kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -550,7 +552,6 @@ __kernel void trace_paths(__global Path *paths,
 		if (ind == -1)
 			break ;
 
-
 		//get normal and texture coordinate
 		float3 normal, txcrd;
 		surface_vectors(V, N, T, direction, ind, u, v, &normal, &txcrd);
@@ -571,8 +572,8 @@ __kernel void trace_paths(__global Path *paths,
 
 		//sample and evaluate BRDF
 		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
-		// if (way == 1)
-		// 	mask *= dot(-1.0f * direction, normal);
+		if (way == 1)
+			mask *= dot(-1.0f * direction, normal);
 
 		//update stuff
 		origin = origin + direction * t + normal * NORMAL_SHIFT;
