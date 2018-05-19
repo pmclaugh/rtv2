@@ -254,11 +254,9 @@ __kernel void init_paths(const Camera cam,
 		v2 = V[light.z];
 		normal = normalize(N[light.x]);
 		direction = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
-		//direction override
-		// direction = normal;
 
 		float3 Ke = mats[M[light.x / 3]].Ke;
-		mask = Ke * dot(direction, normal);		
+		mask = Ke;// * dot(direction, normal);		
 
 		//pick random point just off of that triangle
 		float r1 = get_random(&seed0, &seed1);
@@ -284,7 +282,7 @@ __kernel void init_paths(const Camera cam,
 
 		origin = cam.focus + aperture;
 		direction = normalize(f_point - origin);
-		normal = cam.direction;
+		normal = direction;
 		mask = WHITE;
 		
 	}
@@ -361,13 +359,21 @@ static inline int visibility_test(float3 origin, float3 direction, float t, __gl
 	return 0;
 }
 
-// float geometry_term(Path a, path b)
-// {
-// 	float3 origin, direction, distance;
-// 	float t;
+static float geometry_term(Path a, Path b)
+{
+	float3 origin, direction, distance;
+	float t;
 
+	origin = a.origin;
+	distance = b.origin - origin;
+	t = native_sqrt(dot(distance, distance));
+	direction = normalize(distance);
 
-// }
+	float camera_cos = max(0.0f, dot(a.normal, direction));
+	float light_cos = max(0.0f, dot(b.normal, -1.0f * direction));
+
+	return (camera_cos * light_cos) / (t * t);
+}
 
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
@@ -384,6 +390,14 @@ __kernel void connect_paths(__global Path *paths,
 
 	float3 sum = BLACK;
 	int count = 0;
+
+	float3 contributions[32];
+	float  weight_sums[32];
+	for (int i = 0; i < 32; i ++)
+	{
+		contributions[i] = BLACK;
+		weight_sums[i] = 0.0f;
+	}
 
 	for (int t = 1; t < camera_length; t++)
 	{
@@ -408,8 +422,8 @@ __kernel void connect_paths(__global Path *paths,
 				continue ;
 			if (dot(light_vertex.mask, light_vertex.mask) == 0.0f)
 				break ;
+			sum += light_vertex.mask * camera_vertex.mask * BRIGHTNESS * camera_cos * geometry_term(camera_vertex, light_vertex);
 
-			sum += light_vertex.mask * camera_vertex.mask * BRIGHTNESS * camera_cos * camera_cos * light_cos / (d * d);
 		}
 	}
 	output[index] = sum;
@@ -574,15 +588,13 @@ __kernel void trace_paths(__global Path *paths,
 			break ;
 
 		// bump map (malfunctioning)
-		// normal = bump_map(TN, BTN, ind, normal, bump);
+		normal = bump_map(TN, BTN, ind / 3, normal, bump);
 
 		//color
 		mask *= diff;
 
 		//sample and evaluate BRDF
 		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
-		if (way == 1)
-			mask *= max(0.0f, dot(-1.0f * direction, normal));
 
 		//update stuff
 		origin = origin + direction * t + normal * NORMAL_SHIFT;
@@ -591,6 +603,9 @@ __kernel void trace_paths(__global Path *paths,
 		paths[index + row_size * length].direction = direction;
 		paths[index + row_size * length].mask = mask;
 		paths[index + row_size * length].normal = normal;
+
+		if (way == 1)
+			mask *= max(0.0f, dot(-1.0f * direction, normal));
 	}
 	path_lengths[index] = length;
 	seeds[2 * index] = seed0;

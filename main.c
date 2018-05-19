@@ -93,6 +93,10 @@ void		path_tracer(t_env *env)
 			env->pt->total_clr[i].x = 0;
 			env->pt->total_clr[i].y = 0;
 			env->pt->total_clr[i].z = 0;
+
+			env->pt->pixels[i].x = 0.0f;
+			env->pt->pixels[i].y = 0.0f;
+			env->pt->pixels[i].z = 0.0f;
 		}
 	}
 	printf("sample %d done\n", env->samples);
