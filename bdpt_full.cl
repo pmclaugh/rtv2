@@ -241,7 +241,7 @@ __kernel void init_paths(const Camera cam,
 	uint seed1 = seeds[2 * index + 1];
 
 	float3 origin, direction, mask, normal;
-	float G = 1.0f; //replace with real surface area stuff
+	float G = 2.0f * PI; //replace with real surface area stuff
 	int way = index % 2;
 	if (way)
 	{
@@ -395,13 +395,13 @@ __kernel void connect_paths(__global Path *paths,
 	float3 sum = BLACK;
 	int count = 0;
 
-	for (int t = 0; t < camera_length; t++)
+	for (int t = 2; t <= camera_length; t++)
 	{
-		Path camera_vertex = paths[(2 * index) + (row_size * t)];
-		for (int s = 0; s < light_length; s++)
+		Path camera_vertex = paths[(2 * index) + (row_size * (t - 1))];
+		for (int s = 1; s <= light_length; s++)
 		{
 			count++;
-			Path light_vertex = paths[(2 * index + 1) + (row_size * s)];
+			Path light_vertex = paths[(2 * index + 1) + (row_size * (s - 1))];
 
 			float3 origin, direction, distance;
 			origin = camera_vertex.origin;
@@ -422,16 +422,16 @@ __kernel void connect_paths(__global Path *paths,
 			float this_geom = geometry_term(camera_vertex, light_vertex);
 			float3 contrib = light_vertex.mask * camera_vertex.mask * BRIGHTNESS * camera_cos * this_geom;
 			
-			float weight = 0.0f;
+			float weight = 1.0f;
 			for (int k = 0; k < s + t + 1; k++)
 				if (k == s)
-					weight += 1.0f;
+					;
 				else if (k < s)
 					weight += this_geom / paths[(2 * index + 1) + (row_size * k)].G;
 				else
-					weight += this_geom / paths[(2 * index) + (row_size * (k - s - 1))].G;
+					weight += this_geom / paths[(2 * index) + (row_size * (s + t - k))].G;
 
-			sum += contrib / (weight);
+			sum += contrib / weight;
 		}
 	}
 	output[index] = sum;
