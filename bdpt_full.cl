@@ -36,6 +36,7 @@ typedef struct s_path {
 	float3 direction;
 	float3 normal;
 	float3 mask;
+	float G;
 }				Path;
 
 typedef struct s_material
@@ -215,10 +216,10 @@ static float3 diffuse_BDRF_sample(float3 normal, int way, uint *seed0, uint *see
 	float u1 = get_random(seed0, seed1);
 	float u2 = get_random(seed0, seed1);
 	float theta = 2.0f * PI * u2;
-	if (way)
+	// if (way)
 		return direction_uniform_hemisphere(x, y, u1, theta, normal);
-	else
-		return direction_cos_hemisphere(x, y, u1, theta, normal);
+	// else
+	// 	return direction_cos_hemisphere(x, y, u1, theta, normal);
 }
 
 
@@ -240,6 +241,7 @@ __kernel void init_paths(const Camera cam,
 	uint seed1 = seeds[2 * index + 1];
 
 	float3 origin, direction, mask, normal;
+	float G = 1.0f; //replace with real surface area stuff
 	int way = index % 2;
 	if (way)
 	{
@@ -254,6 +256,7 @@ __kernel void init_paths(const Camera cam,
 		v2 = V[light.z];
 		normal = normalize(N[light.x]);
 		direction = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
+		// G = dot (direction, normal);
 
 		float3 Ke = mats[M[light.x / 3]].Ke;
 		mask = Ke;// * dot(direction, normal);		
@@ -284,12 +287,13 @@ __kernel void init_paths(const Camera cam,
 		direction = normalize(f_point - origin);
 		normal = direction;
 		mask = WHITE;
-		
 	}
+
 	paths[index].origin = origin;
 	paths[index].direction = direction;
 	paths[index].mask = mask;
 	paths[index].normal = normal;
+	paths[index].G = G;
 	path_lengths[index] = 0;
 
 	seeds[2 * index] = seed0;
@@ -391,15 +395,7 @@ __kernel void connect_paths(__global Path *paths,
 	float3 sum = BLACK;
 	int count = 0;
 
-	float3 contributions[32];
-	float  weight_sums[32];
-	for (int i = 0; i < 32; i ++)
-	{
-		contributions[i] = BLACK;
-		weight_sums[i] = 0.0f;
-	}
-
-	for (int t = 1; t < camera_length; t++)
+	for (int t = 0; t < camera_length; t++)
 	{
 		Path camera_vertex = paths[(2 * index) + (row_size * t)];
 		for (int s = 0; s < light_length; s++)
@@ -422,8 +418,20 @@ __kernel void connect_paths(__global Path *paths,
 				continue ;
 			if (dot(light_vertex.mask, light_vertex.mask) == 0.0f)
 				break ;
-			sum += light_vertex.mask * camera_vertex.mask * BRIGHTNESS * camera_cos * geometry_term(camera_vertex, light_vertex);
+			
+			float this_geom = geometry_term(camera_vertex, light_vertex);
+			float3 contrib = light_vertex.mask * camera_vertex.mask * BRIGHTNESS * camera_cos * this_geom;
+			
+			float weight = 0.0f;
+			for (int k = 0; k < s + t + 1; k++)
+				if (k == s)
+					weight += 1.0f;
+				else if (k < s)
+					weight += this_geom / paths[(2 * index + 1) + (row_size * k)].G;
+				else
+					weight += this_geom / paths[(2 * index) + (row_size * (k - s - 1))].G;
 
+			sum += contrib / (weight);
 		}
 	}
 	output[index] = sum;
@@ -592,6 +600,8 @@ __kernel void trace_paths(__global Path *paths,
 
 		//color
 		mask *= diff;
+		if (way)
+			mask *= max(0.0f, dot(-1.0f * direction, normal));
 
 		//sample and evaluate BRDF
 		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
@@ -603,9 +613,11 @@ __kernel void trace_paths(__global Path *paths,
 		paths[index + row_size * length].direction = direction;
 		paths[index + row_size * length].mask = mask;
 		paths[index + row_size * length].normal = normal;
+		paths[index + row_size * length].G = geometry_term(paths[index + length * row_size], paths[index + (length - 1) * row_size]);
 
-		if (way == 1)
-			mask *= max(0.0f, dot(-1.0f * direction, normal));
+		if (!way)
+			mask *= max(0.0f, dot(out, normal));
+
 	}
 	path_lengths[index] = length;
 	seeds[2 * index] = seed0;
