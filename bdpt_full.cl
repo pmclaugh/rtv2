@@ -426,7 +426,7 @@ __kernel void connect_paths(__global Path *paths,
 				contrib *= pow(camera_cos, 1000.0f);
 			
 			float weight = 0.0f;
-			for (int k = 0; k < s + t; k++)
+			for (int k = 1; k < s + t - 1; k++)
 				if (k == s)
 					weight += 1.0f;
 				else if (k < s)
@@ -436,11 +436,11 @@ __kernel void connect_paths(__global Path *paths,
 
 			float ratio = (float)(s + t + 1);
 
-			// if (s + t - 1 == 2)
+			// if (s + t - 1 == )
 				sum += contrib / (ratio * weight);
 		}
 	}
-	output[index] += sum ;/// (float)(count == 0 ? 1 : count);
+	output[index] += sum ;
 }
 
 static void surface_vectors(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *true_N_out, float3 *txcrd_out)
@@ -601,8 +601,6 @@ __kernel void trace_paths(__global Path *paths,
 		// did we hit a light?
 		if (dot(Ke, Ke) > 0.0f)
 		{
-			// if (!way && dot(direction, normal) < 0.0f)
-			// 	output[index / 2] += mask;
 			break ;
 		}
 
