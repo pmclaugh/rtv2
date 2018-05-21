@@ -17,6 +17,10 @@
 
 #define RR_PROB 0.1f
 
+
+#define CAMERA_BOUNCES 3
+#define LIGHT_BOUNCES 3
+
 typedef struct s_ray {
 	float3 origin;
 	float3 direction;
@@ -37,6 +41,8 @@ typedef struct s_path {
 	float3 normal;
 	float3 mask;
 	float G;
+	float pC;
+	float pL;
 }				Path;
 
 typedef struct s_material
@@ -241,7 +247,8 @@ __kernel void init_paths(const Camera cam,
 	uint seed1 = seeds[2 * index + 1];
 
 	float3 origin, direction, mask, normal;
-	float G = 1.0f; //replace with real surface area stuff
+	float G = 1.0f;
+	float pC, pL;
 	int way = index % 2;
 	if (way)
 	{
@@ -264,6 +271,9 @@ __kernel void init_paths(const Camera cam,
 		float r1 = get_random(&seed0, &seed1);
 		float r2 = get_random(&seed0, &seed1);
 		origin = (1.0f - sqrt(r1)) * v0 + (sqrt(r1) * (1.0f - r2)) * v1 + (r2 * sqrt(r1)) * v2 + NORMAL_SHIFT * normal;
+
+		pC = 1.0f;
+		pL = 1.0f;
 	}
 	else
 	{
@@ -286,6 +296,10 @@ __kernel void init_paths(const Camera cam,
 		direction = normalize(f_point - origin);
 		normal = direction;
 		mask = WHITE;
+
+		pC = 1.0f;
+		pL = 1.0f;
+
 	}
 
 	paths[index].origin = origin;
@@ -378,6 +392,9 @@ static float geometry_term(Path a, Path b)
 	return (camera_cos * light_cos) / (t * t);
 }
 
+#define CAMERA_VERTEX(x) (paths[2 * index + row_size * (x)])
+#define LIGHT_VERTEX(x) (paths[(2 * index + 1) + row_size * (x)])
+
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
 							__global Box *boxes,
@@ -396,11 +413,11 @@ __kernel void connect_paths(__global Path *paths,
 
 	for (int t = 2; t <= camera_length; t++)
 	{
-		Path camera_vertex = paths[(2 * index) + (row_size * (t - 1))];
+		Path camera_vertex = CAMERA_VERTEX(t - 1);
 		for (int s = 1; s <= light_length; s++)
 		{
 			count++;
-			Path light_vertex = paths[(2 * index + 1) + (row_size * (s - 1))];
+			Path light_vertex = LIGHT_VERTEX(s - 1);
 
 			float3 origin, direction, distance;
 			origin = camera_vertex.origin;
@@ -422,21 +439,19 @@ __kernel void connect_paths(__global Path *paths,
 			float3 contrib = light_vertex.mask * camera_vertex.mask * BRIGHTNESS * camera_cos * this_geom;
 			if (s == 1)
 				contrib *= light_cos;
-			if (t == 1)
-				contrib *= pow(camera_cos, 1000.0f);
-			
+
 			float weight = 0.0f;
-			for (int k = 1; k < s + t - 1; k++)
+			for (int k = 0; k < s + t + 1; k++)
 				if (k == s)
 					weight += 1.0f;
 				else if (k < s)
-					weight += (this_geom / paths[(2 * index + 1) + (row_size * k)].G);
+					weight += this_geom / (LIGHT_VERTEX(k).G);
 				else
-					weight += this_geom / paths[(2 * index) + (row_size * (s + t - k))].G;
+					weight += this_geom / (CAMERA_VERTEX(s + t - k).G);
 
 			float ratio = (float)(s + t + 1);
 
-			// if (s + t - 1 == )
+			// if (s + t - 1 == 2)
 				sum += contrib / (ratio * weight);
 		}
 	}
@@ -502,9 +517,6 @@ static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float
 	tangent = normalize(tangent - sample_N * dot(sample_N, tangent));
 	return normalize(tangent * bump.x + bitangent * bump.y + sample_N * bump.z);
 }
-
-#define CAMERA_BOUNCES 3
-#define LIGHT_BOUNCES 3
 
 __kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -600,9 +612,7 @@ __kernel void trace_paths(__global Path *paths,
 
 		// did we hit a light?
 		if (dot(Ke, Ke) > 0.0f)
-		{
 			break ;
-		}
 
 		// bump map (malfunctioning)
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
@@ -615,6 +625,10 @@ __kernel void trace_paths(__global Path *paths,
 		//sample and evaluate BRDF
 		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 
+		float pC, pL;
+		pC = 1 / (2.0f * PI);
+		pL = 1 / (2.0f * PI);
+
 		//update stuff
 		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
 		direction = out;
@@ -623,6 +637,8 @@ __kernel void trace_paths(__global Path *paths,
 		paths[index + row_size * length].mask = mask;
 		paths[index + row_size * length].normal = normal;
 		paths[index + row_size * length].G = geometry_term(paths[index + length * row_size], paths[index + (length - 1) * row_size]);
+		paths[index + row_size * length].pC = pC;
+		paths[index + row_size * length].pL = pL;
 
 		if (!way)
 			mask *= max(0.0f, dot(out, normal));

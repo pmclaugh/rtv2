@@ -286,6 +286,8 @@ typedef struct s_gpu_path{
 	cl_float3 normal;
 	cl_float3 mask;
 	cl_float G;
+	cl_float pC;
+	cl_float pL;
 }				gpu_path;
 
 typedef struct s_gpu_camera {
