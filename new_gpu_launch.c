@@ -317,8 +317,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	static gpu_scene *scene;
 	if (!scene)
 		scene = prep_scene(S, CL, worksize);
-	else
-		reseed(scene);
+	// else
+	// 	reseed(scene);
 
 	// printf("prep done\n");
 
@@ -375,7 +375,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	for (int i = 0; i < d; i++)
 	{
 		d_seeds[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_uint) * 2 * worksize, &scene->seeds[2 * worksize * i], NULL);
-		d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_WRITE_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * half_worksize, blank_output, NULL);
+		d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * half_worksize, blank_output, NULL);
 		d_paths[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(gpu_path) * worksize * 10, empty_rays, NULL);
 		d_counts[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * worksize, zero_counts, NULL);
 	}
@@ -516,6 +516,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	{
 		clEnqueueReadBuffer(CL->commands[i], d_outputs[i], CL_TRUE, 0, half_worksize * sizeof(cl_float3), outputs[i], 0, NULL, NULL);
 		clEnqueueReadBuffer(CL->commands[i], d_counts[i], CL_TRUE, 0, worksize * sizeof(cl_int), counts[i], 0, NULL, NULL);
+		clEnqueueReadBuffer(CL->commands[i], d_seeds[i], CL_TRUE, 0, 2 * worksize * sizeof(cl_uint), &scene->seeds[i * 2 * worksize], 0, NULL, NULL);
 	}
 	for (int i = 0; i < d; i++)
 		clFinish(CL->commands[i]);

@@ -9,7 +9,7 @@
 #define BLUE (float3)(0.2f, 0.2f, 0.8f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
-#define BRIGHTNESS 10000000.0f
+#define BRIGHTNESS 100000000.0f
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
@@ -241,7 +241,7 @@ __kernel void init_paths(const Camera cam,
 	uint seed1 = seeds[2 * index + 1];
 
 	float3 origin, direction, mask, normal;
-	float G = 2.0f * PI; //replace with real surface area stuff
+	float G = 1.0f; //replace with real surface area stuff
 	int way = index % 2;
 	if (way)
 	{
@@ -256,10 +256,9 @@ __kernel void init_paths(const Camera cam,
 		v2 = V[light.z];
 		normal = normalize(N[light.x]);
 		direction = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
-		// G = dot (direction, normal);
 
 		float3 Ke = mats[M[light.x / 3]].Ke;
-		mask = Ke;// * dot(direction, normal);		
+		mask = Ke * dot(direction, normal);		
 
 		//pick random point just off of that triangle
 		float r1 = get_random(&seed0, &seed1);
@@ -421,28 +420,36 @@ __kernel void connect_paths(__global Path *paths,
 			
 			float this_geom = geometry_term(camera_vertex, light_vertex);
 			float3 contrib = light_vertex.mask * camera_vertex.mask * BRIGHTNESS * camera_cos * this_geom;
+			if (s == 1)
+				contrib *= light_cos;
+			if (t == 1)
+				contrib *= pow(camera_cos, 1000.0f);
 			
-			float weight = 1.0f;
-			for (int k = 0; k < s + t + 1; k++)
+			float weight = 0.0f;
+			for (int k = 0; k < s + t; k++)
 				if (k == s)
-					;
+					weight += 1.0f;
 				else if (k < s)
-					weight += this_geom / paths[(2 * index + 1) + (row_size * k)].G;
+					weight += (this_geom / paths[(2 * index + 1) + (row_size * k)].G);
 				else
 					weight += this_geom / paths[(2 * index) + (row_size * (s + t - k))].G;
 
-			sum += contrib / weight;
+			float ratio = (float)(s + t + 1);
+
+			// if (s + t - 1 == 2)
+				sum += contrib / (ratio * weight);
 		}
 	}
-	output[index] = sum;
+	output[index] += sum ;/// (float)(count == 0 ? 1 : count);
 }
 
-static void surface_vectors(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *txcrd_out)
+static void surface_vectors(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *true_N_out, float3 *txcrd_out)
 {
 	float3 v0 = V[ind];
 	float3 v1 = V[ind + 1];
 	float3 v2 = V[ind + 2];
 	float3 geom_N = normalize(cross(v1 - v0, v2 - v0));
+	*true_N_out = geom_N;
 
 	v0 = N[ind];
 	v1 = N[ind + 1];
@@ -584,8 +591,8 @@ __kernel void trace_paths(__global Path *paths,
 			break ;
 
 		//get normal and texture coordinate
-		float3 normal, txcrd;
-		surface_vectors(V, N, T, direction, ind, u, v, &normal, &txcrd);
+		float3 normal, true_normal, txcrd;
+		surface_vectors(V, N, T, direction, ind, u, v, &normal, &true_normal, &txcrd);
 
 		//get all texture-like values
 		float3 diff, spec, bump, trans, Ke;
@@ -593,7 +600,11 @@ __kernel void trace_paths(__global Path *paths,
 
 		// did we hit a light?
 		if (dot(Ke, Ke) > 0.0f)
+		{
+			// if (!way && dot(direction, normal) < 0.0f)
+			// 	output[index / 2] += mask;
 			break ;
+		}
 
 		// bump map (malfunctioning)
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
@@ -607,7 +618,7 @@ __kernel void trace_paths(__global Path *paths,
 		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 
 		//update stuff
-		origin = origin + direction * t + normal * NORMAL_SHIFT;
+		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
 		direction = out;
 		paths[index + row_size * length].origin = origin;
 		paths[index + row_size * length].direction = direction;
