@@ -43,6 +43,7 @@ typedef struct s_path {
 	float G;
 	float pC;
 	float pL;
+	_Bool hit_light;
 }				Path;
 
 typedef struct s_material
@@ -265,7 +266,7 @@ __kernel void init_paths(const Camera cam,
 		direction = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 
 		float3 Ke = mats[M[light.x / 3]].Ke;
-		mask = Ke * dot(direction, normal);		
+		mask = Ke * BRIGHTNESS * dot(direction, normal);		
 
 		//pick random point just off of that triangle
 		float r1 = get_random(&seed0, &seed1);
@@ -307,6 +308,7 @@ __kernel void init_paths(const Camera cam,
 	paths[index].mask = mask;
 	paths[index].normal = normal;
 	paths[index].G = G;
+	paths[index].hit_light = 0;
 	path_lengths[index] = 0;
 
 	seeds[2 * index] = seed0;
@@ -411,11 +413,24 @@ __kernel void connect_paths(__global Path *paths,
 	float3 sum = BLACK;
 	int count = 0;
 
-	for (int t = 2; t <= camera_length; t++)
+	for (int t = 2; t <= camera_length + 1; t++)
 	{
 		Path camera_vertex = CAMERA_VERTEX(t - 1);
-		for (int s = 1; s <= light_length; s++)
+		for (int s = 0; s <= light_length; s++)
 		{
+			if (s == 0)
+			{
+				if (camera_vertex.hit_light)
+				{
+					float weight = 0.0f;
+					for (int k = 0; k < t; k++)
+						weight += 1.0f / (CAMERA_VERTEX(k).G);
+					float ratio = t;
+					sum += camera_vertex.mask / (ratio * weight);
+					break ;
+				}
+				continue ;
+			}
 			count++;
 			Path light_vertex = LIGHT_VERTEX(s - 1);
 
@@ -436,7 +451,7 @@ __kernel void connect_paths(__global Path *paths,
 				break ;
 			
 			float this_geom = geometry_term(camera_vertex, light_vertex);
-			float3 contrib = light_vertex.mask * camera_vertex.mask * BRIGHTNESS * camera_cos * this_geom;
+			float3 contrib = light_vertex.mask * camera_vertex.mask * camera_cos * this_geom;
 			if (s == 1)
 				contrib *= light_cos;
 
@@ -612,7 +627,16 @@ __kernel void trace_paths(__global Path *paths,
 
 		// did we hit a light?
 		if (dot(Ke, Ke) > 0.0f)
+		{
+			paths[index + row_size * length].origin = origin + direction * t + true_normal * NORMAL_SHIFT;
+			paths[index + row_size * length].mask = mask * Ke * BRIGHTNESS;
+			paths[index + row_size * length].normal = normal;
+			paths[index + row_size * length].G = geometry_term(paths[index + length * row_size], paths[index + (length - 1) * row_size]);
+			paths[index + row_size * length].pC = 1 / (2.0f * PI);
+			paths[index + row_size * length].pL = -1.0f;
+			paths[index + row_size * length].hit_light = 1;
 			break ;
+		}
 
 		// bump map (malfunctioning)
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
@@ -639,6 +663,7 @@ __kernel void trace_paths(__global Path *paths,
 		paths[index + row_size * length].G = geometry_term(paths[index + length * row_size], paths[index + (length - 1) * row_size]);
 		paths[index + row_size * length].pC = pC;
 		paths[index + row_size * length].pL = pL;
+		paths[index + row_size * length].hit_light = 0;
 
 		if (!way)
 			mask *= max(0.0f, dot(out, normal));

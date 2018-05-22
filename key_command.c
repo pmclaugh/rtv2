@@ -21,7 +21,7 @@
 #define ARR_KEYS		(key >= KEY_LARR  && key <= KEY_UARR)
 #define PRESSED_KEYS	(env->key.w || env->key.a || env->key.s || env->key.d || env->key.space || env->key.shift || env->key.larr || env->key.rarr || env->key.uarr || env->key.darr || env->key.plus || env->key.minus)
 
-#define MOVE_SPEED	2
+#define MOVE_SPEED	10
 #define TURN_SPEED	M_PI / 30
 
 int		exit_hook(int key, t_env *env)
