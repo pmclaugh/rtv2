@@ -229,6 +229,13 @@ static float3 diffuse_BDRF_sample(float3 normal, int way, uint *seed0, uint *see
 	// 	return direction_cos_hemisphere(x, y, u1, theta, normal);
 }
 
+static float surface_area(int3 triangle, __global float3 *V)
+{
+	const float3 e1 = V[triangle.y] - V[triangle.x];
+	const float3 e2 = V[triangle.z] - V[triangle.x];
+	float angle = acos(dot(normalize(e1), normalize(e2)));
+	return (native_sqrt(dot(e1, e1)) * native_sqrt(dot(e2, e2)) / 2.0f) * native_sin(angle);
+}
 
 __kernel void init_paths(const Camera cam,
 						__global uint *seeds,
@@ -273,8 +280,8 @@ __kernel void init_paths(const Camera cam,
 		float r2 = get_random(&seed0, &seed1);
 		origin = (1.0f - sqrt(r1)) * v0 + (sqrt(r1) * (1.0f - r2)) * v1 + (r2 * sqrt(r1)) * v2 + NORMAL_SHIFT * normal;
 
-		pC = 1.0f;
-		pL = 1.0f;
+		pC = 1.0f / (2.0f * PI);
+		pL = 1.0f / ((float)light_poly_count * surface_area(light, V));
 	}
 	else
 	{
@@ -298,8 +305,8 @@ __kernel void init_paths(const Camera cam,
 		normal = direction;
 		mask = WHITE;
 
-		pC = 1.0f;
-		pL = 1.0f;
+		pC = 1.0f / (float)(cam.width * cam.width);//1.0f / (2.0f * PI);
+		pL = 1.0f / (2.0f * PI);
 
 	}
 
@@ -309,6 +316,8 @@ __kernel void init_paths(const Camera cam,
 	paths[index].normal = normal;
 	paths[index].G = G;
 	paths[index].hit_light = 0;
+	paths[index].pC = pC;
+	paths[index].pL = pL;
 	path_lengths[index] = 0;
 
 	seeds[2 * index] = seed0;
@@ -397,9 +406,9 @@ static float geometry_term(Path a, Path b)
 #define CAMERA_VERTEX(x) (paths[2 * index + row_size * (x)])
 #define LIGHT_VERTEX(x) (paths[(2 * index + 1) + row_size * (x)])
 
-#define GEOM(x) x < s ? (LIGHT_VERTEX(x).G) : (x == s ? this_geom : (CAMERA_VERTEX(s + t - (x)).G))
-#define PC(x) x < s ? (LIGHT_VERTEX(x).pC) : x == s ? this_pC : (CAMERA_VERTEX(s + t - x).pC)
-#define PL(x) x < s ? (LIGHT_VERTEX(x).pL) : x == s ? this_pL : (CAMERA_VERTEX(s + t - x).pL)
+#define GEOM(x) ((x) < s ? (LIGHT_VERTEX(x).G) : ((x) == s ? this_geom : (CAMERA_VERTEX(s + t - (x)).G)))
+#define PC(x) ((x) < s ? (LIGHT_VERTEX(x).pC) : (x) == s ? this_pC : (CAMERA_VERTEX(s + t - (x)).pC))
+#define PL(x) ((x) < s ? (LIGHT_VERTEX(x).pL) : (x) == s ? this_pL : (CAMERA_VERTEX(s + t - (x)).pL))
 
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
@@ -427,9 +436,9 @@ __kernel void connect_paths(__global Path *paths,
 				if (camera_vertex.hit_light)
 				{
 					float weight = 0.0f;
-					for (int k = 0; k < t; k++)
+					for (int k = 0; k < t + 1; k++)
 						weight += 1.0f / (CAMERA_VERTEX(k).G);
-					float ratio = t;
+					float ratio = t + 1;
 					sum += camera_vertex.mask / (ratio * weight);
 					break ;
 				}
@@ -447,21 +456,22 @@ __kernel void connect_paths(__global Path *paths,
 			float camera_cos = max(0.0f, dot(camera_vertex.normal, direction));
 			float light_cos = max(0.0f, dot(light_vertex.normal, -1.0f * direction));
 
-			if (camera_cos * light_cos <= 0.0f)
+			if (camera_cos <= 0.0f || light_cos <= 0.0f)
 				continue ;
 			if (!visibility_test(origin, direction, d, boxes, V))
 				continue ;
-			if (dot(light_vertex.mask, light_vertex.mask) == 0.0f)
-				break ;
 			
 			float this_geom = geometry_term(camera_vertex, light_vertex);
+			float this_pL = 1.0f / (2.0f * PI);
+			float this_pC = 1.0f / (2.0f * PI);
+
 			float3 contrib = light_vertex.mask * camera_vertex.mask * camera_cos * this_geom;
 			if (s == 1)
 				contrib *= light_cos;
 
 			float p[16];
 			for (int k = 0; k < s + t + 1; k++)
-				p[k] = (GEOM(s)) / (GEOM(k));
+				p[k] = (GEOM(s) * PL(s)) / (GEOM(k) * PC(k));
 
 			float weight = 0.0f;
 			for (int k = 0; k < s + t + 1; k++)
