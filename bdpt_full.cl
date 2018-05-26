@@ -43,7 +43,7 @@ typedef struct s_path {
 	float G;
 	float pC;
 	float pL;
-	_Bool hit_light;
+	int hit_light;
 }				Path;
 
 typedef struct s_material
@@ -223,10 +223,10 @@ static float3 diffuse_BDRF_sample(float3 normal, int way, uint *seed0, uint *see
 	float u1 = get_random(seed0, seed1);
 	float u2 = get_random(seed0, seed1);
 	float theta = 2.0f * PI * u2;
-	if (way)
+	// if (way)
 		return direction_uniform_hemisphere(x, y, u1, theta, normal);
-	else
-		return direction_cos_hemisphere(x, y, u1, theta, normal);
+	// else
+	// 	return direction_cos_hemisphere(x, y, u1, theta, normal);
 }
 
 
@@ -273,8 +273,8 @@ __kernel void init_paths(const Camera cam,
 		float r2 = get_random(&seed0, &seed1);
 		origin = (1.0f - sqrt(r1)) * v0 + (sqrt(r1) * (1.0f - r2)) * v1 + (r2 * sqrt(r1)) * v2 + NORMAL_SHIFT * normal;
 
-		pC = 1.0f / (2.0f * PI);
-		pL = 1.0f / (2.0f * PI);
+		pC = 1.0f;
+		pL = 1.0f;
 	}
 	else
 	{
@@ -298,8 +298,8 @@ __kernel void init_paths(const Camera cam,
 		normal = direction;
 		mask = WHITE;
 
-		pC = 1.0f / (2.0f * PI);
-		pL = 1.0f / (2.0f * PI);
+		pC = 1.0f;
+		pL = 1.0f;
 
 	}
 
@@ -308,12 +308,7 @@ __kernel void init_paths(const Camera cam,
 	paths[index].mask = mask;
 	paths[index].normal = normal;
 	paths[index].G = G;
-<<<<<<< HEAD
-	paths[index].pC = pC;
-	paths[index].pL = pL;
-=======
 	paths[index].hit_light = 0;
->>>>>>> 2c5f6bdb9d17c3d72b9b79d6a23cc92941963876
 	path_lengths[index] = 0;
 
 	seeds[2 * index] = seed0;
@@ -399,10 +394,10 @@ static float geometry_term(Path a, Path b)
 	return (camera_cos * light_cos) / (t * t);
 }
 
-#define CAMERA_VERTEX(x) (paths[2 * index + (row_size * (x))])
-#define LIGHT_VERTEX(x) (paths[(2 * index + 1) + (row_size * (x))])
+#define CAMERA_VERTEX(x) (paths[2 * index + row_size * (x)])
+#define LIGHT_VERTEX(x) (paths[(2 * index + 1) + row_size * (x)])
 
-#define GEOM(x) x < s ? (LIGHT_VERTEX(x).G) : (x == s ? this_geom : (CAMERA_VERTEX(s + t - x).G))
+#define GEOM(x) x < s ? (LIGHT_VERTEX(x).G) : (x == s ? this_geom : (CAMERA_VERTEX(s + t - (x)).G))
 #define PC(x) x < s ? (LIGHT_VERTEX(x).pC) : x == s ? this_pC : (CAMERA_VERTEX(s + t - x).pC)
 #define PL(x) x < s ? (LIGHT_VERTEX(x).pL) : x == s ? this_pL : (CAMERA_VERTEX(s + t - x).pL)
 
@@ -452,9 +447,6 @@ __kernel void connect_paths(__global Path *paths,
 			float camera_cos = max(0.0f, dot(camera_vertex.normal, direction));
 			float light_cos = max(0.0f, dot(light_vertex.normal, -1.0f * direction));
 
-			float this_pL = 1.0f / (2.0f * PI);
-			float this_pC = 1.0f / (2.0f * PI);
-
 			if (camera_cos * light_cos <= 0.0f)
 				continue ;
 			if (!visibility_test(origin, direction, d, boxes, V))
@@ -468,28 +460,19 @@ __kernel void connect_paths(__global Path *paths,
 				contrib *= light_cos;
 
 			float p[16];
-			for (int i = 0; i < s + t; i++)
-				p[i] = ((GEOM(i)) * (PL(i))) / ((GEOM(i + 1)) * (PC(i)));
+			for (int k = 0; k < s + t + 1; k++)
+				p[k] = (GEOM(s)) / (GEOM(k));
 
-			//multiply forward
-			for (int i = 0; i < s + t; i++)
-				p[i + 1] = p[i] * p[i + 1];
-
-			//pick pivot, append 1
-			float pivot = p[s - 1];
-			p[s + t] = 1.0f;
-
-			//divide through and sum
 			float weight = 0.0f;
-			for (int i = 0; i < s + t + 1; i++)
-				weight += p[i] / pivot;
+			for (int k = 0; k < s + t + 1; k++)
+				weight += p[k];
 
 			float ratio = (float)(s + t + 1);
 
 			sum += contrib / (ratio * weight);
 		}
 	}
-	output[index] += sum ;
+	output[index] += sum;
 }
 
 static void surface_vectors(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *true_N_out, float3 *txcrd_out)
@@ -505,7 +488,7 @@ static void surface_vectors(__global float3 *V, __global float3 *N, __global flo
 	v2 = N[ind + 2];
 	float3 sample_N = normalize((1.0f - u - v) * v0 + u * v1 + v * v2);
 
-	*N_out = sample_N; //dot(geom_N, sample_N) > 0.0f ? sample_N : -1.0f * sample_N;
+	*N_out = sample_N;
 
 	float3 txcrd = (1.0f - u - v) * T[ind] + u * T[ind + 1] + v * T[ind + 2];
 	txcrd.x -= floor(txcrd.x);
@@ -669,8 +652,8 @@ __kernel void trace_paths(__global Path *paths,
 		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 
 		float pC, pL;
-		pC = 1.0f / (2.0f * PI);
-		pL = 1.0f / (2.0f * PI);
+		pC = 1 / (2.0f * PI);
+		pL = 1 / (2.0f * PI);
 
 		//update stuff
 		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
