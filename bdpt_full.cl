@@ -422,12 +422,14 @@ static float geometry_term(Path a, Path b)
 }
 
 #define CAMERA_VERTEX(x) (paths[2 * index + row_size * (x)])
-#define LIGHT_VERTEX(x) (paths[(2 * index + 1) + row_size * (x)])
+#define LIGHT_VERTEX(x) (paths[(2 * index + 1 + sample * jump) % row_size + row_size * (x)])
 
 #define GEOM(x) ((x) < s ? (LIGHT_VERTEX(x).G) : ((x) == s ? this_geom : (CAMERA_VERTEX(s + t - (x)).G)))
 #define PL(x) ((x) < s ? (LIGHT_VERTEX(x).pL) : (x) == s ? this_pL : (CAMERA_VERTEX(s + t - (x)).pL))
 
 #define PC(x) ((x) < s - 1 ? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x)).pC))
+
+#define RESAMPLE_COUNT 4
 
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
@@ -440,84 +442,90 @@ __kernel void connect_paths(__global Path *paths,
 	int row_size = 2 * get_global_size(0);
 
 	int camera_length = path_lengths[2 * index];
-	int light_length = path_lengths[2 * index + 1];
+	
 
 	float3 sum = BLACK;
 	int count = 0;
 
-	for (int t = 2; t <= camera_length; t++)
+	int jump = row_size / RESAMPLE_COUNT;
+
+	for (int sample = 0; sample < RESAMPLE_COUNT; sample++)
 	{
-		Path camera_vertex = CAMERA_VERTEX(t - 1);
-		for (int s = 1; s <= light_length; s++)
+		int light_length = path_lengths[(2 * index + 1 + sample * jump) % row_size];
+		for (int t = 2; t <= camera_length; t++)
 		{
-			if (s == 0)
+			Path camera_vertex = CAMERA_VERTEX(t - 1);
+			for (int s = 1; s <= light_length; s++)
 			{
-				sum += WHITE;
-				if (camera_vertex.hit_light)
+				if (s == 0)
 				{
-					//need to comment this out for now, weights are out of sync
-					// float weight = 0.0f;
-					// for (int k = 0; k < t + 1; k++)
-					// 	weight += 1.0f / (CAMERA_VERTEX(k).G);
-					// float ratio = t + 1;
-					// sum += camera_vertex.mask / (ratio * weight);
-					sum += WHITE;
-					count++;
-					break ;
+					// sum += WHITE;
+					if (camera_vertex.hit_light)
+					{
+						//need to comment this out for now, weights are out of sync
+						// float weight = 0.0f;
+						// for (int k = 0; k < t + 1; k++)
+						// 	weight += 1.0f / (CAMERA_VERTEX(k).G);
+						// float ratio = t + 1;
+						// sum += camera_vertex.mask / (ratio * weight);
+						// sum += WHITE;
+						count++;
+						break ;
+					}
+					continue ;
 				}
-				continue ;
+				Path light_vertex = LIGHT_VERTEX(s - 1);
+
+				float3 origin, direction, distance;
+				origin = camera_vertex.origin;
+				distance = light_vertex.origin - origin;
+				float d = native_sqrt(dot(distance, distance));
+				direction = normalize(distance);
+
+				float camera_cos = dot(camera_vertex.normal, direction);
+				float light_cos = dot(light_vertex.normal, -1.0f * direction);
+
+				if (camera_cos <= 0.0f || light_cos <= 0.0f)
+					continue ;
+				if (!visibility_test(origin, direction, d, boxes, V))
+					continue ;
+				
+				count++;
+
+				float this_geom = geometry_term(camera_vertex, light_vertex);
+				float this_pL = 1.0f / (2.0f * PI);
+				float this_pC = camera_cos / (PI);
+
+				float3 contrib = light_vertex.mask * camera_vertex.mask * camera_cos * this_geom;
+				if (s == 1)
+					contrib *= light_cos;
+
+				float p[16];
+				//initialize with ratios
+				for (int k = 0; k < s + t; k++)
+					p[k] = (GEOM(k) * PL(k)) / (GEOM(k + 1) * PC(k));
+
+				//multiply through
+				for (int k = 0; k < s + t; k++)
+					p[k + 1] = p[k + 1] * p[k];
+
+				//pick pivot and append a 1.0f
+				float pivot = p[s - 1];
+				p[s + t] = 1.0f;
+				for (int k = 0; k < s + t + 1; k++)
+					p[k] /= pivot;
+
+				float weight = 0.0f;
+				for (int k = 0; k < s + t + 1; k++)
+					weight += p[k];
+
+				float ratio = (float)(s + t + 1);
+
+				float test = 1.0f / (ratio * weight);
+
+				if (test == test)
+					sum += contrib * test;
 			}
-			Path light_vertex = LIGHT_VERTEX(s - 1);
-
-			float3 origin, direction, distance;
-			origin = camera_vertex.origin;
-			distance = light_vertex.origin - origin;
-			float d = native_sqrt(dot(distance, distance));
-			direction = normalize(distance);
-
-			float camera_cos = dot(camera_vertex.normal, direction);
-			float light_cos = dot(light_vertex.normal, -1.0f * direction);
-
-			if (camera_cos <= 0.0f || light_cos <= 0.0f)
-				continue ;
-			if (!visibility_test(origin, direction, d, boxes, V))
-				continue ;
-			
-			count++;
-
-			float this_geom = geometry_term(camera_vertex, light_vertex);
-			float this_pL = 1.0f / (2.0f * PI);
-			float this_pC = camera_cos / (PI);
-
-			float3 contrib = light_vertex.mask * camera_vertex.mask * camera_cos * this_geom;
-			if (s == 1)
-				contrib *= light_cos;
-
-			float p[16];
-			//initialize with ratios
-			for (int k = 0; k < s + t; k++)
-				p[k] = (GEOM(k) * PL(k)) / (GEOM(k + 1) * PC(k));
-
-			//multiply through
-			for (int k = 0; k < s + t; k++)
-				p[k + 1] = p[k + 1] * p[k];
-
-			//pick pivot and append a 1.0f
-			float pivot = p[s - 1];
-			p[s + t] = 1.0f;
-			for (int k = 0; k < s + t + 1; k++)
-				p[k] /= pivot;
-
-			float weight = 0.0f;
-			for (int k = 0; k < s + t + 1; k++)
-				weight += p[k];
-
-			float ratio = (float)(s + t + 1);
-
-			float test = 1.0f / (ratio * weight);
-
-			if (test == test)
-				sum += contrib * test;
 		}
 	}
 	output[index] = sum;
