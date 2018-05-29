@@ -337,36 +337,24 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	gcam.aperture = cam.aperture;
 
 	//for simplicity assuming one platform for now. can easily be extended, see old gpu_launch.c
-	
-	//per-platform pointers
-	cl_mem d_vertexes;
-	cl_mem d_tex_coords;
-	cl_mem d_normal;
-	cl_mem d_tangent;
-	cl_mem d_bitangent;
-	cl_mem d_boxes;
-	cl_mem d_materials;
-	cl_mem d_tex;
-	cl_mem d_material_indices;
-	cl_mem d_lights;
-	
-	//per-platform
-	d_vertexes = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->V, NULL);
-	d_tex_coords = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->T, NULL);
-	d_normal = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->N, NULL);
-	d_tangent = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->TN, NULL);
-	d_bitangent = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->BTN, NULL);
-	d_boxes = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_bin) * scene->bin_count, scene->bins, NULL);
-	d_materials = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_mat) * scene->mat_count, scene->mats, NULL);
-	d_tex = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * scene->tex_size, scene->tex, NULL);
-	d_material_indices= clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * scene->tri_count / 3, scene->M, NULL);
-	d_lights = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int3) * scene->light_poly_count, scene->lights, NULL);
 
 	//per-device
 	cl_mem *d_outputs = calloc(CL->numDevices, sizeof(cl_mem));
 	cl_mem *d_seeds = 	calloc(CL->numDevices, sizeof(cl_mem));
 	cl_mem *d_paths = 	calloc(CL->numDevices, sizeof(cl_mem));
 	cl_mem *d_counts = 	calloc(CL->numDevices, sizeof(cl_mem));
+
+	//formerly per-platform now per-device
+	cl_mem *d_vertexes = calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_tex_coords = calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_normal = calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_tangent = calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_bitangent = calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_boxes = calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_materials = calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_tex = calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_material_indices = calloc(CL->numDevices, sizeof(cl_mem));
+	cl_mem *d_lights = calloc(CL->numDevices, sizeof(cl_mem));
 	
 	cl_float3 *blank_output = calloc(half_worksize, sizeof(cl_float3));
 	gpu_path *empty_rays = calloc(worksize * 10, sizeof(gpu_path));
@@ -378,14 +366,22 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * half_worksize, blank_output, NULL);
 		d_paths[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(gpu_path) * worksize * 10, empty_rays, NULL);
 		d_counts[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * worksize, zero_counts, NULL);
+
+		d_vertexes[i] = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->V, NULL);
+		d_tex_coords[i] = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->T, NULL);
+		d_normal[i] = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->N, NULL);
+		d_tangent[i] = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->TN, NULL);
+		d_bitangent[i] = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->BTN, NULL);
+		d_boxes[i] = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_bin) * scene->bin_count, scene->bins, NULL);
+		d_materials[i] = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_mat) * scene->mat_count, scene->mats, NULL);
+		d_tex[i] = 				clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * scene->tex_size, scene->tex, NULL);
+		d_material_indices[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * scene->tri_count / 3, scene->M, NULL);
+		d_lights[i] = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int3) * scene->light_poly_count, scene->lights, NULL);
 	}
 
 	free(blank_output);
 	free(empty_rays);
 	free(zero_counts);
-
-	for (int i = 0; i < CL->numDevices; i++)
-		clFinish(CL->commands[i]);
 
 	// printf("everything should be alloced and copied\n");
 
@@ -424,13 +420,13 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		clSetKernelArg(init_paths[i], 1, sizeof(cl_mem), &d_seeds[i]);
 		clSetKernelArg(init_paths[i], 2, sizeof(cl_mem), &d_paths[i]);
 		clSetKernelArg(init_paths[i], 3, sizeof(cl_mem), &d_counts[i]);
-		clSetKernelArg(init_paths[i], 4, sizeof(cl_mem), &d_lights);
+		clSetKernelArg(init_paths[i], 4, sizeof(cl_mem), &d_lights[i]);
 		clSetKernelArg(init_paths[i], 5, sizeof(cl_uint), &scene->light_poly_count);
-		clSetKernelArg(init_paths[i], 6, sizeof(cl_mem), &d_vertexes);
-		clSetKernelArg(init_paths[i], 7, sizeof(cl_mem), &d_normal);
+		clSetKernelArg(init_paths[i], 6, sizeof(cl_mem), &d_vertexes[i]);
+		clSetKernelArg(init_paths[i], 7, sizeof(cl_mem), &d_normal[i]);
 		clSetKernelArg(init_paths[i], 8, sizeof(cl_mem), &d_outputs[i]);
-		clSetKernelArg(init_paths[i], 9, sizeof(cl_mem), &d_material_indices);
-		clSetKernelArg(init_paths[i], 10, sizeof(cl_mem), &d_materials);
+		clSetKernelArg(init_paths[i], 9, sizeof(cl_mem), &d_material_indices[i]);
+		clSetKernelArg(init_paths[i], 10, sizeof(cl_mem), &d_materials[i]);
 		/*
 		__kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -447,16 +443,16 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 						__global float3 *output)
 		*/
 		clSetKernelArg(trace_paths[i], 0, sizeof(cl_mem), &d_paths[i]);
-		clSetKernelArg(trace_paths[i], 1, sizeof(cl_mem), &d_vertexes);
-		clSetKernelArg(trace_paths[i], 2, sizeof(cl_mem), &d_tex_coords);
-		clSetKernelArg(trace_paths[i], 3, sizeof(cl_mem), &d_normal);
-		clSetKernelArg(trace_paths[i], 4, sizeof(cl_mem), &d_tangent);
-		clSetKernelArg(trace_paths[i], 5, sizeof(cl_mem), &d_bitangent);
-		clSetKernelArg(trace_paths[i], 6, sizeof(cl_mem), &d_material_indices);
-		clSetKernelArg(trace_paths[i], 7, sizeof(cl_mem), &d_materials);
-		clSetKernelArg(trace_paths[i], 8, sizeof(cl_mem), &d_tex);
+		clSetKernelArg(trace_paths[i], 1, sizeof(cl_mem), &d_vertexes[i]);
+		clSetKernelArg(trace_paths[i], 2, sizeof(cl_mem), &d_tex_coords[i]);
+		clSetKernelArg(trace_paths[i], 3, sizeof(cl_mem), &d_normal[i]);
+		clSetKernelArg(trace_paths[i], 4, sizeof(cl_mem), &d_tangent[i]);
+		clSetKernelArg(trace_paths[i], 5, sizeof(cl_mem), &d_bitangent[i]);
+		clSetKernelArg(trace_paths[i], 6, sizeof(cl_mem), &d_material_indices[i]);
+		clSetKernelArg(trace_paths[i], 7, sizeof(cl_mem), &d_materials[i]);
+		clSetKernelArg(trace_paths[i], 8, sizeof(cl_mem), &d_tex[i]);
 		clSetKernelArg(trace_paths[i], 9, sizeof(cl_mem), &d_counts[i]);
-		clSetKernelArg(trace_paths[i], 10, sizeof(cl_mem), &d_boxes);
+		clSetKernelArg(trace_paths[i], 10, sizeof(cl_mem), &d_boxes[i]);
 		clSetKernelArg(trace_paths[i], 11, sizeof(cl_mem), &d_seeds[i]);
 		clSetKernelArg(trace_paths[i], 12, sizeof(cl_mem), &d_outputs[i]);
 
@@ -470,8 +466,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		*/
 		clSetKernelArg(connect_paths[i], 0, sizeof(cl_mem), &d_paths[i]);
 		clSetKernelArg(connect_paths[i], 1, sizeof(cl_mem), &d_counts[i]);
-		clSetKernelArg(connect_paths[i], 2, sizeof(cl_mem), &d_boxes);
-		clSetKernelArg(connect_paths[i], 3, sizeof(cl_mem), &d_vertexes);
+		clSetKernelArg(connect_paths[i], 2, sizeof(cl_mem), &d_boxes[i]);
+		clSetKernelArg(connect_paths[i], 3, sizeof(cl_mem), &d_vertexes[i]);
 		clSetKernelArg(connect_paths[i], 4, sizeof(cl_mem), &d_outputs[i]);
 	}
 
@@ -522,15 +518,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		clFinish(CL->commands[i]);
 	//printf("read complete\n");
 
-	clReleaseMemObject(d_vertexes);
-	clReleaseMemObject(d_tex_coords);
-	clReleaseMemObject(d_normal);
-	clReleaseMemObject(d_tangent);
-	clReleaseMemObject(d_bitangent);
-	clReleaseMemObject(d_boxes);
-	clReleaseMemObject(d_materials);
-	clReleaseMemObject(d_tex);
-	clReleaseMemObject(d_material_indices);
+
 	for (int i = 0; i < CL->numDevices; i++)
 	{
 		//kernels
@@ -543,6 +531,16 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		clReleaseMemObject(d_seeds[i]);
 		clReleaseMemObject(d_paths[i]);
 		clReleaseMemObject(d_counts[i]);
+
+		clReleaseMemObject(d_vertexes[i]);
+		clReleaseMemObject(d_tex_coords[i]);
+		clReleaseMemObject(d_normal[i]);
+		clReleaseMemObject(d_tangent[i]);
+		clReleaseMemObject(d_bitangent[i]);
+		clReleaseMemObject(d_boxes[i]);
+		clReleaseMemObject(d_materials[i]);
+		clReleaseMemObject(d_tex[i]);
+		clReleaseMemObject(d_material_indices[i]);
 	}
 
 	free(init_paths);
@@ -552,6 +550,15 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	free(d_seeds);
 	free(d_paths);
 	free(d_counts);
+	free(d_vertexes);
+	free(d_tex_coords);
+	free(d_normal);
+	free(d_tangent);
+	free(d_bitangent);
+	free(d_boxes);
+	free(d_materials);
+	free(d_tex);
+	free(d_material_indices);
 	cl_float3 *output = calloc(half_worksize, sizeof(cl_float3));
 	cl_int *count = calloc(half_worksize, sizeof(cl_int));
 	cl_int light_count = 0;
