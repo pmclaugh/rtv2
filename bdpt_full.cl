@@ -9,7 +9,7 @@
 #define BLUE (float3)(0.2f, 0.2f, 0.8f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
-#define BRIGHTNESS 100000000.0f
+#define BRIGHTNESS 100000.0f
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
@@ -223,10 +223,26 @@ static float3 diffuse_BDRF_sample(float3 normal, int way, uint *seed0, uint *see
 	float u1 = get_random(seed0, seed1);
 	float u2 = get_random(seed0, seed1);
 	float theta = 2.0f * PI * u2;
-	// if (way)
+	if (way)
 		return direction_uniform_hemisphere(x, y, u1, theta, normal);
-	// else
-	// 	return direction_cos_hemisphere(x, y, u1, theta, normal);
+	else
+		return direction_cos_hemisphere(x, y, u1, theta, normal);
+}
+
+static float diffuse_BDRF_prob(float3 in, float3 normal, float3 out, int way)
+{
+	if (way)
+		return 1.0f / (2.0f * PI);
+	else
+		return dot(out, normal) / PI;
+}
+
+static float diffuse_BDRF_eval(float3 in, float3 normal, float3 out, int way)
+{
+	if (way)
+		return dot(-1.0f * in, normal);
+	else
+		return dot(out, normal);
 }
 
 static float surface_area(int3 triangle, __global float3 *V)
@@ -282,16 +298,19 @@ __kernel void init_paths(const Camera cam,
 
 		pC = 1.0f / (2.0f * PI);
 		pL = 1.0f / ((float)light_poly_count * surface_area(light, V));
+		mask /= pL;
 	}
 	else
 	{
 		//stratified sampling on the camera plane
-		float x = (float)((index / 2) % cam.width) + get_random(&seed0, &seed1);
-		float y = (float)((index / 2) / cam.width) + get_random(&seed0, &seed1);
+		float x = (float)((index / 2) % cam.width);
+		float y = (float)((index / 2) / cam.width);
 		origin = cam.focus;
 
-		float3 through = cam.origin + cam.d_x * x + cam.d_y * y;
+		float3 through = cam.origin + cam.d_x * (x + get_random(&seed0, &seed1)) + cam.d_y * (y + get_random(&seed0, &seed1));
 		direction = normalize(cam.focus - through);
+		through = cam.origin + cam.d_x * (x + 0.5f) + cam.d_y * (y + 0.5f);
+		float3 prime_direction = normalize(cam.focus - through);
 
 		float3 aperture;
 		aperture.x = (get_random(&seed0, &seed1) - 0.5f) * cam.aperture;
@@ -303,11 +322,11 @@ __kernel void init_paths(const Camera cam,
 		origin = cam.focus + aperture;
 		direction = normalize(f_point - origin);
 		normal = direction;
-		mask = WHITE;
+		mask = WHITE * dot(prime_direction, direction);
 
-		pC = 1.0f / (float)(cam.width * cam.width);//1.0f / (2.0f * PI);
+		pC = 1.0f;// / (float)(cam.width * cam.width);
 		pL = 1.0f / (2.0f * PI);
-
+		mask /= pC;
 	}
 
 	paths[index].origin = origin;
@@ -397,10 +416,10 @@ static float geometry_term(Path a, Path b)
 	t = native_sqrt(dot(distance, distance));
 	direction = normalize(distance);
 
-	float camera_cos = max(0.0f, dot(a.normal, direction));
-	float light_cos = max(0.0f, dot(b.normal, -1.0f * direction));
+	float camera_cos = dot(a.normal, direction);
+	float light_cos = dot(b.normal, -1.0f * direction);
 
-	return (camera_cos * light_cos) / (t * t);
+	return fabs(camera_cos * light_cos) / (t * t);
 }
 
 #define CAMERA_VERTEX(x) (paths[2 * index + row_size * (x)])
@@ -453,8 +472,8 @@ __kernel void connect_paths(__global Path *paths,
 			float d = native_sqrt(dot(distance, distance));
 			direction = normalize(distance);
 
-			float camera_cos = max(0.0f, dot(camera_vertex.normal, direction));
-			float light_cos = max(0.0f, dot(light_vertex.normal, -1.0f * direction));
+			float camera_cos = dot(camera_vertex.normal, direction);
+			float light_cos = dot(light_vertex.normal, -1.0f * direction);
 
 			if (camera_cos <= 0.0f || light_cos <= 0.0f)
 				continue ;
@@ -463,15 +482,26 @@ __kernel void connect_paths(__global Path *paths,
 			
 			float this_geom = geometry_term(camera_vertex, light_vertex);
 			float this_pL = 1.0f / (2.0f * PI);
-			float this_pC = 1.0f / (2.0f * PI);
+			float this_pC = camera_cos / (PI);
 
 			float3 contrib = light_vertex.mask * camera_vertex.mask * camera_cos * this_geom;
 			if (s == 1)
 				contrib *= light_cos;
 
 			float p[16];
+			//initialize with ratios
+			for (int k = 0; k < s + t; k++)
+				p[k] = (GEOM(k) * PL(k)) / (GEOM(k + 1) * PC(k));
+
+			//multiply through
+			for (int k = 0; k < s + t; k++)
+				p[k + 1] = p[k + 1] * p[k];
+
+			//pick pivot and append a 1.0f
+			float pivot = p[s - 1];
+			p[s + t] = 1.0f;
 			for (int k = 0; k < s + t + 1; k++)
-				p[k] = (GEOM(s) * PL(s)) / (GEOM(k) * PC(k));
+				p[k] /= pivot;
 
 			float weight = 0.0f;
 			for (int k = 0; k < s + t + 1; k++)
@@ -479,10 +509,13 @@ __kernel void connect_paths(__global Path *paths,
 
 			float ratio = (float)(s + t + 1);
 
-			sum += contrib / (ratio * weight);
+			float test = 1.0f / (ratio * weight);
+
+			if (test == test)
+				sum += contrib * test;
 		}
 	}
-	output[index] += sum;
+	output[index] = sum;
 }
 
 static void surface_vectors(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *true_N_out, float3 *txcrd_out)
@@ -580,6 +613,10 @@ __kernel void trace_paths(__global Path *paths,
 	int limit = way ? LIGHT_BOUNCES : CAMERA_BOUNCES;
 
 	int length = 1;
+
+	float pC = 1.0f;
+	float pL = 1.0f / (2.0f * PI);
+
 	for (length = 1; length <= limit; length++)
 	{
 		inv_dir = 1.0f / direction;
@@ -660,11 +697,7 @@ __kernel void trace_paths(__global Path *paths,
 
 		//sample and evaluate BRDF
 		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
-
-		float pC, pL;
-		pC = 1 / (2.0f * PI);
-		pL = 1 / (2.0f * PI);
-
+		
 		//update stuff
 		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
 		direction = out;
@@ -677,8 +710,13 @@ __kernel void trace_paths(__global Path *paths,
 		paths[index + row_size * length].pL = pL;
 		paths[index + row_size * length].hit_light = 0;
 
+		pC = dot(out, normal) / (PI);
+		pL = 1 / (2.0f * PI);
+
 		if (!way)
-			mask *= max(0.0f, dot(out, normal));
+			mask *= max(0.0f, dot(out, normal)) / pC;
+		else
+			mask /= pL;
 
 	}
 	path_lengths[index] = length;

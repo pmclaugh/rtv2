@@ -41,7 +41,7 @@ void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
 	double Lw = 0.0;
 	for (int i = 0; i < resolution; i++)
 	{
-		double scale = 1.0;//count[i] > 0 ? 1.0 / (double)(count[i]) : 1;
+		double scale = count[i] > 0 ? 1.0 / (double)(count[i]) : 1;
 		data->pixels[i].x = data->total_clr[i].x * scale;
 		data->pixels[i].y = data->total_clr[i].y * scale;
 		data->pixels[i].z = data->total_clr[i].z * scale;
