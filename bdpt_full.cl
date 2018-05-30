@@ -588,6 +588,8 @@ static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float
 	return normalize(tangent * bump.x + bitangent * bump.y + sample_N * bump.z);
 }
 
+#define LENGTH (length - skip - subskip)
+
 __kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
 						__global float3 *T,
@@ -624,6 +626,7 @@ __kernel void trace_paths(__global Path *paths,
 
 	int length = 1;
 	int skip = 0;
+	int subskip = 0;
 	float G_buffer = 1.0f;
 	Path spec_point;
 
@@ -692,13 +695,13 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			if (!way)
 			{
-				paths[index + row_size * (length - skip)].origin = origin + direction * t + true_normal * NORMAL_SHIFT;
-				paths[index + row_size * (length - skip)].mask = mask * Ke * BRIGHTNESS;
-				paths[index + row_size * (length - skip)].normal = normal;
-				paths[index + row_size * (length - skip)].G = geometry_term(paths[index + (length - skip) * row_size], paths[index + ((length - skip) - 1) * row_size]);
-				paths[index + row_size * (length - skip)].pC = pC;
-				paths[index + row_size * (length - skip)].pL = pL;
-				paths[index + row_size * (length - skip)].hit_light = 1;
+				paths[index + row_size * LENGTH].origin = origin + direction * t + true_normal * NORMAL_SHIFT;
+				paths[index + row_size * LENGTH].mask = mask * Ke * BRIGHTNESS;
+				paths[index + row_size * LENGTH].normal = normal;
+				paths[index + row_size * LENGTH].G = geometry_term(paths[index + LENGTH * row_size], paths[index + (LENGTH - 1) * row_size]);
+				paths[index + row_size * LENGTH].pC = pC;
+				paths[index + row_size * LENGTH].pL = pL;
+				paths[index + row_size * LENGTH].hit_light = 1;
 				length++;
 			}
 			break ;
@@ -715,9 +718,9 @@ __kernel void trace_paths(__global Path *paths,
 			spec_point.origin = origin;
 			spec_point.normal = normal;
 			if (G_buffer == 1.0f)
-				G_buffer = geometry_term(spec_point, paths[index + ((length - skip) - 1) * row_size]);
+				G_buffer = geometry_term(spec_point, paths[index + (LENGTH - 1) * row_size]);
 			mask *= spec;
-			skip++;
+			subskip++;
 			continue;
 		}
 
@@ -727,7 +730,7 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			float cosine = max(0.0f, dot(-1.0f * direction, normal));
 			mask *= cosine;
-			paths[index + row_size * ((length - skip) - 1)].pC = cosine / PI;
+			paths[index + row_size * (LENGTH - 1)].pC = cosine / PI;
 		}
 
 		//sample and evaluate BRDF
@@ -736,20 +739,22 @@ __kernel void trace_paths(__global Path *paths,
 		//update stuff
 		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
 		direction = out;
-		paths[index + row_size * (length - skip)].origin = origin;
-		paths[index + row_size * (length - skip)].direction = direction;
-		paths[index + row_size * (length - skip)].mask = mask;
-		paths[index + row_size * (length - skip)].normal = normal;
+		paths[index + row_size * LENGTH].origin = origin;
+		paths[index + row_size * LENGTH].direction = direction;
+		paths[index + row_size * LENGTH].mask = mask;
+		paths[index + row_size * LENGTH].normal = normal;
 		if (G_buffer == 1.0f)
-			paths[index + row_size * (length - skip)].G = geometry_term(paths[index + (length - skip) * row_size], paths[index + ((length - skip) - 1) * row_size]);
+			paths[index + row_size * LENGTH].G = geometry_term(paths[index + LENGTH * row_size], paths[index + (LENGTH - 1) * row_size]);
 		else
 		{
-			paths[index + row_size * (length - skip)].G = G_buffer;
+			paths[index + row_size * LENGTH].G = G_buffer;
 			G_buffer = 1.0f;
+			skip += subskip;
+			subskip = 0;
 		}
-		paths[index + row_size * (length - skip)].pC = pC;
-		paths[index + row_size * (length - skip)].pL = pL;
-		paths[index + row_size * (length - skip)].hit_light = 0;
+		paths[index + row_size * LENGTH].pC = pC;
+		paths[index + row_size * LENGTH].pL = pL;
+		paths[index + row_size * LENGTH].hit_light = 0;
 
 		pC = dot(out, normal) / (PI);
 
@@ -757,7 +762,8 @@ __kernel void trace_paths(__global Path *paths,
 			mask *= 2.0f;
 
 	}
-	path_lengths[index] = (length - skip);
+
+	path_lengths[index] = length - skip;
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
 }
