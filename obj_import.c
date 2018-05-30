@@ -214,8 +214,8 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			sscanf(str, "Ka %f %f %f", &m.Ka.x, &m.Ka.y, &m.Ka.z);
 		else if (strncmp(str, "Kd", 2) == 0)
 			sscanf(str, "Kd %f %f %f", &m.Kd.x, &m.Kd.y, &m.Kd.z);
-		else if (strncmp(str, "Ks", 2) == 0)
-			sscanf(str, "Ks %f %f %f", &m.Ks.x, &m.Ks.y, &m.Ks.z);
+		// else if (strncmp(str, "Ks", 2) == 0)
+		// 	sscanf(str, "Ks %f %f %f", &m.Ks.x, &m.Ks.y, &m.Ks.z);
 		else if (strncmp(str, "Ke", 2) == 0)
 			sscanf(str, "Ke %f %f %f", &m.Ke.x, &m.Ke.y, &m.Ke.z);
 
@@ -267,18 +267,18 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			else if (strstr(m.map_d_path, ".jpg") || strstr(m.map_d_path, ".jpeg"))
 				;//m.map_d = load_jpg_map(rel_path, m.map_d_path);
 		}
-		else if (strncmp(str, "map_Ks", 6) == 0)
-		{
-			//printf("loading a Ks\n");
-			m.map_Ks_path = calloc(512, 1);
-			sscanf(str, "map_Ks %s\n", m.map_Ks_path);
-			if (strstr(m.map_Ks_path, ".bmp"))
-				m.map_Ks = load_bmp_map(rel_path, m.map_Ks_path);
-			else if (strstr(m.map_Ks_path, ".tga"))
-				m.map_Ks = load_tga_map(rel_path, m.map_Ks_path);
-			else if (strstr(m.map_Ks_path, ".jpg") || strstr(m.map_Ks_path, ".jpeg"))
-				;//m.map_Ks = load_jpg_map(rel_path, m.map_Ks_path);
-		}
+		// else if (strncmp(str, "map_Ks", 6) == 0)
+		// {
+		// 	//printf("loading a Ks\n");
+		// 	m.map_Ks_path = calloc(512, 1);
+		// 	sscanf(str, "map_Ks %s\n", m.map_Ks_path);
+		// 	if (strstr(m.map_Ks_path, ".bmp"))
+		// 		m.map_Ks = load_bmp_map(rel_path, m.map_Ks_path);
+		// 	else if (strstr(m.map_Ks_path, ".tga"))
+		// 		m.map_Ks = load_tga_map(rel_path, m.map_Ks_path);
+		// 	else if (strstr(m.map_Ks_path, ".jpg") || strstr(m.map_Ks_path, ".jpeg"))
+		// 		;//m.map_Ks = load_jpg_map(rel_path, m.map_Ks_path);
+		// }
 		free(str);
 	}
 	S->materials[mat_ind] = m;

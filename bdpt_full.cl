@@ -714,7 +714,8 @@ __kernel void trace_paths(__global Path *paths,
 			direction = normalize(2.0f * dot(-1.0f * direction, normal) * normal + direction);
 			spec_point.origin = origin;
 			spec_point.normal = normal;
-			G_buffer *= geometry_term(spec_point, paths[index + ((length - skip) - 1) * row_size]);
+			if (G_buffer == 1.0f)
+				G_buffer = geometry_term(spec_point, paths[index + ((length - skip) - 1) * row_size]);
 			mask *= spec;
 			skip++;
 			continue;
