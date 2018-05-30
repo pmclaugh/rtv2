@@ -43,6 +43,7 @@ typedef struct s_path {
 	float pC;
 	float pL;
 	int hit_light;
+	int	spec;
 }				Path;
 
 typedef struct s_material
@@ -214,6 +215,29 @@ static float3 direction_cos_hemisphere(float3 x, float3 y, float u1, float theta
 	return normalize(x * r * native_cos(theta) + y * r * native_sin(theta) + normal * native_sqrt(max(0.0f, 1.0f - u1)));
 }
 
+static float3 specular_BRDF_sample(float3 direction, float3 normal, float3 spec, int way, uint *seed0, uint *seed1)
+{
+	float3 spec_dir = normalize(direction - 2.0f * dot(direction, normal) * normal);
+
+	// //local orthonormal system
+	// float3 axis = fabs(spec_dir.x) > fabs(spec_dir.y) ? UNIT_Y : UNIT_X;
+	// float3 hem_x = cross(axis, spec_dir);
+	// float3 hem_y = cross(spec_dir, hem_x);
+
+	// float r1 = get_random(seed0, seed1);
+	// float r2 = get_random(seed0, seed1);
+	// float phi = 2.0f * PI * r1;
+	// float theta = acos(pow((1.0f - r2), 1.0f / (100.0f * (spec.x + spec.y + spec.z))));
+
+	// float3 x = hem_x * sin(theta) * cos(phi);
+	// float3 y = hem_y * sin(theta) * sin(phi);
+	// float3 z = spec_dir * cos(theta);
+	// spec_dir = x + y + z;
+	// if (dot(spec_dir, normal) < 0.0f) // pick mirror of sample (same importance)
+	// 	spec_dir = z - x - y;
+	return spec_dir;
+}
+
 static float3 diffuse_BDRF_sample(float3 normal, int way, uint *seed0, uint *seed1)
 {
 	float3 x, y;
@@ -236,9 +260,12 @@ static float diffuse_BDRF_prob(float3 in, float3 normal, float3 out, int way)
 		return dot(out, normal) / PI;
 }
 
-static float3 diffuse_BDRF_eval(float3 to_eye, float3 normal, float3 to_light, float3 color)
+static float diffuse_BDRF_eval(float3 in, float3 normal, float3 out, int way)
 {
-	return color * dot(normal, to_light) / PI;
+	if (way)
+		return dot(-1.0f * in, normal);
+	else
+		return dot(out, normal);
 }
 
 static float surface_area(int3 triangle, __global float3 *V)
@@ -333,6 +360,7 @@ __kernel void init_paths(const Camera cam,
 	paths[index].hit_light = 0;
 	paths[index].pC = pC;
 	paths[index].pL = pL;
+	paths[index].spec = 0;
 	path_lengths[index] = 0;
 
 	seeds[2 * index] = seed0;
@@ -419,14 +447,12 @@ static float geometry_term(Path a, Path b)
 }
 
 #define CAMERA_VERTEX(x) (paths[2 * index + row_size * (x)])
-#define LIGHT_VERTEX(x) (paths[(2 * index + 1 + sample * jump) % row_size + row_size * (x)])
+#define LIGHT_VERTEX(x) (paths[(2 * index + 1) + row_size * (x)])
 
 #define GEOM(x) ((x) < s ? (LIGHT_VERTEX(x).G) : ((x) == s ? this_geom : (CAMERA_VERTEX(s + t - (x)).G)))
 #define PL(x) ((x) < s ? (LIGHT_VERTEX(x).pL) : (x) == s ? this_pL : (CAMERA_VERTEX(s + t - (x)).pL))
 
 #define PC(x) ((x) < s - 1 ? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x)).pC))
-
-#define RESAMPLE_COUNT 1
 
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
@@ -439,93 +465,94 @@ __kernel void connect_paths(__global Path *paths,
 	int row_size = 2 * get_global_size(0);
 
 	int camera_length = path_lengths[2 * index];
-	
+	int light_length = path_lengths[2 * index + 1];
 
 	float3 sum = BLACK;
 	int count = 0;
 
-	int jump = row_size / RESAMPLE_COUNT;
-
-	for (int sample = 0; sample < RESAMPLE_COUNT; sample++)
+	for (int t = 2; t <= camera_length; t++)
 	{
-		int light_length = path_lengths[(2 * index + 1 + sample * jump) % row_size];
-		for (int t = 2; t <= camera_length; t++)
+		Path camera_vertex = CAMERA_VERTEX(t - 1);
+		for (int s = 0; s <= light_length; s++)
 		{
-			Path camera_vertex = CAMERA_VERTEX(t - 1);
-			for (int s = 1; s <= light_length; s++)
+			if (s == 0)
 			{
-				if (s == 0)
+				if (camera_vertex.hit_light)
 				{
-					// sum += WHITE;
-					if (camera_vertex.hit_light)
+					float weight = 0.0f;
+					for (int k = 0; k < t - 1; k++)
 					{
-						//need to comment this out for now, weights are out of sync
-						// float weight = 0.0f;
-						// for (int k = 0; k < t + 1; k++)
-						// 	weight += 1.0f / (CAMERA_VERTEX(k).G);
-						// float ratio = t + 1;
-						// sum += camera_vertex.mask / (ratio * weight);
-						// sum += WHITE;
-						count++;
-						break ;
+						if (CAMERA_VERTEX(k).spec == 0)
+							weight += 1.0f / (CAMERA_VERTEX(k).G);
 					}
-					continue ;
+					float ratio = t - 1;
+					if (weight > 0.0f)
+						sum += camera_vertex.mask / (ratio * weight);
+					count++;
+					break ;
 				}
-				Path light_vertex = LIGHT_VERTEX(s - 1);
-
-				float3 origin, direction, distance;
-				origin = camera_vertex.origin;
-				distance = light_vertex.origin - origin;
-				float d = native_sqrt(dot(distance, distance));
-				direction = normalize(distance);
-
-				float camera_cos = dot(camera_vertex.normal, direction);
-				float light_cos = dot(light_vertex.normal, -1.0f * direction);
-
-				if (camera_cos <= 0.0f || light_cos <= 0.0f)
-					continue ;
-				if (!visibility_test(origin, direction, d, boxes, V))
-					continue ;
-				
-				count++;
-
-				float this_geom = geometry_term(camera_vertex, light_vertex);
-				float this_pL = 1.0f / (2.0f * PI);
-				float this_pC = camera_cos / (PI);
-
-				float3 contrib = light_vertex.mask * camera_vertex.mask * camera_cos * this_geom;
-				if (s == 1)
-					contrib *= light_cos;
-
-				float p[16];
-				//initialize with ratios
-				for (int k = 0; k < s + t; k++)
-					p[k] = (GEOM(k) * PL(k)) / (GEOM(k + 1) * PC(k));
-
-				//multiply through
-				for (int k = 0; k < s + t; k++)
-					p[k + 1] = p[k + 1] * p[k];
-
-				//pick pivot and append a 1.0f
-				float pivot = p[s - 1];
-				p[s + t] = 1.0f;
-				for (int k = 0; k < s + t + 1; k++)
-					p[k] /= pivot;
-
-				float weight = 0.0f;
-				for (int k = 0; k < s + t + 1; k++)
-					weight += p[k];
-
-				float ratio = (float)(s + t + 1);
-
-				float test = 1.0f / (ratio * weight);
-
-				if (test == test)
-					sum += contrib * test;
+				continue ;
 			}
+			Path light_vertex = LIGHT_VERTEX(s - 1);
+
+			float3 origin, direction, distance;
+			origin = camera_vertex.origin;
+			distance = light_vertex.origin - origin;
+			float d = native_sqrt(dot(distance, distance));
+			direction = normalize(distance);
+
+			float camera_cos = dot(camera_vertex.normal, direction);
+			float light_cos = dot(light_vertex.normal, -1.0f * direction);
+
+			if (camera_cos <= 0.0f || light_cos <= 0.0f)
+				continue ;
+			if (!visibility_test(origin, direction, d, boxes, V))
+				continue ;
+			
+			count++;
+
+			float this_geom = geometry_term(camera_vertex, light_vertex);
+			float this_pL = 1.0f / (2.0f * PI);
+			float this_pC = camera_cos / (PI);
+
+			float3 contrib = light_vertex.mask * camera_vertex.mask * camera_cos * this_geom;
+			if (s == 1)
+				contrib *= light_cos;
+
+			float p[16];
+			//initialize with ratios
+			for (int k = 0; k < s + t; k++)
+				p[k] = (GEOM(k) * PL(k)) / (GEOM(k + 1) * PC(k));
+
+			//multiply through
+			for (int k = 0; k < s + t; k++)
+				p[k + 1] = p[k + 1] * p[k];
+
+			//pick pivot and append a 1.0f
+			float pivot = p[s - 1];
+			p[s + t] = 1.0f;
+			for (int k = 0; k < s + t + 1; k++)
+				p[k] /= pivot;
+
+			float weight = 0.0f;
+			for (int k = 0; k < s + t + 1; k++)
+			{
+				if (k < s && LIGHT_VERTEX(k).spec == 1)
+					continue ;
+				if (k > s && CAMERA_VERTEX(s + t - k).spec == 1)
+					continue ;
+				weight += p[k];
+			}
+
+			float ratio = (float)(s + t + 1);
+
+			float test = 1.0f / (ratio * weight);
+
+			if (test == test)
+				sum += contrib * test;
 		}
 	}
-	output[index] = sum / (float)RESAMPLE_COUNT;
+	output[index] = sum;
 }
 
 static void surface_vectors(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *true_N_out, float3 *txcrd_out)
@@ -623,13 +650,11 @@ __kernel void trace_paths(__global Path *paths,
 	int limit = way ? LIGHT_BOUNCES : CAMERA_BOUNCES;
 
 	int length = 1;
-	int skip = 0;
-	float G_buffer = 1.0f;
 
 	float pC = 1.0f;
 	float pL = 1.0f / (2.0f * PI);
 
-	for (length = 1; length < limit; length++)
+	for (length = 1; length <= limit; length++)
 	{
 		inv_dir = 1.0f / direction;
 		//reset stack and results
@@ -691,69 +716,70 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			if (!way)
 			{
-				paths[index + row_size * (length - skip)].origin = origin + direction * t + true_normal * NORMAL_SHIFT;
-				paths[index + row_size * (length - skip)].mask = mask * Ke * BRIGHTNESS;
-				paths[index + row_size * (length - skip)].normal = normal;
-				paths[index + row_size * (length - skip)].G = geometry_term(paths[index + (length - skip) * row_size], paths[index + ((length - skip) - 1) * row_size]);
-				paths[index + row_size * (length - skip)].pC = pC;
-				paths[index + row_size * (length - skip)].pL = pL;
-				paths[index + row_size * (length - skip)].hit_light = 1;
+				paths[index + row_size * length].origin = origin + direction * t + true_normal * NORMAL_SHIFT;
+				paths[index + row_size * length].mask = mask * Ke * BRIGHTNESS;
+				paths[index + row_size * length].normal = normal;
+				paths[index + row_size * length].G = geometry_term(paths[index + length * row_size], paths[index + (length - 1) * row_size]);
+				paths[index + row_size * length].pC = pC;
+				paths[index + row_size * length].pL = pL;
+				paths[index + row_size * length].hit_light = 1;
+				paths[index + row_size * length].spec = 0;
 				length++;
 			}
 			break ;
 		}
 
-		// bump map
+		// bump map (malfunctioning)
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
 
-		// // did we hit a specular surface?
-		// if (dot(spec, spec) > 0.0f)
-		// {
-		// 	origin = origin + direction * t + true_normal * NORMAL_SHIFT;
-		// 	direction = normalize(2.0f * dot(-1.0f * direction, normal) * normal + direction);
-		// 	Path spot;
-		// 	spot.origin = origin;
-		// 	spot.normal = normal;
-		// 	G_buffer *= geometry_term(spot, paths[index + ((length - skip) - 1) * row_size]);
-		// 	mask *= spec;
+		float3 out;
+		if (dot(spec, spec) > 0.0f)
+		{
+			out = specular_BRDF_sample(direction, normal, spec, way, &seed0, &seed1);
+			mask *= spec;
+			paths[index + row_size * length].spec = 1;
+		}
+		else
+		{
+			out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
+			mask *= diff;
+			paths[index + row_size * length].spec = 0;
+		}
 
-		// 	skip++;
-		// 	continue;
-		// }
-
-		//color
-		mask *= diff;
 		if (way)
 		{
 			float cosine = max(0.0f, dot(-1.0f * direction, normal));
 			mask *= cosine;
-			paths[index + row_size * ((length - skip) - 1)].pC = cosine / PI;
+			paths[index + row_size * (length - 1)].pC = cosine / PI;
 		}
-
-		//sample and evaluate BRDF
-		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 		
 		//update stuff
 		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
 		direction = out;
-		paths[index + row_size * (length - skip)].origin = origin;
-		paths[index + row_size * (length - skip)].direction = direction;
-		paths[index + row_size * (length - skip)].mask = mask;
-		paths[index + row_size * (length - skip)].normal = normal;
-		paths[index + row_size * (length - skip)].G = G_buffer * geometry_term(paths[index + (length - skip) * row_size], paths[index + ((length - skip) - 1) * row_size]);
-		paths[index + row_size * (length - skip)].pC = pC;
-		paths[index + row_size * (length - skip)].pL = pL;
-		paths[index + row_size * (length - skip)].hit_light = 0;
+		paths[index + row_size * length].origin = origin;
+		paths[index + row_size * length].direction = direction;
+		paths[index + row_size * length].mask = mask;
+		paths[index + row_size * length].normal = normal;
+		paths[index + row_size * length].G = geometry_term(paths[index + length * row_size], paths[index + (length - 1) * row_size]);
+		paths[index + row_size * length].pC = pC;
+		paths[index + row_size * length].pL = pL;
+		paths[index + row_size * length].hit_light = 0;
 
-		G_buffer = 1.0f;
-
-		pC = dot(out, normal) / (PI);
-
-		if (way)
-			mask *= 2.0f;
+		if (!way)
+		{
+			if (paths[index + row_size * length].spec == 0)
+			{
+				pC = dot(out, normal) / (PI);
+				mask *= max(0.0f, dot(out, normal)) / pC;
+			}
+			else
+				pC = 1.0f;
+		}
+		else
+			mask /= pL;
 
 	}
-	path_lengths[index] = (length - skip);
+	path_lengths[index] = length;
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
 }
