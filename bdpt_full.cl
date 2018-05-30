@@ -760,7 +760,6 @@ __kernel void trace_paths(__global Path *paths,
 
 		if (way)
 			mask *= 2.0f;
-
 	}
 
 	path_lengths[index] = length - skip;
