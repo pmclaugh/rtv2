@@ -528,7 +528,7 @@ __kernel void connect_paths(__global Path *paths,
 			}
 		}
 	}
-	output[index] = sum;
+	output[index] = sum / (float)RESAMPLE_COUNT;
 }
 
 static void surface_vectors(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *true_N_out, float3 *txcrd_out)
@@ -734,9 +734,7 @@ __kernel void trace_paths(__global Path *paths,
 		pC = dot(out, normal) / (PI);
 
 		if (way)
-			mask *= max(0.0f, dot(out, normal));
-		else
-			mask *= 0.5f; //long story
+			mask *= 2.0f;
 
 	}
 	path_lengths[index] = length;
