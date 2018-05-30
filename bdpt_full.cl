@@ -625,6 +625,7 @@ __kernel void trace_paths(__global Path *paths,
 	int length = 1;
 	int skip = 0;
 	float G_buffer = 1.0f;
+	Path spec_point;
 
 	float pC = 1.0f;
 	float pL = 1.0f / (2.0f * PI);
@@ -706,20 +707,18 @@ __kernel void trace_paths(__global Path *paths,
 		// bump map
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
 
-		// // did we hit a specular surface?
-		// if (dot(spec, spec) > 0.0f)
-		// {
-		// 	origin = origin + direction * t + true_normal * NORMAL_SHIFT;
-		// 	direction = normalize(2.0f * dot(-1.0f * direction, normal) * normal + direction);
-		// 	Path spot;
-		// 	spot.origin = origin;
-		// 	spot.normal = normal;
-		// 	G_buffer *= geometry_term(spot, paths[index + ((length - skip) - 1) * row_size]);
-		// 	mask *= spec;
-
-		// 	skip++;
-		// 	continue;
-		// }
+		// did we hit a specular surface?
+		if (dot(spec, spec) > 0.0f)
+		{
+			origin = origin + direction * t + true_normal * NORMAL_SHIFT;
+			direction = normalize(2.0f * dot(-1.0f * direction, normal) * normal + direction);
+			spec_point.origin = origin;
+			spec_point.normal = normal;
+			G_buffer *= geometry_term(spec_point, paths[index + ((length - skip) - 1) * row_size]);
+			mask *= spec;
+			skip++;
+			continue;
+		}
 
 		//color
 		mask *= diff;
@@ -740,12 +739,16 @@ __kernel void trace_paths(__global Path *paths,
 		paths[index + row_size * (length - skip)].direction = direction;
 		paths[index + row_size * (length - skip)].mask = mask;
 		paths[index + row_size * (length - skip)].normal = normal;
-		paths[index + row_size * (length - skip)].G = G_buffer * geometry_term(paths[index + (length - skip) * row_size], paths[index + ((length - skip) - 1) * row_size]);
+		if (G_buffer == 1.0f)
+			paths[index + row_size * (length - skip)].G = geometry_term(paths[index + (length - skip) * row_size], paths[index + ((length - skip) - 1) * row_size]);
+		else
+		{
+			paths[index + row_size * (length - skip)].G = G_buffer;
+			G_buffer = 1.0f;
+		}
 		paths[index + row_size * (length - skip)].pC = pC;
 		paths[index + row_size * (length - skip)].pL = pL;
 		paths[index + row_size * (length - skip)].hit_light = 0;
-
-		G_buffer = 1.0f;
 
 		pC = dot(out, normal) / (PI);
 
