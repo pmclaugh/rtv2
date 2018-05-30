@@ -236,12 +236,9 @@ static float diffuse_BDRF_prob(float3 in, float3 normal, float3 out, int way)
 		return dot(out, normal) / PI;
 }
 
-static float diffuse_BDRF_eval(float3 in, float3 normal, float3 out, int way)
+static float3 diffuse_BDRF_eval(float3 to_eye, float3 normal, float3 to_light, float3 color)
 {
-	if (way)
-		return dot(-1.0f * in, normal);
-	else
-		return dot(out, normal);
+	return color * dot(normal, to_light) / PI;
 }
 
 static float surface_area(int3 triangle, __global float3 *V)
@@ -429,7 +426,7 @@ static float geometry_term(Path a, Path b)
 
 #define PC(x) ((x) < s - 1 ? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x)).pC))
 
-#define RESAMPLE_COUNT 4
+#define RESAMPLE_COUNT 1
 
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
@@ -626,6 +623,8 @@ __kernel void trace_paths(__global Path *paths,
 	int limit = way ? LIGHT_BOUNCES : CAMERA_BOUNCES;
 
 	int length = 1;
+	int skip = 0;
+	float G_buffer = 1.0f;
 
 	float pC = 1.0f;
 	float pL = 1.0f / (2.0f * PI);
@@ -692,20 +691,35 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			if (!way)
 			{
-				paths[index + row_size * length].origin = origin + direction * t + true_normal * NORMAL_SHIFT;
-				paths[index + row_size * length].mask = mask * Ke * BRIGHTNESS;
-				paths[index + row_size * length].normal = normal;
-				paths[index + row_size * length].G = geometry_term(paths[index + length * row_size], paths[index + (length - 1) * row_size]);
-				paths[index + row_size * length].pC = pC;
-				paths[index + row_size * length].pL = pL;
-				paths[index + row_size * length].hit_light = 1;
+				paths[index + row_size * (length - skip)].origin = origin + direction * t + true_normal * NORMAL_SHIFT;
+				paths[index + row_size * (length - skip)].mask = mask * Ke * BRIGHTNESS;
+				paths[index + row_size * (length - skip)].normal = normal;
+				paths[index + row_size * (length - skip)].G = geometry_term(paths[index + (length - skip) * row_size], paths[index + ((length - skip) - 1) * row_size]);
+				paths[index + row_size * (length - skip)].pC = pC;
+				paths[index + row_size * (length - skip)].pL = pL;
+				paths[index + row_size * (length - skip)].hit_light = 1;
 				length++;
 			}
 			break ;
 		}
 
-		// bump map (malfunctioning)
+		// bump map
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
+
+		// // did we hit a specular surface?
+		// if (dot(spec, spec) > 0.0f)
+		// {
+		// 	origin = origin + direction * t + true_normal * NORMAL_SHIFT;
+		// 	direction = normalize(2.0f * dot(-1.0f * direction, normal) * normal + direction);
+		// 	Path spot;
+		// 	spot.origin = origin;
+		// 	spot.normal = normal;
+		// 	G_buffer *= geometry_term(spot, paths[index + ((length - skip) - 1) * row_size]);
+		// 	mask *= spec;
+
+		// 	skip++;
+		// 	continue;
+		// }
 
 		//color
 		mask *= diff;
@@ -713,7 +727,7 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			float cosine = max(0.0f, dot(-1.0f * direction, normal));
 			mask *= cosine;
-			paths[index + row_size * (length - 1)].pC = cosine / PI;
+			paths[index + row_size * ((length - skip) - 1)].pC = cosine / PI;
 		}
 
 		//sample and evaluate BRDF
@@ -722,14 +736,16 @@ __kernel void trace_paths(__global Path *paths,
 		//update stuff
 		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
 		direction = out;
-		paths[index + row_size * length].origin = origin;
-		paths[index + row_size * length].direction = direction;
-		paths[index + row_size * length].mask = mask;
-		paths[index + row_size * length].normal = normal;
-		paths[index + row_size * length].G = geometry_term(paths[index + length * row_size], paths[index + (length - 1) * row_size]);
-		paths[index + row_size * length].pC = pC;
-		paths[index + row_size * length].pL = pL;
-		paths[index + row_size * length].hit_light = 0;
+		paths[index + row_size * (length - skip)].origin = origin;
+		paths[index + row_size * (length - skip)].direction = direction;
+		paths[index + row_size * (length - skip)].mask = mask;
+		paths[index + row_size * (length - skip)].normal = normal;
+		paths[index + row_size * (length - skip)].G = G_buffer * geometry_term(paths[index + (length - skip) * row_size], paths[index + ((length - skip) - 1) * row_size]);
+		paths[index + row_size * (length - skip)].pC = pC;
+		paths[index + row_size * (length - skip)].pL = pL;
+		paths[index + row_size * (length - skip)].hit_light = 0;
+
+		G_buffer = 1.0f;
 
 		pC = dot(out, normal) / (PI);
 
@@ -737,7 +753,7 @@ __kernel void trace_paths(__global Path *paths,
 			mask *= 2.0f;
 
 	}
-	path_lengths[index] = length;
+	path_lengths[index] = (length - skip);
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
 }
