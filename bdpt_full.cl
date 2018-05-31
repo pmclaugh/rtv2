@@ -215,7 +215,7 @@ static float3 direction_cos_hemisphere(float3 x, float3 y, float u1, float theta
 	return normalize(x * r * native_cos(theta) + y * r * native_sin(theta) + normal * native_sqrt(max(0.0f, 1.0f - u1)));
 }
 
-static float3 specular_BRDF_sample(float3 direction, float3 normal, float3 spec, int way, uint *seed0, uint *seed1)
+static float3 specular_BRDF_sample(float3 direction, float3 normal, float roughness, int way, uint *seed0, uint *seed1)
 {
 	float3 spec_dir = normalize(direction - 2.0f * dot(direction, normal) * normal);
 
@@ -227,7 +227,7 @@ static float3 specular_BRDF_sample(float3 direction, float3 normal, float3 spec,
 	// float r1 = get_random(seed0, seed1);
 	// float r2 = get_random(seed0, seed1);
 	// float phi = 2.0f * PI * r1;
-	// float theta = acos(pow((1.0f - r2), 1.0f / (100.0f * (spec.x + spec.y + spec.z))));
+	// float theta = acos(pow((1.0f - r2), 1.0f / (100.0f * roughness)));
 
 	// float3 x = hem_x * sin(theta) * cos(phi);
 	// float3 y = hem_y * sin(theta) * sin(phi);
@@ -473,6 +473,8 @@ __kernel void connect_paths(__global Path *paths,
 	for (int t = 2; t <= camera_length; t++)
 	{
 		Path camera_vertex = CAMERA_VERTEX(t - 1);
+		if (camera_vertex.spec == 1)
+			continue ;
 		for (int s = 0; s <= light_length; s++)
 		{
 			if (s == 0)
@@ -494,6 +496,8 @@ __kernel void connect_paths(__global Path *paths,
 				continue ;
 			}
 			Path light_vertex = LIGHT_VERTEX(s - 1);
+			if (light_vertex.spec == 1)
+				continue ;
 
 			float3 origin, direction, distance;
 			origin = camera_vertex.origin;
@@ -597,7 +601,7 @@ static float3 fetch_tex(	float3 txcrd,
 	return out;
 }
 
-static void fetch_all_tex(__global int *M, __global Material *mats, __global uchar *tex, int ind, float3 txcrd, float3 *diff, float3 *spec, float3 *bump, float3 *trans, float3 *Ke)
+static void fetch_all_tex(__global int *M, __global Material *mats, __global uchar *tex, int ind, float3 txcrd, float3 *diff, float3 *spec, float3 *bump, float3 *trans, float3 *Ke, float *roughness)
 {
 	const Material mat = mats[M[ind / 3]];
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : BLACK;
@@ -605,6 +609,7 @@ static void fetch_all_tex(__global int *M, __global Material *mats, __global uch
 	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : mat.Ks;
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 	*Ke = mat.Ke;
+	*roughness = mat.roughness;
 }
 
 static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float3 sample_N, float3 bump)
@@ -709,7 +714,8 @@ __kernel void trace_paths(__global Path *paths,
 
 		//get all texture-like values
 		float3 diff, spec, bump, trans, Ke;
-		fetch_all_tex(M, mats, tex, ind, txcrd, &diff, &spec, &bump, &trans, &Ke);
+		float roughness;
+		fetch_all_tex(M, mats, tex, ind, txcrd, &diff, &spec, &bump, &trans, &Ke, &roughness);
 
 		// did we hit a light?
 		if (dot(Ke, Ke) > 0.0f)
@@ -733,9 +739,9 @@ __kernel void trace_paths(__global Path *paths,
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
 
 		float3 out;
-		if (dot(spec, spec) > 0.0f)
+		if (roughness > 0.0f)
 		{
-			out = specular_BRDF_sample(direction, normal, spec, way, &seed0, &seed1);
+			out = specular_BRDF_sample(direction, normal, roughness, way, &seed0, &seed1);
 			mask *= spec;
 			paths[index + row_size * length].spec = 1;
 		}

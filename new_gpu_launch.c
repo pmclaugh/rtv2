@@ -36,7 +36,6 @@ typedef struct s_gpu_path{
 	cl_float pC;
 	cl_float pL;
 	cl_int hit_light;
-	cl_int spec;
 }				gpu_path;
 
 typedef struct s_gpu_camera {
@@ -596,16 +595,31 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	for (int i = 0; i < CL->numDevices; i++)
 		clSetKernelArg(handle->init_paths[i], 0, sizeof(gpu_camera), &gcam);
 
+	//zero out relevant buffers
+	int zero = 0;
+	for (int i = 0; i < CL->numDevices; i++)
+	{
+		clEnqueueFillBuffer(CL->commands[i], handle->d_outputs[i], &zero, sizeof(int), 0, sizeof(cl_float3) * half_worksize, 0, NULL, NULL);
+		clEnqueueFillBuffer(CL->commands[i], handle->d_counts[i], &zero, sizeof(int), 0, sizeof(cl_int) * worksize, 0, NULL, NULL);
+		clEnqueueFillBuffer(CL->commands[i], handle->d_paths[i], &zero, sizeof(int), 0, sizeof(gpu_path) * worksize * 10, 0, NULL, NULL);
+	}
+	for (int i = 0; i < CL->numDevices; i++)
+		clFinish(CL->commands[i]);
+
 	//ACTUAL LAUNCH TIME
 	cl_event begin, finish;
 	cl_ulong start, end;
-	// cl_event collectE, traverseE, fetchE, bounceE;
+	cl_event init, trace, connect;
 	for (int i = 0; i < CL->numDevices; i++)
 		for (int j = 0; j < samples; j++)
 		{
-			clEnqueueNDRangeKernel(CL->commands[i], handle->init_paths[i], 1, 0, &worksize, &localsize, 0, NULL, j == 0 && i == 0 ? &begin : NULL);
-			clEnqueueNDRangeKernel(CL->commands[i], handle->trace_paths[i], 1, 0, &worksize, &localsize, 0, NULL, NULL);
-			clEnqueueNDRangeKernel(CL->commands[i], handle->connect_paths[i], 1, 0, &half_worksize, &localsize, 0, NULL, j == samples - 1 && i == CL->numDevices - 1? &finish : NULL);
+			clEnqueueNDRangeKernel(CL->commands[i], handle->init_paths[i], 1, 0, &worksize, &localsize, j == 0 ? 0 : 1, j == 0 ? NULL : &connect, &init);
+			if (j == 0 && i == 0)
+				begin = init;
+			clEnqueueNDRangeKernel(CL->commands[i], handle->trace_paths[i], 1, 0, &worksize, &localsize, 1, &init, &trace);
+			clEnqueueNDRangeKernel(CL->commands[i], handle->connect_paths[i], 1, 0, &half_worksize, &localsize, 1, &trace, &connect);
+			if (j == samples - 1 && i == CL->numDevices - 1)
+				finish = connect;
 		}
 
 	for (int i = 0; i < CL->numDevices; i++)
