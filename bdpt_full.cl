@@ -17,8 +17,8 @@
 
 #define RR_PROB 0.1f
 
-#define CAMERA_LENGTH 4
-#define LIGHT_LENGTH 4
+#define CAMERA_LENGTH 5
+#define LIGHT_LENGTH 5
 
 typedef struct s_ray {
 	float3 origin;
@@ -571,7 +571,7 @@ static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float
 	return normalize(tangent * bump.x + bitangent * bump.y + sample_N * bump.z);
 }
 
-#define LENGTH length
+#define LENGTH (length - skip)
 
 __kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -612,6 +612,10 @@ __kernel void trace_paths(__global Path *paths,
 	float pL = 1.0f / (2.0f * PI);
 
 	int hit_light = 0;
+
+	Path spec_point;
+	float G_buffer = 1.0f;
+	int skip = 0;
 
 	for (length = 1; length < limit; length++)
 	{	
@@ -662,9 +666,13 @@ __kernel void trace_paths(__global Path *paths,
 		if (ind == -1)
 			break ;
 
+
 		//get normal and texture coordinate
 		float3 normal, true_normal, txcrd;
 		surface_vectors(V, N, T, direction, ind, u, v, &normal, &true_normal, &txcrd);
+
+		//update position
+		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
 
 		//get all texture-like values
 		float3 diff, spec, bump, trans, Ke;
@@ -673,8 +681,18 @@ __kernel void trace_paths(__global Path *paths,
 		// bump map
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
 
-		
-		float3 out;
+		if (dot(spec, spec) > 0.0f)
+		{
+			//specular hit
+			spec_point.origin = origin;
+			spec_point.normal = normal;
+			G_buffer *= geometry_term(spec_point, paths[index + row_size * (LENGTH - 1)]);
+			direction = 2.0f * dot(normal, -1.0f * direction) * normal + direction;
+			mask *= spec;
+			skip++;
+			continue;
+		}
+
 		mask *= diff;
 		if (way)
 		{
@@ -682,15 +700,20 @@ __kernel void trace_paths(__global Path *paths,
 			mask *= cosine;
 			paths[index + row_size * (LENGTH - 1)].pC = cosine / PI;
 		}
+
 		//sample and evaluate BRDF
-		out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
+		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 		
 		//update stuff
-		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
+		
 		paths[index + row_size * LENGTH].origin = origin;
 		paths[index + row_size * LENGTH].mask = mask;
 		paths[index + row_size * LENGTH].normal = normal;
-		paths[index + row_size * LENGTH].G = geometry_term(paths[index + LENGTH * row_size], paths[index + (LENGTH - 1) * row_size]);
+		if (G_buffer == 1.0f)
+			paths[index + row_size * LENGTH].G = geometry_term(paths[index + LENGTH * row_size], paths[index + (LENGTH - 1) * row_size]);
+		else
+			paths[index + row_size * LENGTH].G = G_buffer;
+		G_buffer = 1.0f;
 		paths[index + row_size * LENGTH].pC = pC;
 		paths[index + row_size * LENGTH].pL = pL;
 		paths[index + row_size * LENGTH].hit_light = 0;
@@ -701,7 +724,7 @@ __kernel void trace_paths(__global Path *paths,
 			mask *= 2.0f;
 	}
 
-	path_lengths[index] = length;
+	path_lengths[index] = length - skip;
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
 }
