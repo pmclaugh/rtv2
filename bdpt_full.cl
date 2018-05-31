@@ -17,8 +17,8 @@
 
 #define RR_PROB 0.1f
 
-#define CAMERA_BOUNCES 3
-#define LIGHT_BOUNCES 3
+#define CAMERA_LENGTH 4
+#define LIGHT_LENGTH 4
 
 typedef struct s_ray {
 	float3 origin;
@@ -426,7 +426,7 @@ static float geometry_term(Path a, Path b)
 
 #define PC(x) ((x) < s - 1 ? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x)).pC))
 
-#define RESAMPLE_COUNT 1
+#define RESAMPLE_COUNT 4
 
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
@@ -454,23 +454,6 @@ __kernel void connect_paths(__global Path *paths,
 			Path camera_vertex = CAMERA_VERTEX(t - 1);
 			for (int s = 1; s <= light_length; s++)
 			{
-				if (s == 0)
-				{
-					// sum += WHITE;
-					if (camera_vertex.hit_light)
-					{
-						//need to comment this out for now, weights are out of sync
-						// float weight = 0.0f;
-						// for (int k = 0; k < t + 1; k++)
-						// 	weight += 1.0f / (CAMERA_VERTEX(k).G);
-						// float ratio = t + 1;
-						// sum += camera_vertex.mask / (ratio * weight);
-						// sum += WHITE;
-						count++;
-						break ;
-					}
-					continue ;
-				}
 				Path light_vertex = LIGHT_VERTEX(s - 1);
 
 				float3 origin, direction, distance;
@@ -588,7 +571,7 @@ static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float
 	return normalize(tangent * bump.x + bitangent * bump.y + sample_N * bump.z);
 }
 
-#define LENGTH (length - skip - subskip)
+#define LENGTH length
 
 __kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -618,24 +601,20 @@ __kernel void trace_paths(__global Path *paths,
 	origin = paths[index].origin;
 	direction = paths[index].direction;
 	mask = paths[index].mask;
-	path_lengths[index] = 1;
 	old_dir = direction;
 	
 	int way = index % 2;
-	int limit = way ? LIGHT_BOUNCES : CAMERA_BOUNCES;
+	int limit = way ? LIGHT_LENGTH : CAMERA_LENGTH;
 
-	int length = 1;
-	int skip = 0;
-	int subskip = 0;
-	float G_buffer = 1.0f;
-	Path spec_point;
+	int length;
 
 	float pC = 1.0f;
 	float pL = 1.0f / (2.0f * PI);
 
+	int hit_light = 0;
+
 	for (length = 1; length < limit; length++)
-	{
-		inv_dir = 1.0f / direction;
+	{	
 		//reset stack and results
 		stack[0] = 0;
 		int s_i = 1;
@@ -643,6 +622,7 @@ __kernel void trace_paths(__global Path *paths,
 		t = FLT_MAX;
 		int ind = -1;
 
+		inv_dir = 1.0f / direction;
 		//find collision point
 		while (s_i)
 		{
@@ -690,41 +670,11 @@ __kernel void trace_paths(__global Path *paths,
 		float3 diff, spec, bump, trans, Ke;
 		fetch_all_tex(M, mats, tex, ind, txcrd, &diff, &spec, &bump, &trans, &Ke);
 
-		// did we hit a light?
-		if (dot(Ke, Ke) > 0.0f)
-		{
-			if (!way)
-			{
-				paths[index + row_size * LENGTH].origin = origin + direction * t + true_normal * NORMAL_SHIFT;
-				paths[index + row_size * LENGTH].mask = mask * Ke * BRIGHTNESS;
-				paths[index + row_size * LENGTH].normal = normal;
-				paths[index + row_size * LENGTH].G = geometry_term(paths[index + LENGTH * row_size], paths[index + (LENGTH - 1) * row_size]);
-				paths[index + row_size * LENGTH].pC = pC;
-				paths[index + row_size * LENGTH].pL = pL;
-				paths[index + row_size * LENGTH].hit_light = 1;
-				length++;
-			}
-			break ;
-		}
-
 		// bump map
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
 
-		// did we hit a specular surface?
-		if (dot(spec, spec) > 0.0f)
-		{
-			origin = origin + direction * t + true_normal * NORMAL_SHIFT;
-			direction = normalize(2.0f * dot(-1.0f * direction, normal) * normal + direction);
-			spec_point.origin = origin;
-			spec_point.normal = normal;
-			if (G_buffer == 1.0f)
-				G_buffer = geometry_term(spec_point, paths[index + (LENGTH - 1) * row_size]);
-			mask *= spec;
-			subskip++;
-			continue;
-		}
-
-		//color
+		
+		float3 out;
 		mask *= diff;
 		if (way)
 		{
@@ -732,37 +682,26 @@ __kernel void trace_paths(__global Path *paths,
 			mask *= cosine;
 			paths[index + row_size * (LENGTH - 1)].pC = cosine / PI;
 		}
-
 		//sample and evaluate BRDF
-		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
+		out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 		
 		//update stuff
 		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
-		direction = out;
 		paths[index + row_size * LENGTH].origin = origin;
-		paths[index + row_size * LENGTH].direction = direction;
 		paths[index + row_size * LENGTH].mask = mask;
 		paths[index + row_size * LENGTH].normal = normal;
-		if (G_buffer == 1.0f)
-			paths[index + row_size * LENGTH].G = geometry_term(paths[index + LENGTH * row_size], paths[index + (LENGTH - 1) * row_size]);
-		else
-		{
-			paths[index + row_size * LENGTH].G = G_buffer;
-			G_buffer = 1.0f;
-			skip += subskip;
-			subskip = 0;
-		}
+		paths[index + row_size * LENGTH].G = geometry_term(paths[index + LENGTH * row_size], paths[index + (LENGTH - 1) * row_size]);
 		paths[index + row_size * LENGTH].pC = pC;
 		paths[index + row_size * LENGTH].pL = pL;
 		paths[index + row_size * LENGTH].hit_light = 0;
 
+		direction = out;
 		pC = dot(out, normal) / (PI);
-
 		if (way)
 			mask *= 2.0f;
 	}
 
-	path_lengths[index] = length - skip;
+	path_lengths[index] = length;
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
 }

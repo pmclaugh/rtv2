@@ -601,7 +601,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	{
 		clEnqueueFillBuffer(CL->commands[i], handle->d_outputs[i], &zero, sizeof(int), 0, sizeof(cl_float3) * half_worksize, 0, NULL, NULL);
 		clEnqueueFillBuffer(CL->commands[i], handle->d_counts[i], &zero, sizeof(int), 0, sizeof(cl_int) * worksize, 0, NULL, NULL);
-		clEnqueueFillBuffer(CL->commands[i], handle->d_paths[i], &zero, sizeof(int), 0, sizeof(gpu_path) * worksize, 0, NULL, NULL);
+		clEnqueueFillBuffer(CL->commands[i], handle->d_paths[i], &zero, sizeof(int), 0, sizeof(gpu_path) * worksize * 10, 0, NULL, NULL);
 	}
 	for (int i = 0; i < CL->numDevices; i++)
 		clFinish(CL->commands[i]);
