@@ -320,7 +320,7 @@ __kernel void init_paths(const Camera cam,
 		normal = direction;
 		mask = WHITE * dot(prime_direction, direction);
 
-		pC = 1.0f;// / (float)(cam.width * cam.width);
+		pC = 1.0f / (float)(cam.width * cam.width);
 		pL = 1.0f / (2.0f * PI);
 		mask /= pC;
 	}
@@ -424,9 +424,9 @@ static float geometry_term(Path a, Path b)
 #define GEOM(x) ((x) < s ? (LIGHT_VERTEX(x).G) : ((x) == s ? this_geom : (CAMERA_VERTEX(s + t - (x)).G)))
 #define PL(x) ((x) < s ? (LIGHT_VERTEX(x).pL) : (x) == s ? this_pL : (CAMERA_VERTEX(s + t - (x)).pL))
 
-#define PC(x) ((x) < s - 1 ? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x)).pC))
+#define PC(x) ((x) < s - 1? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x) - 1).pC))
 
-#define RESAMPLE_COUNT 4
+#define RESAMPLE_COUNT 1
 
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
@@ -438,13 +438,12 @@ __kernel void connect_paths(__global Path *paths,
 	int index = get_global_id(0);
 	int row_size = 2 * get_global_size(0);
 
-	int camera_length = path_lengths[2 * index];
-	
-
 	float3 sum = BLACK;
-	int count = 0;
 
 	int jump = row_size / RESAMPLE_COUNT;
+
+	int camera_length = path_lengths[2 * index];
+	float p[16];
 
 	for (int sample = 0; sample < RESAMPLE_COUNT; sample++)
 	{
@@ -452,7 +451,41 @@ __kernel void connect_paths(__global Path *paths,
 		for (int t = 2; t <= camera_length; t++)
 		{
 			Path camera_vertex = CAMERA_VERTEX(t - 1);
-			for (int s = 1; s <= light_length; s++)
+
+			//handle s==0
+			int s = 0;
+			if (camera_vertex.hit_light)
+			{
+				float3 contrib = camera_vertex.mask * BRIGHTNESS;
+				//initialize with ratios
+				for (int k = 0; k < t; k++)
+				{
+					//something in here is wrong, reevaluate when not hungry
+					if (k == 0)
+						p[k] = (LIGHT_VERTEX(0).pL) / (CAMERA_VERTEX(t - 1).pC * CAMERA_VERTEX(t - 1).G);
+					else
+						p[k] = (CAMERA_VERTEX(t - k - 1).pL * CAMERA_VERTEX(t - k).G) / (CAMERA_VERTEX(t - k - 1).pC * CAMERA_VERTEX(t - k - 1).G);
+				}
+				//multiply through
+				for (int k = 0; k < t; k++)
+					p[k + 1] = p[k + 1] * p[k];
+				//append 1.0f
+				p[t] = 1.0f;
+
+				float weight = 0.0f;
+				for (int k = 0; k < t + 1; k++)
+					weight += p[k];
+
+				float ratio = (float)(t + 1);
+
+				float test = 1.0f / (ratio * weight);
+
+				if (test == test)
+					sum += contrib * test;
+				break;
+			}
+
+			for (s = 1; s <= light_length; s++)
 			{
 				Path light_vertex = LIGHT_VERTEX(s - 1);
 
@@ -469,8 +502,6 @@ __kernel void connect_paths(__global Path *paths,
 					continue ;
 				if (!visibility_test(origin, direction, d, boxes, V))
 					continue ;
-				
-				count++;
 
 				float this_geom = geometry_term(camera_vertex, light_vertex);
 				float this_pL = 1.0f / (2.0f * PI);
@@ -479,8 +510,7 @@ __kernel void connect_paths(__global Path *paths,
 				float3 contrib = light_vertex.mask * camera_vertex.mask * camera_cos * this_geom;
 				if (s == 1)
 					contrib *= light_cos;
-
-				float p[16];
+				
 				//initialize with ratios
 				for (int k = 0; k < s + t; k++)
 					p[k] = (GEOM(k) * PL(k)) / (GEOM(k + 1) * PC(k));
@@ -571,7 +601,7 @@ static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float
 	return normalize(tangent * bump.x + bitangent * bump.y + sample_N * bump.z);
 }
 
-#define LENGTH (length - skip)
+#define LENGTH length
 
 __kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -613,11 +643,7 @@ __kernel void trace_paths(__global Path *paths,
 
 	int hit_light = 0;
 
-	Path spec_point;
-	float G_buffer = 1.0f;
-	int skip = 0;
-
-	for (length = 1; length < limit; length++)
+	for (length = 1; length < limit && !hit_light; length++)
 	{	
 		//reset stack and results
 		stack[0] = 0;
@@ -681,42 +707,35 @@ __kernel void trace_paths(__global Path *paths,
 		// bump map
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
 
-		if (dot(spec, spec) > 0.0f)
-		{
-			//specular hit
-			spec_point.origin = origin;
-			spec_point.normal = normal;
-			G_buffer *= geometry_term(spec_point, paths[index + row_size * (LENGTH - 1)]);
-			direction = 2.0f * dot(normal, -1.0f * direction) * normal + direction;
-			mask *= spec;
-			skip++;
-			continue;
-		}
-
-		mask *= diff;
-		if (way)
-		{
-			float cosine = max(0.0f, dot(-1.0f * direction, normal));
-			mask *= cosine;
-			paths[index + row_size * (LENGTH - 1)].pC = cosine / PI;
-		}
-
 		//sample and evaluate BRDF
 		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
-		
+
+		if (dot(Ke, Ke) > 0.0f)
+		{
+			if (way)
+				break;
+			mask *= Ke * dot(-1.0f * direction, normal); //Le(0) * Le(0->1)
+			hit_light = 1;
+		}
+		else
+		{
+			mask *= diff;
+			if (way)
+			{
+				float cosine = fabs(dot(-1.0f * direction, normal));
+				mask *= cosine;
+				paths[index + row_size * (LENGTH - 1)].pC = cosine / PI;
+			}
+		}
 		//update stuff
 		
 		paths[index + row_size * LENGTH].origin = origin;
 		paths[index + row_size * LENGTH].mask = mask;
 		paths[index + row_size * LENGTH].normal = normal;
-		if (G_buffer == 1.0f)
-			paths[index + row_size * LENGTH].G = geometry_term(paths[index + LENGTH * row_size], paths[index + (LENGTH - 1) * row_size]);
-		else
-			paths[index + row_size * LENGTH].G = G_buffer;
-		G_buffer = 1.0f;
+		paths[index + row_size * LENGTH].G = geometry_term(paths[index + LENGTH * row_size], paths[index + (LENGTH - 1) * row_size]);
 		paths[index + row_size * LENGTH].pC = pC;
 		paths[index + row_size * LENGTH].pL = pL;
-		paths[index + row_size * LENGTH].hit_light = 0;
+		paths[index + row_size * LENGTH].hit_light = hit_light;
 
 		direction = out;
 		pC = dot(out, normal) / (PI);
@@ -724,7 +743,7 @@ __kernel void trace_paths(__global Path *paths,
 			mask *= 2.0f;
 	}
 
-	path_lengths[index] = length - skip;
+	path_lengths[index] = length;
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
 }
