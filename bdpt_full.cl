@@ -293,7 +293,7 @@ __kernel void init_paths(const Camera cam,
 		origin = (1.0f - sqrt(r1)) * v0 + (sqrt(r1) * (1.0f - r2)) * v1 + (r2 * sqrt(r1)) * v2 + NORMAL_SHIFT * normal;
 
 		pC = 1.0f / (2.0f * PI);
-		pL = 1.0f / ((float)light_poly_count * surface_area(light, V));
+		pL = 1.0f / (surface_area(light, V));
 		mask /= pL;
 	}
 	else

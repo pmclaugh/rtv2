@@ -544,7 +544,8 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 							__global int *path_lengths,
 							__global Box *boxes,
 							__global float3 *V,
-							__global float3 *output)
+							__global float3 *output,
+							const Camera cam)
 		*/
 		clSetKernelArg(handle->connect_paths[i], 0, sizeof(cl_mem), &handle->d_paths[i]);
 		clSetKernelArg(handle->connect_paths[i], 1, sizeof(cl_mem), &handle->d_counts[i]);
@@ -593,7 +594,10 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 
 	//camera may need update
 	for (int i = 0; i < CL->numDevices; i++)
+	{
 		clSetKernelArg(handle->init_paths[i], 0, sizeof(gpu_camera), &gcam);
+		clSetKernelArg(handle->connect_paths[i], 5, sizeof(gpu_camera), &gcam);
+	}
 
 	//ACTUAL LAUNCH TIME
 	cl_event begin, finish;
