@@ -39,6 +39,7 @@ void save_file(t_env *env, int frame_no)
 void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
 {
 	double Lw = 0.0;
+	int *nanflags = calloc(resolution, sizeof(int));
 	for (int i = 0; i < resolution; i++)
 	{
 		double scale = count[i] > 0 ? 1.0 / (double)(count[i]) : 1;
@@ -51,7 +52,10 @@ void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
 		if (this_lw == this_lw)
 			Lw += this_lw;
 		else
+		{
 			printf("NaN alert\n");
+			nanflags[i] = 1;
+		}
 	}
 
 	Lw /= (double)resolution;
@@ -66,7 +70,15 @@ void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
 		data->pixels[i].x = data->pixels[i].x / (data->pixels[i].x + 1.0);
 		data->pixels[i].y = data->pixels[i].y / (data->pixels[i].y + 1.0);
 		data->pixels[i].z = data->pixels[i].z / (data->pixels[i].z + 1.0);
+
+		if (nanflags[i])
+		{
+			data->pixels[i].x = 0.0;
+			data->pixels[i].y = 1.0;
+			data->pixels[i].z = 0.0;
+		}
 	}
+	free(nanflags);
 }
 
 void		path_tracer(t_env *env)

@@ -452,7 +452,7 @@ __kernel void connect_paths(__global Path *paths,
 		{
 			Path camera_vertex = CAMERA_VERTEX(t - 1);
 
-			//handle s==0
+			// //handle s==0
 			int s = 0;
 			if (camera_vertex.hit_light)
 			{
@@ -460,15 +460,15 @@ __kernel void connect_paths(__global Path *paths,
 				//initialize with ratios
 				for (int k = 0; k < t; k++)
 				{
-					//something in here is wrong, reevaluate when not hungry
 					if (k == 0)
-						p[k] = (LIGHT_VERTEX(0).pL) / (CAMERA_VERTEX(t - 1).pC * CAMERA_VERTEX(t - 1).G);
+						p[k] = (LIGHT_VERTEX(0).pL) / (camera_vertex.pC * camera_vertex.G);
 					else
 						p[k] = (CAMERA_VERTEX(t - k - 1).pL * CAMERA_VERTEX(t - k).G) / (CAMERA_VERTEX(t - k - 1).pC * CAMERA_VERTEX(t - k - 1).G);
 				}
 				//multiply through
 				for (int k = 0; k < t; k++)
 					p[k + 1] = p[k + 1] * p[k];
+
 				//append 1.0f
 				p[t] = 1.0f;
 
@@ -480,11 +480,10 @@ __kernel void connect_paths(__global Path *paths,
 
 				float test = 1.0f / (ratio * weight);
 
-				if (test == test)
+				if (test == test && weight == weight)
 					sum += contrib * test;
-				break;
+				continue;
 			}
-
 			for (s = 1; s <= light_length; s++)
 			{
 				Path light_vertex = LIGHT_VERTEX(s - 1);
@@ -714,7 +713,7 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			if (way)
 				break;
-			mask *= Ke * dot(-1.0f * direction, normal); //Le(0) * Le(0->1)
+			mask *= Ke * max(0.0f, dot(-1.0f * direction, normal)); //Le(0) * Le(0->1)
 			hit_light = 1;
 		}
 		else
