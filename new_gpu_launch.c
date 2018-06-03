@@ -164,7 +164,6 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int worksize)
 	TN = calloc(s->face_count, sizeof(cl_float3));
 	BTN = calloc(s->face_count, sizeof(cl_float3));
 
-	cl_int light_poly_count = 0;
 	for (int i = 0; i < s->face_count; i++)
 	{
 		Face f = s->faces[i];
@@ -194,27 +193,30 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int worksize)
 			TN[i] = unit_vec(vec_scale(vec_sub(vec_scale(dp1, duv2.y), vec_scale(dp2, duv1.y)), r));
 			BTN[i] = unit_vec(cross(TN[i], cross(vec_sub(f.verts[1], f.verts[0]), vec_sub(f.verts[2], f.verts[0]))));
 		}
-		if (dot(simple_mats[f.mat_ind].Ke, simple_mats[f.mat_ind].Ke) > 0.0f)
-			light_poly_count++;
 	}
 
-	printf("lights\n");
-	cl_int3 *lights = calloc(light_poly_count, sizeof(cl_int3));
-	light_poly_count = 0;
-	for (int i = 0; i < s->face_count; i++)
+	//LIGHTS
+	cl_float3 *lights = calloc(s->light_face_count * 3, sizeof(cl_float3));
+	cl_int light_poly_count = 0;
+	for (int i = 0; i < s->light_face_count; i++)
 	{
-		Face f = s->faces[i];
-		if (dot(simple_mats[f.mat_ind].Ke, simple_mats[f.mat_ind].Ke) > 0.0f)
-			lights[light_poly_count++] = (cl_int3){i * 3, i * 3 + 1, i * 3 + 2};
+		Face L = s->light_faces[i];
+		if (dot(simple_mats[L.mat_ind].Ke, simple_mats[L.mat_ind].Ke) > 0.0f)
+		{
+			lights[light_poly_count * 3] = L.verts[0];
+			lights[light_poly_count * 3 + 1] = L.verts[1];
+			lights[light_poly_count * 3 + 2] = L.verts[2];
+			light_poly_count++;
+		}
 	}
-
-	printf("lights done\n");
+	printf("prep scene reports %d light faces\n", light_poly_count);
 	//BINS
 	gpu_bin *flat_bvh = flatten_bvh(s);
-
+	printf("flattened\n");
 	//COMBINE
 	gpu_scene *gs = calloc(1, sizeof(gpu_scene));
 	*gs = (gpu_scene){V, T, N, M, TN, BTN, s->face_count * 3, lights, light_poly_count, flat_bvh, s->bin_count, h_tex, tex_size, simple_mats, s->mat_count, h_seeds, worksize * 2 * CL->numDevices * CL->numPlatforms};
+	printf("prepped\n");
 	return gs;
 }
 
@@ -462,7 +464,7 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 		handle->d_materials[i] = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_mat) * scene->mat_count, scene->mats, NULL);
 		handle->d_tex[i] = 				clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * scene->tex_size, scene->tex, NULL);
 		handle->d_material_indices[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * scene->tri_count / 3, scene->M, NULL);
-		handle->d_lights[i] = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int3) * scene->light_poly_count, scene->lights, NULL);
+		handle->d_lights[i] = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * 3 * scene->light_poly_count, scene->lights, NULL);
 	}
 
 	free(blank_output);
@@ -580,6 +582,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	if (!handle)
 		handle = gpu_alloc(CL, scene, worksize);
 
+	// printf("all big setup functions done\n");
 
 	gpu_camera gcam;
 	gcam.pos = cam.pos;
@@ -598,6 +601,10 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		clSetKernelArg(handle->init_paths[i], 0, sizeof(gpu_camera), &gcam);
 		clSetKernelArg(handle->connect_paths[i], 5, sizeof(gpu_camera), &gcam);
 	}
+
+
+	// printf("ready to launch\n");
+	// getchar();
 
 	//ACTUAL LAUNCH TIME
 	cl_event begin, finish;

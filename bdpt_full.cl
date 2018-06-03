@@ -241,10 +241,10 @@ static float3 diffuse_BDRF_eval(float3 to_eye, float3 normal, float3 to_light, f
 	return color * dot(normal, to_light) / PI;
 }
 
-static float surface_area(int3 triangle, __global float3 *V)
+static float surface_area(int index, __global float3 *lights)
 {
-	const float3 e1 = V[triangle.y] - V[triangle.x];
-	const float3 e2 = V[triangle.z] - V[triangle.x];
+	const float3 e1 = lights[index * 3 + 1] - lights[index * 3];
+	const float3 e2 = lights[index * 3 + 2] - lights[index * 3];
 	float angle = acos(dot(normalize(e1), normalize(e2)));
 	return (native_sqrt(dot(e1, e1)) * native_sqrt(dot(e2, e2)) / 2.0f) * native_sin(angle);
 }
@@ -253,7 +253,7 @@ __kernel void init_paths(const Camera cam,
 						__global uint *seeds,
 						__global Path *paths,
 						__global int *path_lengths,
-						__global int3 *lights,
+						__global float3 *lights,
 						const uint light_poly_count,
 						__global float3 *V,
 						__global float3 *N,
@@ -275,16 +275,15 @@ __kernel void init_paths(const Camera cam,
 		//pick a random light triangle
 		int light_ind = (int)floor((float)light_poly_count * get_random(&seed0, &seed1));
 		light_ind %= light_poly_count;
-		int3 light = lights[light_ind];
 		
 		float3 v0, v1, v2;
-		v0 = V[light.x];
-		v1 = V[light.y];
-		v2 = V[light.z];
-		normal = normalize(N[light.x]);
+		v0 = lights[light_ind * 3];
+		v1 = lights[light_ind * 3 + 1];
+		v2 = lights[light_ind * 3 + 2];
+		normal = normalize(cross(normalize(v1 - v0), normalize(v2-v0)));
 		direction = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 
-		float3 Ke = mats[M[light.x / 3]].Ke;
+		float3 Ke = WHITE;
 		mask = Ke * BRIGHTNESS * dot(direction, normal);		
 
 		//pick random point just off of that triangle
@@ -293,7 +292,7 @@ __kernel void init_paths(const Camera cam,
 		origin = (1.0f - sqrt(r1)) * v0 + (sqrt(r1) * (1.0f - r2)) * v1 + (r2 * sqrt(r1)) * v2 + NORMAL_SHIFT * normal;
 
 		pC = 1.0f / (2.0f * PI);
-		pL = 1.0f / (surface_area(light, V));
+		pL = 1.0f / (surface_area(light_ind, lights));
 		mask /= pL;
 	}
 	else
@@ -426,7 +425,7 @@ static float geometry_term(Path a, Path b)
 
 #define PC(x) ((x) < s - 1? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x) - 1).pC))
 
-#define RESAMPLE_COUNT 4
+#define RESAMPLE_COUNT 1
 
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
