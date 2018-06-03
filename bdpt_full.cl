@@ -426,7 +426,7 @@ static float geometry_term(Path a, Path b)
 
 #define PC(x) ((x) < s - 1? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x) - 1).pC))
 
-#define RESAMPLE_COUNT 1
+#define RESAMPLE_COUNT 4
 
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,

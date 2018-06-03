@@ -115,7 +115,7 @@ void		path_tracer(t_env *env)
 
 			env->pt->count[i] = 0;
 		}
-		env->cam.pos = vec_add(env->cam.pos, (cl_float3){1.0f, 0.0f, 0.0f});
+		env->cam.pos = vec_add(env->cam.pos, (cl_float3){-4.0f, 0.0f, 0.0f});
 	}
 	printf("sample %d done\n", env->samples);
 }
