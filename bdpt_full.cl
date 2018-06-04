@@ -15,10 +15,11 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define RR_PROB 0.1f
+#define RR_PROB 0.5f
+#define RR_THRESHOLD 3
 
-#define CAMERA_LENGTH 5
-#define LIGHT_LENGTH 5
+#define CAMERA_LENGTH 10
+#define LIGHT_LENGTH 10
 
 typedef struct s_ray {
 	float3 origin;
@@ -426,6 +427,9 @@ static float geometry_term(Path a, Path b)
 
 #define PC(x) ((x) < s - 1? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x) - 1).pC))
 
+#define QC(x) (s + t - (x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
+#define QL(x) ((x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
+
 #define RESAMPLE_COUNT 1
 
 __kernel void connect_paths(__global Path *paths,
@@ -463,7 +467,7 @@ __kernel void connect_paths(__global Path *paths,
 					if (k == 0)
 						p[k] = (LIGHT_VERTEX(0).pL) / (camera_vertex.pC * camera_vertex.G);
 					else
-						p[k] = (CAMERA_VERTEX(t - k - 1).pL * CAMERA_VERTEX(t - k).G) / (CAMERA_VERTEX(t - k - 1).pC * CAMERA_VERTEX(t - k - 1).G);
+						p[k] = (QL(k) * CAMERA_VERTEX(t - k - 1).pL * CAMERA_VERTEX(t - k).G) / (QC(k) * CAMERA_VERTEX(t - k - 1).pC * CAMERA_VERTEX(t - k - 1).G);
 				}
 				//multiply through
 				for (int k = 0; k < t; k++)
@@ -512,7 +516,7 @@ __kernel void connect_paths(__global Path *paths,
 				
 				//initialize with ratios
 				for (int k = 0; k < s + t; k++)
-					p[k] = (GEOM(k) * PL(k)) / (GEOM(k + 1) * PC(k));
+					p[k] = (QL(k) * GEOM(k) * PL(k)) / (QC(k) * GEOM(k + 1) * PC(k));
 
 				//multiply through
 				for (int k = 0; k < s + t; k++)
@@ -726,8 +730,9 @@ __kernel void trace_paths(__global Path *paths,
 				paths[index + row_size * (LENGTH - 1)].pC = cosine / PI;
 			}
 		}
+
+
 		//update stuff
-		
 		paths[index + row_size * LENGTH].origin = origin;
 		paths[index + row_size * LENGTH].mask = mask;
 		paths[index + row_size * LENGTH].normal = normal;
@@ -736,10 +741,21 @@ __kernel void trace_paths(__global Path *paths,
 		paths[index + row_size * LENGTH].pL = pL;
 		paths[index + row_size * LENGTH].hit_light = hit_light;
 
-		direction = out;
+		pL = 1.0f / (2.0f * PI);
 		pC = dot(out, normal) / (PI);
 		if (way)
 			mask *= 2.0f;
+
+		//russian roulette
+		float p = length <= RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB;
+		if (get_random(&seed0, &seed1) < p)
+			mask /= p;
+		else
+		{
+			length++;
+			break;
+		}
+		direction = out;
 	}
 
 	path_lengths[index] = length;
