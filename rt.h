@@ -551,7 +551,7 @@ float			read_float(FILE *fp, const int file_endian, const int machine_endian);
 double			read_double(FILE *fp, const int file_endian, const int machine_endian);
 
 //face.c
-int get_face_elements(char *line, int *va, int *vta, int *vna, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc, int *vd, int *vtd, int *vnd);
+int get_face_elements(char *line, int *va, int *vta, int *vna, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc);
 int count_face_elements(const char *str);
 void break_down_poly(char *line, int triangle, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc);
 
@@ -582,3 +582,8 @@ void		run_sdl(t_env *env);
 
 //save_img.c
 void		save_img(cl_float3 *image, int dimension);
+
+//obj_import.c
+Map *load_bmp_map(char *rel_path, char *filename);
+Map *load_jpg_map(char *rel_path, char *filename);
+Map *load_tga_map(char *rel_path, char *filename);

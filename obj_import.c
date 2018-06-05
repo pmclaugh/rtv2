@@ -216,11 +216,11 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			//printf("loading a Ka\n");
 			m.map_Ka_path = calloc(512, 1);
 			sscanf(str, "map_Ka %s\n", m.map_Ka_path);
-			if (strstr(m.map_Ka_path, ".bmp"))
+			if (strstr(m.map_Ka_path, ".bmp") || strstr(m.map_Ka_path, ".BMP"))
 				m.map_Ka = load_bmp_map(rel_path, m.map_Ka_path);
-			else if (strstr(m.map_Ka_path, ".tga"))
+			else if (strstr(m.map_Ka_path, ".tga") || strstr(m.map_Ka_path, ".TGA"))
 				m.map_Ka = load_tga_map(rel_path, m.map_Ka_path);
-			else if (strstr(m.map_Ka_path, ".jpg") || strstr(m.map_Ka_path, ".jpeg"))
+			else if (strstr(m.map_Ka_path, ".jpg") || strstr(m.map_Ka_path, ".jpeg") || strstr(m.map_Ka_path, ".JPG") || strstr(m.map_Ka_path, ".JPEG"))
 				m.map_Ka = load_jpg_map(rel_path, m.map_Ka_path);
 		}
 		else if (strncmp(str, "map_Kd", 6) == 0)
@@ -228,11 +228,11 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			//printf("loading a Kd\n");
 			m.map_Kd_path = calloc(512, 1);
 			sscanf(str, "map_Kd %s\n", m.map_Kd_path);
-			if (strstr(m.map_Kd_path, ".bmp"))
+			if (strstr(m.map_Kd_path, ".bmp") || strstr(m.map_Kd_path, ".BMP"))
 				m.map_Kd = load_bmp_map(rel_path, m.map_Kd_path);
-			else if (strstr(m.map_Kd_path, ".tga"))
+			else if (strstr(m.map_Kd_path, ".tga") || strstr(m.map_Kd_path, ".TGA"))
 				m.map_Kd = load_tga_map(rel_path, m.map_Kd_path);
-			else if (strstr(m.map_Kd_path, ".jpg") || strstr(m.map_Kd_path, ".jpeg"))
+			else if (strstr(m.map_Kd_path, ".jpg") || strstr(m.map_Kd_path, ".jpeg") || strstr(m.map_Kd_path, ".JPG") || strstr(m.map_Kd_path, ".JPEG"))
 				m.map_Kd = load_jpg_map(rel_path, m.map_Kd_path);
 		}
 		else if (strncmp(str, "map_bump", 8) == 0)
@@ -240,11 +240,11 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			//printf("loading a bump\n");
 			m.map_bump_path = calloc(512, 1);
 			sscanf(str, "map_bump %s\n", m.map_bump_path);
-			if (strstr(m.map_bump_path, ".bmp"))
+			if (strstr(m.map_bump_path, ".bmp") || strstr(m.map_bump_path, ".BMP"))
 				m.map_bump = load_bmp_map(rel_path, m.map_bump_path);
-			else if (strstr(m.map_bump_path, ".tga"))
+			else if (strstr(m.map_bump_path, ".tga") || strstr(m.map_bump_path, ".TGA"))
 				m.map_bump = load_tga_map(rel_path, m.map_bump_path);
-			else if (strstr(m.map_bump_path, ".jpg") || strstr(m.map_bump_path, ".jpeg"))
+			else if (strstr(m.map_bump_path, ".jpg") || strstr(m.map_bump_path, ".jpeg") || strstr(m.map_bump_path, ".JPG") || strstr(m.map_bump_path, ".JPEG"))
 				m.map_bump = load_jpg_map(rel_path, m.map_bump_path);
 		}
 		else if (strncmp(str, "map_d", 5) == 0)
@@ -252,11 +252,11 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			//printf("loading a map_d\n");
 			m.map_d_path = calloc(512, 1);
 			sscanf(str, "map_d %s\n", m.map_d_path);
-			if (strstr(m.map_d_path, ".bmp"))
+			if (strstr(m.map_d_path, ".bmp") || strstr(m.map_d_path, ".BMP"))
 				m.map_d = load_bmp_map(rel_path, m.map_d_path);
-			else if (strstr(m.map_d_path, ".tga"))
+			else if (strstr(m.map_d_path, ".tga") || strstr(m.map_d_path, ".TGA"))
 				m.map_d = load_tga_map(rel_path, m.map_d_path);
-			else if (strstr(m.map_d_path, ".jpg") || strstr(m.map_d_path, ".jpeg"))
+			else if (strstr(m.map_d_path, ".jpg") || strstr(m.map_d_path, ".jpeg") || strstr(m.map_d_path, ".JPG") || strstr(m.map_d_path, ".JPEG"))
 				m.map_d = load_jpg_map(rel_path, m.map_d_path);
 		}
 		else if (strncmp(str, "map_Ks", 6) == 0)
@@ -264,11 +264,11 @@ void load_mats(Scene *S, char *rel_path, char *filename)
 			//printf("loading a Ks\n");
 			m.map_Ks_path = calloc(512, 1);
 			sscanf(str, "map_Ks %s\n", m.map_Ks_path);
-			if (strstr(m.map_Ks_path, ".bmp"))
+			if (strstr(m.map_Ks_path, ".bmp") || strstr(m.map_Ks_path, ".BMP"))
 				m.map_Ks = load_bmp_map(rel_path, m.map_Ks_path);
-			else if (strstr(m.map_Ks_path, ".tga"))
+			else if (strstr(m.map_Ks_path, ".tga") || strstr(m.map_Ks_path, ".TGA"))
 				m.map_Ks = load_tga_map(rel_path, m.map_Ks_path);
-			else if (strstr(m.map_Ks_path, ".jpg") || strstr(m.map_Ks_path, ".jpeg"))
+			else if (strstr(m.map_Ks_path, ".jpg") || strstr(m.map_Ks_path, ".jpeg") || strstr(m.map_Ks_path, ".JPG") || strstr(m.map_Ks_path, ".JPEG"))
 				m.map_Ks = load_jpg_map(rel_path, m.map_Ks_path);
 		}
 		free(str);
@@ -343,13 +343,13 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 			obj_count++;
 	}
 	center = vec_add(vec_scale(vec_sub(max, min), 0.5), min);
-	printf("%d triangles\n", face_count);
+	if (VERBOSE)
+		printf("%d triangles\n", face_count);
 
 	//load mats
 	if (*matpath != '\0')
 		load_mats(S, rel_path, matpath);
 	free(matpath);
-	printf("basics counted\n");
 
 	//back to top of file, alloc objects, count faces, load v, vt, vn
 	fseek(fp, 0, SEEK_SET);
@@ -359,13 +359,13 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 	cl_float3 *VT = calloc(vt_count, sizeof(cl_float3));
 	Face *faces = calloc(face_count, sizeof(Face));
 
-	printf("\t%d %d %d %d\n", v_count, vn_count, vt_count, face_count);
 	v_count = 0;
 	vn_count = 0;
 	vt_count = 0;
 	face_count = 0;
 
-	printf("%d objects\n", obj_count);
+	if (VERBOSE)
+		printf("%d objects\n", obj_count);
 	int *obj_indices = calloc(obj_count, sizeof(int));
 	obj_count = 0;
 
@@ -418,26 +418,26 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 		else if (strncmp(line, "f ", 2) == 0)
 		{
 			Face f;
-			int va, vna, vta, vb, vnb, vtb, vc, vnc, vtc, vd, vnd, vtd;
-			int count = get_face_elements(line, &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc, &vd, &vtd, &vnd);
+			int va, vna, vta, vb, vnb, vtb, vc, vnc, vtc;
+			int count = get_face_elements(line, &va, &vta, &vna, &vb, &vtb, &vnb, &vc, &vtc, &vnc);
 			f.shape = 3;
 			f.center = ORIGIN;
 			if (va < 0)
 				f.verts[0] = V[v_count + va];
 			else
 				f.verts[0] = V[va - 1];
-			f.center = vec_add(f.center, f.verts[0]);
 			if (vb < 0)
 				f.verts[1] = V[v_count + vb];
 			else
 				f.verts[1] = V[vb - 1]; 
-			f.center = vec_add(f.center, f.verts[1]);
 			if (vc < 0)
 				f.verts[2] = V[v_count + vc];
 			else
 				f.verts[2] = V[vc - 1];
+		
+			f.center = vec_add(f.center, f.verts[0]);
+			f.center = vec_add(f.center, f.verts[1]);
 			f.center = vec_add(f.center, f.verts[2]);
-
 			f.center = vec_scale(f.center, 1.0f / (float)f.shape);
 
 			if (vna == 0 || vnb == 0 || vnc == 0)
@@ -505,18 +505,18 @@ Scene *scene_from_obj(char *rel_path, char *filename, File_edits edit_info)
 						new_f.verts[0] = V[v_count + va];
 					else
 						new_f.verts[0] = V[va - 1];
-					new_f.center = vec_add(new_f.center, new_f.verts[0]);
 					if (vb < 0)
 						new_f.verts[1] = V[v_count + vb];
 					else
 						new_f.verts[1] = V[vb - 1]; 
-					new_f.center = vec_add(new_f.center, new_f.verts[1]);
 					if (vc < 0)
 						new_f.verts[2] = V[v_count + vc];
 					else
 						new_f.verts[2] = V[vc - 1];
+					
+					new_f.center = vec_add(new_f.center, new_f.verts[0]);
+					new_f.center = vec_add(new_f.center, new_f.verts[1]);
 					new_f.center = vec_add(new_f.center, new_f.verts[2]);
-				
 					new_f.center = vec_scale(new_f.center, 1.0f / (float)new_f.shape);
 			
 					if (vna == 0 || vnb == 0 || vnc == 0)

@@ -49,8 +49,7 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 	edit_info->map_Kd_path = NULL;
 	edit_info->map_Ks_path = NULL;
 	edit_info->map_Ke_path = NULL;
-	edit_info->Kd = (cl_float3){0.8, 0.2, 0.2};
-	printf("\t\t%s", *line);
+	edit_info->Kd = (cl_float3){0.8f, 0.2f, 0.2f};
 	fgets(*line, 512, fp);
 	if (strchr(*line, '{') == NULL)
 		return ;
@@ -64,21 +63,6 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 			edit_info->translate = get_vec(*line);
 		else if (strstr(*line, "rotate"))
 			edit_info->rotate = get_vec(*line);
-		else if (strstr(*line, "map_Kd"))
-		{
-			edit_info->map_Kd_path = calloc(512, sizeof(char));
-			sscanf(strstr(*line, "map_Kd"), "map_Kd= %s\n", edit_info->map_Kd_path);
-		}
-		else if (strstr(*line, "map_Ks"))
-		{
-			edit_info->map_Ks_path = calloc(512, sizeof(char));
-			sscanf(strstr(*line, "map_Ks"), "map_Ks= %s\n", edit_info->map_Ks_path);
-		}
-		else if (strstr(*line, "map_Ke"))
-		{
-			edit_info->map_Ke_path = calloc(512, sizeof(char));
-			sscanf(strstr(*line, "map_Ke"), "map_Ke= %s\n", edit_info->map_Ke_path);
-		}
 		else if (strstr(*line, "Kd"))
 			edit_info->Kd = get_vec(*line);
 		else if (strstr(*line, "Kss"))
@@ -101,7 +85,6 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 			break ;
 		else
 			break ;
-		printf("[*]%s", *line);
 	}
 	if (edit_info->scale <= 0.0f)
 		edit_info->scale = 1.0f;
@@ -231,7 +214,7 @@ void	load_config(t_env *env)
 			S[j] = scene_from_3ds(dir_path[j], file[j], edit_info[j]);
 		else
 		{
-			printf("not a valid file, must be file.ply or file.obj\n");
+			printf("not a valid file, must be file.ply, file.obj or file.3ds\n");
 			exit(0);
 		}
 	}

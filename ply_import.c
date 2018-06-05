@@ -21,20 +21,11 @@ Scene	*scene_from_ply(char *rel_path, char *filename, File_edits edit_info)
 	S->materials[0].map_d_path = NULL;
 	S->materials[0].map_d = NULL;
 	S->materials[0].map_Kd = NULL;
-	if ((S->materials[0].map_Kd_path = edit_info.map_Kd_path) != NULL)
-	{
-		;
-	}
+	S->materials[0].map_Kd_path = NULL;
 	S->materials[0].map_Ks = NULL;
-	if ((S->materials[0].map_Ks_path = edit_info.map_Ks_path) != NULL)
-	{
-		;
-	}
+	S->materials[0].map_Ks_path = NULL;
     S->materials[0].map_Ke = NULL;
-    if ((S->materials[0].map_Ke_path = edit_info.map_Ke_path) != NULL)
-	{
-		;
-	}
+    S->materials[0].map_Ke_path = NULL;
 	S->materials[0].Ns.x = 10;
 	S->materials[0].Ni = edit_info.ior;
 	S->materials[0].roughness = edit_info.roughness;
@@ -42,15 +33,13 @@ Scene	*scene_from_ply(char *rel_path, char *filename, File_edits edit_info)
 	S->materials[0].d = 1 - edit_info.transparency;
 	S->materials[0].Tf = (cl_float3){1, 1, 1};
 	S->materials[0].illum = 2;
-    S->materials[0].Ka = (cl_float3){0.58, 0.58, 0.58}; //ambient mask
+    S->materials[0].Ka = (cl_float3){0.58f, 0.58f, 0.58f}; //ambient mask
     S->materials[0].Kd = edit_info.Kd; //diffuse mask
     S->materials[0].Ks = edit_info.Ks;
     S->materials[0].Ke = edit_info.Ke;
-
 	S->materials[0].metallic = edit_info.metallic;
 	S->materials[0].scatter = edit_info.scatter;
 	S->materials[0].Kss = edit_info.Kss;
-
 	return S;
 }
 
@@ -158,7 +147,7 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 				if (V[i].z > max.z)
 					max.z = V[i].z;
 			}
-			center = vec_add(vec_scale(vec_sub(max, min), 0.5), min);
+			center = vec_add(vec_scale(vec_sub(max, min), 0.5f), min);
 			for (int i =  0; i < v_total; i++)
 			{
 				V[i] = vec_sub(V[i], center);
@@ -178,8 +167,6 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 					{
 						int a, b, c;
 						n = (uint8_t)read_uchar(fp, file_endian, endian);
-						if (n != 3)
-							printf("this polygon has %hhu vertices\n", n);
 						for (int xyz = 0; xyz < n; xyz++)
 						{
 							if (xyz == 0)
@@ -189,8 +176,6 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 							else
 								c = read_int(fp, file_endian, endian);
 						}
-						if (a < 0 || a >= v_total || b < 0 || b >= v_total || c < 0 || c >= v_total)
-							printf("index is outside of array size\n");
 						Face face;
 						face.shape = 3;
 						face.mat_type = GPU_MAT_DIFFUSE;
@@ -199,7 +184,7 @@ static Face *read_binary_file(FILE *fp, Elements *elems, int elem_total, int f_t
 						face.verts[1] = V[b];
 						face.verts[2] = V[c];
 
-						face.center = vec_scale(vec_add(vec_add(V[a], V[b]), V[c]), 1.0 / 3.0);
+						face.center = vec_scale(vec_add(vec_add(V[a], V[b]), V[c]), 1.0f / 3.0f);
 
 						cl_float3 N = cross(vec_sub(V[b], V[a]), vec_sub(V[c], V[a]));
 						face.norms[0] = N;
@@ -323,7 +308,7 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 					}
 				}
 			}
-			center = vec_add(vec_scale(vec_sub(max, min), 0.5), min);
+			center = vec_add(vec_scale(vec_sub(max, min), 0.5f), min);
 			for (int i = 0; i < v_total; i++)
 			{
 				V[i] = vec_sub(V[i], center);
@@ -340,7 +325,6 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 				char *ptr = line;
 				int n = 0;
 				//now faces
-				// k is not initialized
 				for (int k = 0; k < elems[j].property_total; k++)
 				{
 					if (strstr(elems[j].props[k].name, "vertex_indices"))
@@ -397,7 +381,7 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 							face.verts[1] = V[c];
 							face.verts[2] = V[d];
 
-							face.center = vec_scale(vec_add(vec_add(V[a], V[c]), V[d]), 1.0 / (float)face.shape);
+							face.center = vec_scale(vec_add(vec_add(V[a], V[c]), V[d]), 1.0f / (float)face.shape);
 
 							cl_float3 N = cross(vec_sub(V[c], V[a]), vec_sub(V[d], V[a]));
 							face.norms[0] = N;
@@ -417,7 +401,7 @@ static Face *read_ascii_file(FILE *fp, Elements *elems, int elem_total, int f_to
 							face.verts[1] = V[d];
 							face.verts[2] = V[e];
 
-							face.center = vec_scale(vec_add(vec_add(V[a], V[d]), V[e]), 1.0 / (float)face.shape);
+							face.center = vec_scale(vec_add(vec_add(V[a], V[d]), V[e]), 1.0f / (float)face.shape);
 
 							cl_float3 N = cross(vec_sub(V[d], V[a]), vec_sub(V[e], V[a]));
 							face.norms[0] = N;

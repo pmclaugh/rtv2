@@ -1,8 +1,8 @@
 #include "rt.h"
 
-int get_face_elements(char *line, int *va, int *vta, int *vna, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc, int *vd, int *vtd, int *vnd)
+int get_face_elements(char *line, int *va, int *vta, int *vna, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc)
 {
-	*va = *vta = *vna = *vb = *vtb = *vnb = *vc = *vtc = *vnc = *vd = *vtd = *vnd = 0;
+	*va = *vta = *vna = *vb = *vtb = *vnb = *vc = *vtc = *vnc = 0;
 	int vertices = 0;
 	char *str = calloc(256, sizeof(char));
 
@@ -42,12 +42,6 @@ int get_face_elements(char *line, int *va, int *vta, int *vna, int *vb, int *vtb
 			*vc = v;
 			*vtc = vt;
 			*vnc = vn;
-		}
-		else if (vertices == 4)
-		{
-			*vd = v;
-			*vtd = vt;
-			*vnd = vn;
 		}
 		line = move_str(line, str, 0);
 	}
