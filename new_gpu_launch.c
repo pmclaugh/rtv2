@@ -36,6 +36,7 @@ typedef struct s_gpu_path{
 	cl_float pC;
 	cl_float pL;
 	cl_int hit_light;
+	cl_int specular;
 }				gpu_path;
 
 typedef struct s_gpu_camera {
