@@ -248,10 +248,10 @@ static float3 gloss_BDRF_sample(float3 normal, float3 spec_dir, float3 in, float
 	return out;
 }
 
-static float surface_area(int index, __global float3 *lights)
+static float surface_area(int3 triangle, __global float3 *V)
 {
-	const float3 e1 = lights[index * 3 + 1] - lights[index * 3];
-	const float3 e2 = lights[index * 3 + 2] - lights[index * 3];
+	const float3 e1 = V[triangle.y] - V[triangle.x];
+	const float3 e2 = V[triangle.z] - V[triangle.x];
 	float angle = acos(dot(normalize(e1), normalize(e2)));
 	return (native_sqrt(dot(e1, e1)) * native_sqrt(dot(e2, e2)) / 2.0f) * native_sin(angle);
 }
@@ -260,7 +260,7 @@ __kernel void init_paths(const Camera cam,
 						__global uint *seeds,
 						__global Path *paths,
 						__global int *path_lengths,
-						__global float3 *lights,
+						__global int3 *lights,
 						const uint light_poly_count,
 						__global float3 *V,
 						__global float3 *N,
@@ -282,25 +282,25 @@ __kernel void init_paths(const Camera cam,
 		//pick a random light triangle
 		int light_ind = (int)floor((float)light_poly_count * get_random(&seed0, &seed1));
 		light_ind %= light_poly_count;
+		int3 light = lights[light_ind];
 		
 		float3 v0, v1, v2;
-		v0 = lights[light_ind * 3];
-		v1 = lights[light_ind * 3 + 1];
-		v2 = lights[light_ind * 3 + 2];
-		normal = normalize(cross(normalize(v1 - v0), normalize(v2-v0)));
+		v0 = V[light.x];
+		v1 = V[light.y];
+		v2 = V[light.z];
+		normal = normalize(N[light.x]);
 		direction = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 
+		float3 Ke = mats[M[light.x / 3]].Ke;
+		mask = Ke * BRIGHTNESS;	
 
-		float3 Ke = WHITE;
-		mask = Ke * BRIGHTNESS;		
-    
 		//pick random point just off of that triangle
 		float r1 = get_random(&seed0, &seed1);
 		float r2 = get_random(&seed0, &seed1);
 		origin = (1.0f - sqrt(r1)) * v0 + (sqrt(r1) * (1.0f - r2)) * v1 + (r2 * sqrt(r1)) * v2 + NORMAL_SHIFT * normal;
 
 		pC = 1.0f / (2.0f * PI);
-		pL = 1.0f / (surface_area(light_ind, lights));
+		pL = 1.0f / ((float)light_poly_count * surface_area(light, V));
 		mask /= pL;
 	}
 	else
@@ -468,7 +468,7 @@ static float bdrf(float3 in, const Path p, float3 out)
 #define QC(x) (s + t - (x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
 #define QL(x) ((x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
 
-#define RESAMPLE_COUNT 4
+#define RESAMPLE_COUNT 1
 
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
@@ -501,32 +501,32 @@ __kernel void connect_paths(__global Path *paths,
 
 				//causes fireflies with specular objects. needs some sort of fix.
 
-				float3 contrib = camera_vertex.mask * BRIGHTNESS;
-				//initialize with ratios
-				for (int k = 0; k < t; k++)
-				{
-					if (k == 0)
-						p[k] = (LIGHT_VERTEX(0).pL) / (camera_vertex.pC * camera_vertex.G);
-					else
-						p[k] = (QL(k) * CAMERA_VERTEX(t - k - 1).pL * CAMERA_VERTEX(t - k).G) / (QC(k) * CAMERA_VERTEX(t - k - 1).pC * CAMERA_VERTEX(t - k - 1).G);
-				}
-				//multiply through
-				for (int k = 0; k < t; k++)
-					p[k + 1] = p[k + 1] * p[k];
+				// float3 contrib = camera_vertex.mask * BRIGHTNESS;
+				// //initialize with ratios
+				// for (int k = 0; k < t; k++)
+				// {
+				// 	if (k == 0)
+				// 		p[k] = (LIGHT_VERTEX(0).pL) / (camera_vertex.pC * camera_vertex.G);
+				// 	else
+				// 		p[k] = (QL(k) * CAMERA_VERTEX(t - k - 1).pL * CAMERA_VERTEX(t - k).G) / (QC(k) * CAMERA_VERTEX(t - k - 1).pC * CAMERA_VERTEX(t - k - 1).G);
+				// }
+				// //multiply through
+				// for (int k = 0; k < t; k++)
+				// 	p[k + 1] = p[k + 1] * p[k];
 
-				//append 1.0f
-				p[t] = 1.0f;
+				// //append 1.0f
+				// p[t] = 1.0f;
 
-				float weight = 0.0f;
-				for (int k = 0; k < t + 1; k++)
-					weight += p[k];
+				// float weight = 0.0f;
+				// for (int k = 0; k < t + 1; k++)
+				// 	weight += p[k];
 
-				float ratio = (float)(t + 1);
+				// float ratio = (float)(t + 1);
 
-				float test = 1.0f / (ratio * weight);
+				// float test = 1.0f / (ratio * weight);
 
-				if (test == test && weight == weight)
-					sum += contrib * test;
+				// if (test == test && weight == weight)
+				// 	sum += contrib * test;
 				continue;
 			}
 			for (s = 1; s <= light_length; s++)
@@ -579,6 +579,8 @@ __kernel void connect_paths(__global Path *paths,
 				//evaluate BDRF for both
 				BDRF_C = bdrf(camera_in, camera_vertex, direction);
 				BDRF_L = s == 1 ? 1.0f : bdrf(light_in, light_vertex, -1.0f * direction);
+
+				//still need to adjust mask based on new probability figures, ugh
 
 				float3 contrib = light_vertex.mask * camera_vertex.mask * BDRF_L * BDRF_C * this_geom;
 				
@@ -855,5 +857,3 @@ __kernel void trace_paths(__global Path *paths,
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
 }
-
-//pC = 100.0f * pow(dot(out, spec_dir), 100.0f) / (2.0f * PI);

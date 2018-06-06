@@ -102,7 +102,7 @@ void		path_tracer(t_env *env)
 		save_file(env, frame_count);
 		frame_count++;
 		env->samples = 0;
-		env->render = 1;
+		env->render = 0;
 		for (int i = 0; i < DIM_PT * DIM_PT; i++)
 		{
 			env->pt->total_clr[i].x = 0;
@@ -118,15 +118,15 @@ void		path_tracer(t_env *env)
 
 		//per-frame updates
 		//env->cam.pos = vec_add(env->cam.pos, (cl_float3){-4.0f, 0.0f, 0.0f});
-		cl_float3 delta = (cl_float3){0.0f, -4.0f, 0.0f};
-		for (int i = 0; i < env->scene->light_face_count; i++)
-		{
-			Face L = env->scene->light_faces[i];
-			L.verts[0] = vec_add(delta, L.verts[0]);
-			L.verts[1] = vec_add(delta, L.verts[1]);
-			L.verts[2] = vec_add(delta, L.verts[2]);
-			env->scene->light_faces[i] = L;
-		}
+		// cl_float3 delta = (cl_float3){0.0f, -4.0f, 0.0f};
+		// for (int i = 0; i < env->scene->light_face_count; i++)
+		// {
+		// 	Face L = env->scene->light_faces[i];
+		// 	L.verts[0] = vec_add(delta, L.verts[0]);
+		// 	L.verts[1] = vec_add(delta, L.verts[1]);
+		// 	L.verts[2] = vec_add(delta, L.verts[2]);
+		// 	env->scene->light_faces[i] = L;
+		// }
 	}
 	printf("sample %d done\n", env->samples);
 }
