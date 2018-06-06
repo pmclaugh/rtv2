@@ -200,7 +200,7 @@ static int intersect_triangle(const float3 origin, const float3 direction, __glo
 static void orthonormal(float3 z, float3 *x, float3 *y)
 {
 	//local orthonormal system
-	float3 axis = fabsf(z.x) > fabsf(z.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+	float3 axis = fabs(z.x) > fabs(z.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
 	axis = cross(axis, z);
 	*x = axis;
 	*y = cross(z, axis);
@@ -422,7 +422,7 @@ static float geometry_term(Path a, Path b)
 	float camera_cos = dot(a.normal, direction);
 	float light_cos = dot(b.normal, -1.0f * direction);
 
-	return fabsf(camera_cos * light_cos) / (t * t);
+	return fabs(camera_cos * light_cos) / (t * t);
 }
 
 static float pdf(float3 in, Path p, float3 out, int way)
@@ -501,32 +501,32 @@ __kernel void connect_paths(__global Path *paths,
 
 				//causes fireflies with specular objects. needs some sort of fix.
 
-				// float3 contrib = camera_vertex.mask * BRIGHTNESS;
-				// //initialize with ratios
-				// for (int k = 0; k < t; k++)
-				// {
-				// 	if (k == 0)
-				// 		p[k] = (LIGHT_VERTEX(0).pL) / (camera_vertex.pC * camera_vertex.G);
-				// 	else
-				// 		p[k] = (QL(k) * CAMERA_VERTEX(t - k - 1).pL * CAMERA_VERTEX(t - k).G) / (QC(k) * CAMERA_VERTEX(t - k - 1).pC * CAMERA_VERTEX(t - k - 1).G);
-				// }
-				// //multiply through
-				// for (int k = 0; k < t; k++)
-				// 	p[k + 1] = p[k + 1] * p[k];
+				float3 contrib = camera_vertex.mask * BRIGHTNESS;
+				//initialize with ratios
+				for (int k = 0; k < t; k++)
+				{
+					if (k == 0)
+						p[k] = (LIGHT_VERTEX(0).pL) / (camera_vertex.pC * camera_vertex.G);
+					else
+						p[k] = (QL(k) * CAMERA_VERTEX(t - k - 1).pL * CAMERA_VERTEX(t - k).G) / (QC(k) * CAMERA_VERTEX(t - k - 1).pC * CAMERA_VERTEX(t - k - 1).G);
+				}
+				//multiply through
+				for (int k = 0; k < t; k++)
+					p[k + 1] = p[k + 1] * p[k];
 
-				// //append 1.0f
-				// p[t] = 1.0f;
+				//append 1.0f
+				p[t] = 1.0f;
 
-				// float weight = 0.0f;
-				// for (int k = 0; k < t + 1; k++)
-				// 	weight += p[k];
+				float weight = 0.0f;
+				for (int k = 0; k < t + 1; k++)
+					weight += p[k];
 
-				// float ratio = (float)(t + 1);
+				float ratio = (float)(t + 1);
 
-				// float test = 1.0f / (ratio * weight);
+				float test = 1.0f / (ratio * weight);
 
-				// if (test == test && weight == weight)
-				// 	sum += contrib * test;
+				if (test == test && weight == weight)
+					sum += contrib * test;
 				continue;
 			}
 			for (s = 1; s <= light_length; s++)
@@ -579,8 +579,6 @@ __kernel void connect_paths(__global Path *paths,
 				//evaluate BDRF for both
 				BDRF_C = bdrf(camera_in, camera_vertex, direction);
 				BDRF_L = s == 1 ? 1.0f : bdrf(light_in, light_vertex, -1.0f * direction);
-
-				//still need to adjust mask based on new probability figures, ugh
 
 				float3 contrib = light_vertex.mask * camera_vertex.mask * BDRF_L * BDRF_C * this_geom;
 				
@@ -803,7 +801,7 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			mask *= diff;
 			if (way)
-				mask *= fabsf(dot(-1.0f * direction, normal));
+				mask *= fabs(dot(-1.0f * direction, normal));
 			out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 		}
 
