@@ -21,7 +21,7 @@
 #define CAMERA_LENGTH 10
 #define LIGHT_LENGTH 10
 
-#define SPECULAR 10.0f
+#define SPECULAR 20.0f
 
 typedef struct s_ray {
 	float3 origin;
@@ -431,7 +431,7 @@ static float pdf(float3 in, Path p, float3 out, int way)
 	if (p.specular)
 	{
 		float3 spec_dir = 2.0f * dot(in, p.normal) * p.normal - in;
-		return (SPECULAR + 2.0f) * pow(dot(out, spec_dir), SPECULAR) / (2.0f * PI);
+		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
 	}
 	else
 		if (!way) //NB "way" seems flipped here but that's the point
@@ -579,6 +579,8 @@ __kernel void connect_paths(__global Path *paths,
 				//evaluate BDRF for both
 				BDRF_C = bdrf(camera_in, camera_vertex, direction);
 				BDRF_L = s == 1 ? 1.0f : bdrf(light_in, light_vertex, -1.0f * direction);
+
+				//still need to adjust mask based on new probability figures, ugh
 
 				float3 contrib = light_vertex.mask * camera_vertex.mask * BDRF_L * BDRF_C * this_geom;
 				
@@ -789,12 +791,13 @@ __kernel void trace_paths(__global Path *paths,
 				break;
 			mask *= Ke;
 			hit_light = 1;
+			paths[index + row_size * (LENGTH - 1)].pL = 1.0f / (2.0f * PI);
 		}
 		else if (specular)
 		{
 			mask *= spec;
 			spec_dir = 2.0f * dot(-1.0f * direction, normal) * normal + direction;
-			out = gloss_BDRF_sample(normal, spec_dir, direction, 100.0f, &seed0, &seed1);
+			out = gloss_BDRF_sample(normal, spec_dir, direction, SPECULAR, &seed0, &seed1);
 		}
 		else
 		{
@@ -821,11 +824,11 @@ __kernel void trace_paths(__global Path *paths,
 		else
 			paths[index + row_size * (LENGTH - 1)].pL = pdf(out, paths[index + row_size * LENGTH], -1.0f * direction, way);
 
-		//new probability values
+		//new probability values (to do: clean these up with pdf function)
 		if (way)
 		{
 			if (specular)
-				pL = 100.0f * pow(dot(out, spec_dir), 100.0f) / (2.0f * PI);
+				pL = (SPECULAR + 2.0f) * pow(dot(out, spec_dir), SPECULAR) / (2.0f * PI);
 			else
 			{
 				mask *= 2.0f; //this might not be necessary idk
@@ -834,7 +837,7 @@ __kernel void trace_paths(__global Path *paths,
 		}
 		else
 			if (specular)
-				pC = 100.0f * pow(dot(out, spec_dir), 100.0f) / (2.0f * PI);
+				pC = (SPECULAR + 2.0f) * pow(dot(out, spec_dir), SPECULAR) / (2.0f * PI);
 			else
 				pC = dot(out, normal) / (PI);
 
