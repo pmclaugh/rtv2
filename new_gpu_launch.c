@@ -595,31 +595,34 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	gcam.focal_length = cam.focal_length;
 	gcam.aperture = cam.aperture;
 
-	//camera may need update
-	for (int i = 0; i < CL->numDevices; i++)
+	if(first)
 	{
-		clSetKernelArg(handle->init_paths[i], 0, sizeof(gpu_camera), &gcam);
-		clSetKernelArg(handle->connect_paths[i], 5, sizeof(gpu_camera), &gcam);
-	}
-
-	//lights may need update
-	cl_float3 *lights = calloc(S->light_face_count * 3, sizeof(cl_float3));
-	cl_int light_poly_count = 0;
-	for (int i = 0; i < S->light_face_count; i++)
-	{
-		Face L = S->light_faces[i];
-		if (dot(scene->mats[L.mat_ind].Ke, scene->mats[L.mat_ind].Ke) > 0.0f)
+		//camera may need update
+		for (int i = 0; i < CL->numDevices; i++)
 		{
-			lights[light_poly_count * 3] = L.verts[0];
-			lights[light_poly_count * 3 + 1] = L.verts[1];
-			lights[light_poly_count * 3 + 2] = L.verts[2];
-			light_poly_count++;
+			clSetKernelArg(handle->init_paths[i], 0, sizeof(gpu_camera), &gcam);
+			clSetKernelArg(handle->connect_paths[i], 5, sizeof(gpu_camera), &gcam);
 		}
+
+		//lights may need update
+		cl_float3 *lights = calloc(S->light_face_count * 3, sizeof(cl_float3));
+		cl_int light_poly_count = 0;
+		for (int i = 0; i < S->light_face_count; i++)
+		{
+			Face L = S->light_faces[i];
+			if (dot(scene->mats[L.mat_ind].Ke, scene->mats[L.mat_ind].Ke) > 0.0f)
+			{
+				lights[light_poly_count * 3] = L.verts[0];
+				lights[light_poly_count * 3 + 1] = L.verts[1];
+				lights[light_poly_count * 3 + 2] = L.verts[2];
+				light_poly_count++;
+			}
+		}
+		printf("prep scene reports %d light faces\n", light_poly_count);
+		for (int i = 0; i < CL->numDevices; i++)
+			clEnqueueWriteBuffer(CL->commands[i], handle->d_lights[i], CL_TRUE, 0, sizeof(cl_float3) * 3 * scene->light_poly_count, lights, 0, NULL, NULL);
+		free(lights);
 	}
-	printf("prep scene reports %d light faces\n", light_poly_count);
-	for (int i = 0; i < CL->numDevices; i++)
-		clEnqueueWriteBuffer(CL->commands[i], handle->d_lights[i], CL_TRUE, 0, sizeof(cl_float3) * 3 * scene->light_poly_count, lights, 0, NULL, NULL);
-	free(lights);
 
 	// printf("ready to launch\n");
 	// getchar();

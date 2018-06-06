@@ -118,7 +118,7 @@ void		path_tracer(t_env *env)
 
 		//per-frame updates
 		//env->cam.pos = vec_add(env->cam.pos, (cl_float3){-4.0f, 0.0f, 0.0f});
-		cl_float3 delta = (cl_float3){-4.0f, 0.0f, 0.0f};
+		cl_float3 delta = (cl_float3){0.0f, -4.0f, 0.0f};
 		for (int i = 0; i < env->scene->light_face_count; i++)
 		{
 			Face L = env->scene->light_faces[i];
