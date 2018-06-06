@@ -312,21 +312,34 @@ void sbvh(t_env *env)
 
 	//some preprocessing
 	Face *faces = NULL;
+	Face *light_faces = NULL;
+	int light_face_index = 0;
 	for (int i = 0; i < env->scene->face_count; i++)
 	{
 		Face *f = calloc(1, sizeof(Face));
 		memcpy(f, &env->scene->faces[i], sizeof(Face));
-		f->next = faces;
+		if (dot(env->scene->materials[f->mat_ind].Ke, env->scene->materials[f->mat_ind].Ke) > 0.0f)
+		{
+			f->next = light_faces;
+			light_faces = f;
+			light_face_index++;
+		}
+		else
+		{
+			f->next = faces;
+			faces = f;
+		}
 
 		for (int i = 0; i < 3; i++)
 		{
 			f->edges[i] = unit_vec(vec_sub(f->verts[(i + 1) % 3], f->verts[i]));
 			f->edge_t[i] = vec_mag(vec_sub(f->verts[(i + 1) % 3], f->verts[i]));
 		}
-
-		faces = f;
 	}
 	free(env->scene->faces);
+
+	env->scene->light_faces = light_faces;
+	env->scene->light_face_count = light_face_index;
 
 	//put all faces in AABBs
 	AABB *boxes = NULL;
@@ -363,6 +376,7 @@ void sbvh(t_env *env)
 	}
 	printf("done. %d boxes\n", count);
 	printf("%d member references vs %d starting\n", ref_count, root_box->member_count);
+	printf("%d polygons were separated into the light array\n", light_face_index);
 
 	env->scene->bins = root_box;
 	env->scene->bin_count = count;
@@ -429,6 +443,20 @@ void flatten_faces(Scene *scene)
 		}
 	}
 	scene->faces = faces;
+
+	//also make a flat light array
+	Face *lights = calloc(scene->light_face_count, sizeof(Face));
+	Face *L = scene->light_faces;
+	for (int i = 0; i < scene->light_face_count; i++)
+	{
+		memcpy(&lights[i], L, sizeof(Face));
+		L = L->next;
+	}
+
+	scene->light_faces = lights;
+
+	///////THIS LEAKS FIX IT LATER
+
 }
 
 gpu_bin bin_from_box(AABB *box)

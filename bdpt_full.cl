@@ -248,10 +248,10 @@ static float3 gloss_BDRF_sample(float3 normal, float3 spec_dir, float3 in, float
 	return out;
 }
 
-static float surface_area(int3 triangle, __global float3 *V)
+static float surface_area(int index, __global float3 *lights)
 {
-	const float3 e1 = V[triangle.y] - V[triangle.x];
-	const float3 e2 = V[triangle.z] - V[triangle.x];
+	const float3 e1 = lights[index * 3 + 1] - lights[index * 3];
+	const float3 e2 = lights[index * 3 + 2] - lights[index * 3];
 	float angle = acos(dot(normalize(e1), normalize(e2)));
 	return (native_sqrt(dot(e1, e1)) * native_sqrt(dot(e2, e2)) / 2.0f) * native_sin(angle);
 }
@@ -260,7 +260,7 @@ __kernel void init_paths(const Camera cam,
 						__global uint *seeds,
 						__global Path *paths,
 						__global int *path_lengths,
-						__global int3 *lights,
+						__global float3 *lights,
 						const uint light_poly_count,
 						__global float3 *V,
 						__global float3 *N,
@@ -282,25 +282,25 @@ __kernel void init_paths(const Camera cam,
 		//pick a random light triangle
 		int light_ind = (int)floor((float)light_poly_count * get_random(&seed0, &seed1));
 		light_ind %= light_poly_count;
-		int3 light = lights[light_ind];
 		
 		float3 v0, v1, v2;
-		v0 = V[light.x];
-		v1 = V[light.y];
-		v2 = V[light.z];
-		normal = normalize(N[light.x]);
+		v0 = lights[light_ind * 3];
+		v1 = lights[light_ind * 3 + 1];
+		v2 = lights[light_ind * 3 + 2];
+		normal = normalize(cross(normalize(v1 - v0), normalize(v2-v0)));
 		direction = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 
-		float3 Ke = mats[M[light.x / 3]].Ke;
-		mask = Ke * BRIGHTNESS;	
 
+		float3 Ke = WHITE;
+		mask = Ke * BRIGHTNESS;		
+    
 		//pick random point just off of that triangle
 		float r1 = get_random(&seed0, &seed1);
 		float r2 = get_random(&seed0, &seed1);
 		origin = (1.0f - sqrt(r1)) * v0 + (sqrt(r1) * (1.0f - r2)) * v1 + (r2 * sqrt(r1)) * v2 + NORMAL_SHIFT * normal;
 
 		pC = 1.0f / (2.0f * PI);
-		pL = 1.0f / ((float)light_poly_count * surface_area(light, V));
+		pL = 1.0f / (surface_area(light_ind, lights));
 		mask /= pL;
 	}
 	else
@@ -468,7 +468,7 @@ static float bdrf(float3 in, const Path p, float3 out)
 #define QC(x) (s + t - (x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
 #define QL(x) ((x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
 
-#define RESAMPLE_COUNT 1
+#define RESAMPLE_COUNT 4
 
 __kernel void connect_paths(__global Path *paths,
 							__global int *path_lengths,
