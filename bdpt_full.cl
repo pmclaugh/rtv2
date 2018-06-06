@@ -15,10 +15,13 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define RR_PROB 0.1f
+#define RR_PROB 0.5f
+#define RR_THRESHOLD 3
 
-#define CAMERA_LENGTH 5
-#define LIGHT_LENGTH 5
+#define CAMERA_LENGTH 10
+#define LIGHT_LENGTH 10
+
+#define SPECULAR 20.0f
 
 typedef struct s_ray {
 	float3 origin;
@@ -43,6 +46,7 @@ typedef struct s_path {
 	float pC;
 	float pL;
 	int hit_light;
+	int specular;
 }				Path;
 
 typedef struct s_material
@@ -196,7 +200,7 @@ static int intersect_triangle(const float3 origin, const float3 direction, __glo
 static void orthonormal(float3 z, float3 *x, float3 *y)
 {
 	//local orthonormal system
-	float3 axis = fabs(z.x) > fabs(z.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+	float3 axis = fabsf(z.x) > fabsf(z.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
 	axis = cross(axis, z);
 	*x = axis;
 	*y = cross(z, axis);
@@ -228,17 +232,20 @@ static float3 diffuse_BDRF_sample(float3 normal, int way, uint *seed0, uint *see
 		return direction_cos_hemisphere(x, y, u1, theta, normal);
 }
 
-static float diffuse_BDRF_prob(float3 in, float3 normal, float3 out, int way)
+static float3 gloss_BDRF_sample(float3 normal, float3 spec_dir, float3 in, float exponent, uint *seed0, uint *seed1)
 {
-	if (way)
-		return 1.0f / (2.0f * PI);
-	else
-		return dot(out, normal) / PI;
-}
+	//pure specular direction
+	float3 x, y;
+	orthonormal(spec_dir, &x, &y);
+	float u1 = get_random(seed0, seed1);
+	float u2 = get_random(seed0, seed1);
+	float phi = 2.0f * PI * u2;
 
-static float3 diffuse_BDRF_eval(float3 to_eye, float3 normal, float3 to_light, float3 color)
-{
-	return color * dot(normal, to_light) / PI;
+	u1 = pow(u1, 1.0f / (exponent + 1.0f));
+	float3 out = normalize(x * (native_sqrt(1.0f - u1 * u1) * native_cos(phi)) + y * (native_sqrt(1.0f - u1 * u1)) * native_sin(phi) + u1 * spec_dir);
+	if (dot(out, normal) <= 0.0f)
+		out = normalize(u1 * spec_dir - x * (native_sqrt(1.0f - u1 * u1) * native_cos(phi)) - y * (native_sqrt(1.0f - u1 * u1)) * native_sin(phi));
+	return out;
 }
 
 static float surface_area(int index, __global float3 *lights)
@@ -283,9 +290,10 @@ __kernel void init_paths(const Camera cam,
 		normal = normalize(cross(normalize(v1 - v0), normalize(v2-v0)));
 		direction = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 
-		float3 Ke = WHITE;
-		mask = Ke * BRIGHTNESS * dot(direction, normal);		
 
+		float3 Ke = WHITE;
+		mask = Ke * BRIGHTNESS;		
+    
 		//pick random point just off of that triangle
 		float r1 = get_random(&seed0, &seed1);
 		float r2 = get_random(&seed0, &seed1);
@@ -302,7 +310,7 @@ __kernel void init_paths(const Camera cam,
 		float y = (float)((index / 2) / cam.width);
 		origin = cam.focus;
 
-		float3 through = cam.origin + cam.d_x * (x + get_random(&seed0, &seed1)) + cam.d_y * (y + get_random(&seed0, &seed1));
+		float3 through = cam.origin + cam.d_x * (x + 0.98f * get_random(&seed0, &seed1)) + cam.d_y * (y + 0.98f * get_random(&seed0, &seed1));
 		direction = normalize(cam.focus - through);
 		through = cam.origin + cam.d_x * (x + 0.5f) + cam.d_y * (y + 0.5f);
 		float3 prime_direction = normalize(cam.focus - through);
@@ -317,7 +325,7 @@ __kernel void init_paths(const Camera cam,
 		origin = cam.focus + aperture;
 		direction = normalize(f_point - origin);
 		normal = direction;
-		mask = WHITE * dot(prime_direction, direction);
+		mask = WHITE;
 
 		pC = 1.0f / (float)(cam.width * cam.width);
 		pL = 1.0f / (2.0f * PI);
@@ -414,16 +422,51 @@ static float geometry_term(Path a, Path b)
 	float camera_cos = dot(a.normal, direction);
 	float light_cos = dot(b.normal, -1.0f * direction);
 
-	return fabs(camera_cos * light_cos) / (t * t);
+	return fabsf(camera_cos * light_cos) / (t * t);
+}
+
+static float pdf(float3 in, Path p, float3 out, int way)
+{
+	//in and out should both point away from p.
+	if (p.specular)
+	{
+		float3 spec_dir = 2.0f * dot(in, p.normal) * p.normal - in;
+		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
+	}
+	else
+		if (!way) //NB "way" seems flipped here but that's the point
+			return 1.0f / (2.0f * PI);
+		else
+			return max(0.0f, dot(p.normal, out)) / PI;
+}
+
+static float bdrf(float3 in, const Path p, float3 out)
+{
+	//in and out should both point away from p.
+	if (p.specular)
+	{
+		float3 spec_dir = 2.0f * dot(in, p.normal) * p.normal - in;
+		float ret = (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
+		if (ret > 0.0f && ret == ret)
+			return ret;
+		else
+			return 0.0f;
+	}
+	else
+		return max(0.0f, dot(p.normal, out)) / PI;
 }
 
 #define CAMERA_VERTEX(x) (paths[2 * index + row_size * (x)])
 #define LIGHT_VERTEX(x) (paths[(2 * index + 1 + sample * jump) % row_size + row_size * (x)])
 
 #define GEOM(x) ((x) < s ? (LIGHT_VERTEX(x).G) : ((x) == s ? this_geom : (CAMERA_VERTEX(s + t - (x)).G)))
-#define PL(x) ((x) < s ? (LIGHT_VERTEX(x).pL) : (x) == s ? this_pL : (CAMERA_VERTEX(s + t - (x)).pL))
 
-#define PC(x) ((x) < s - 1? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x) - 1).pC))
+#define PL(x) ((x) == t - 2 ? prev_pL : (x) < s ? (LIGHT_VERTEX(x).pL) : (x) == s ? this_pL : (CAMERA_VERTEX(s + t - (x)).pL))
+
+#define PC(x) ((x) == s - 2 ? prev_pC : (x) < s - 1 ? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x) - 1).pC))
+
+#define QC(x) (s + t - (x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
+#define QL(x) ((x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
 
 #define RESAMPLE_COUNT 4
 
@@ -455,41 +498,43 @@ __kernel void connect_paths(__global Path *paths,
 			int s = 0;
 			if (camera_vertex.hit_light)
 			{
-				float3 contrib = camera_vertex.mask * BRIGHTNESS;
-				//initialize with ratios
-				for (int k = 0; k < t; k++)
-				{
-					if (k == 0)
-						p[k] = (LIGHT_VERTEX(0).pL) / (camera_vertex.pC * camera_vertex.G);
-					else
-						p[k] = (CAMERA_VERTEX(t - k - 1).pL * CAMERA_VERTEX(t - k).G) / (CAMERA_VERTEX(t - k - 1).pC * CAMERA_VERTEX(t - k - 1).G);
-				}
-				//multiply through
-				for (int k = 0; k < t; k++)
-					p[k + 1] = p[k + 1] * p[k];
 
-				//append 1.0f
-				p[t] = 1.0f;
+				//causes fireflies with specular objects. needs some sort of fix.
 
-				float weight = 0.0f;
-				for (int k = 0; k < t + 1; k++)
-					weight += p[k];
+				// float3 contrib = camera_vertex.mask * BRIGHTNESS;
+				// //initialize with ratios
+				// for (int k = 0; k < t; k++)
+				// {
+				// 	if (k == 0)
+				// 		p[k] = (LIGHT_VERTEX(0).pL) / (camera_vertex.pC * camera_vertex.G);
+				// 	else
+				// 		p[k] = (QL(k) * CAMERA_VERTEX(t - k - 1).pL * CAMERA_VERTEX(t - k).G) / (QC(k) * CAMERA_VERTEX(t - k - 1).pC * CAMERA_VERTEX(t - k - 1).G);
+				// }
+				// //multiply through
+				// for (int k = 0; k < t; k++)
+				// 	p[k + 1] = p[k + 1] * p[k];
 
-				float ratio = (float)(t + 1);
+				// //append 1.0f
+				// p[t] = 1.0f;
 
-				float test = 1.0f / (ratio * weight);
+				// float weight = 0.0f;
+				// for (int k = 0; k < t + 1; k++)
+				// 	weight += p[k];
 
-				if (test == test && weight == weight)
-					sum += contrib * test;
+				// float ratio = (float)(t + 1);
+
+				// float test = 1.0f / (ratio * weight);
+
+				// if (test == test && weight == weight)
+				// 	sum += contrib * test;
 				continue;
 			}
 			for (s = 1; s <= light_length; s++)
 			{
 				Path light_vertex = LIGHT_VERTEX(s - 1);
 
-				float3 origin, direction, distance;
-				origin = camera_vertex.origin;
-				distance = light_vertex.origin - origin;
+				float3 direction, distance;
+				distance = light_vertex.origin - camera_vertex.origin;
 				float d = native_sqrt(dot(distance, distance));
 				direction = normalize(distance);
 
@@ -498,20 +543,50 @@ __kernel void connect_paths(__global Path *paths,
 
 				if (camera_cos <= 0.0f || light_cos <= 0.0f)
 					continue ;
-				if (!visibility_test(origin, direction, d, boxes, V))
+				if (!visibility_test(camera_vertex.origin, direction, d, boxes, V))
 					continue ;
 
 				float this_geom = geometry_term(camera_vertex, light_vertex);
-				float this_pL = 1.0f / (2.0f * PI);
-				float this_pC = camera_cos / (PI);
+				float this_pL, this_pC, BDRF_L, BDRF_C, prev_pL, prev_pC;
+				float3 light_in, camera_in;
 
-				float3 contrib = light_vertex.mask * camera_vertex.mask * camera_cos * this_geom;
+				//the parts based on light_in
 				if (s == 1)
-					contrib *= light_cos;
+				{
+					prev_pC = 1.0f; //placeholder, won't be accessed
+					this_pL = 1.0f / (2.0f * PI);
+				}
+				else
+				{
+					light_in = normalize(LIGHT_VERTEX(s - 2).origin - light_vertex.origin);
+					this_pL = pdf(light_in, light_vertex, -1.0f * direction, 0);
+					prev_pC = pdf(-1.0f * direction, light_vertex, light_in, 1); //these 0s and 1s suck and should be fixed
+				}
+
+				//the parts based on camera_in
+				if (t == 1)
+				{
+					prev_pL = 1.0f; //placeholder
+					this_pC = 1.0f;
+				}
+				else
+				{
+					camera_in = normalize(CAMERA_VERTEX(t - 2).origin - camera_vertex.origin);
+					this_pC = pdf(camera_in, camera_vertex, direction, 1);
+					prev_pL = pdf(direction, camera_vertex, camera_in, 0);
+				}
+
+				//evaluate BDRF for both
+				BDRF_C = bdrf(camera_in, camera_vertex, direction);
+				BDRF_L = s == 1 ? 1.0f : bdrf(light_in, light_vertex, -1.0f * direction);
+
+				//still need to adjust mask based on new probability figures, ugh
+
+				float3 contrib = light_vertex.mask * camera_vertex.mask * BDRF_L * BDRF_C * this_geom;
 				
 				//initialize with ratios
 				for (int k = 0; k < s + t; k++)
-					p[k] = (GEOM(k) * PL(k)) / (GEOM(k + 1) * PC(k));
+					p[k] = (QL(k) * GEOM(k) * PL(k)) / (QC(k) * GEOM(k + 1) * PC(k));
 
 				//multiply through
 				for (int k = 0; k < s + t; k++)
@@ -598,6 +673,7 @@ static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float
 	tangent = normalize(tangent - sample_N * dot(sample_N, tangent));
 	return normalize(tangent * bump.x + bitangent * bump.y + sample_N * bump.z);
 }
+
 
 #define LENGTH length
 
@@ -705,28 +781,34 @@ __kernel void trace_paths(__global Path *paths,
 		// bump map
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
 
-		//sample and evaluate BRDF
-		float3 out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
-
+		//direction
+		float3 out;
+		int specular = dot(spec, spec) > 0.0f ? 1 : 0;
+		float3 spec_dir;
 		if (dot(Ke, Ke) > 0.0f)
 		{
 			if (way)
 				break;
-			mask *= Ke * max(0.0f, dot(-1.0f * direction, normal)); //Le(0) * Le(0->1)
+			mask *= Ke;
 			hit_light = 1;
+			paths[index + row_size * (LENGTH - 1)].pL = 1.0f / (2.0f * PI);
+		}
+		else if (specular)
+		{
+			mask *= spec;
+			spec_dir = 2.0f * dot(-1.0f * direction, normal) * normal + direction;
+			out = gloss_BDRF_sample(normal, spec_dir, direction, SPECULAR, &seed0, &seed1);
 		}
 		else
 		{
 			mask *= diff;
 			if (way)
-			{
-				float cosine = fabs(dot(-1.0f * direction, normal));
-				mask *= cosine;
-				paths[index + row_size * (LENGTH - 1)].pC = cosine / PI;
-			}
+				mask *= fabsf(dot(-1.0f * direction, normal));
+			out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 		}
-		//update stuff
-		
+
+
+		//write vertex
 		paths[index + row_size * LENGTH].origin = origin;
 		paths[index + row_size * LENGTH].mask = mask;
 		paths[index + row_size * LENGTH].normal = normal;
@@ -734,14 +816,46 @@ __kernel void trace_paths(__global Path *paths,
 		paths[index + row_size * LENGTH].pC = pC;
 		paths[index + row_size * LENGTH].pL = pL;
 		paths[index + row_size * LENGTH].hit_light = hit_light;
+		paths[index + row_size * LENGTH].specular = specular;
 
-		direction = out;
-		pC = dot(out, normal) / (PI);
+		//update back-path probability
 		if (way)
-			mask *= 2.0f;
+			paths[index + row_size * (LENGTH - 1)].pC = pdf(out, paths[index + row_size * LENGTH], -1.0f * direction, way);
+		else
+			paths[index + row_size * (LENGTH - 1)].pL = pdf(out, paths[index + row_size * LENGTH], -1.0f * direction, way);
+
+		//new probability values (to do: clean these up with pdf function)
+		if (way)
+		{
+			if (specular)
+				pL = (SPECULAR + 2.0f) * pow(dot(out, spec_dir), SPECULAR) / (2.0f * PI);
+			else
+			{
+				mask *= 2.0f; //this might not be necessary idk
+				pL = 1.0f / (2.0f * PI);
+			}
+		}
+		else
+			if (specular)
+				pC = (SPECULAR + 2.0f) * pow(dot(out, spec_dir), SPECULAR) / (2.0f * PI);
+			else
+				pC = dot(out, normal) / (PI);
+
+		//russian roulette
+		float p = length <= RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB;
+		if (get_random(&seed0, &seed1) < p)
+			mask /= p;
+		else
+		{
+			length++;
+			break;
+		}
+		direction = out;
 	}
 
 	path_lengths[index] = length;
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
 }
+
+//pC = 100.0f * pow(dot(out, spec_dir), 100.0f) / (2.0f * PI);
