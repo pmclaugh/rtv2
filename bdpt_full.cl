@@ -498,6 +498,9 @@ __kernel void connect_paths(__global Path *paths,
 			int s = 0;
 			if (camera_vertex.hit_light)
 			{
+
+				//causes fireflies with specular objects. needs some sort of fix.
+
 				// float3 contrib = camera_vertex.mask * BRIGHTNESS;
 				// //initialize with ratios
 				// for (int k = 0; k < t; k++)
@@ -555,21 +558,29 @@ __kernel void connect_paths(__global Path *paths,
 				}
 				else
 				{
-					light_in = normalize(light_vertex.origin - LIGHT_VERTEX(s - 2).origin);
+					light_in = normalize(LIGHT_VERTEX(s - 2).origin - light_vertex.origin);
 					this_pL = pdf(light_in, light_vertex, -1.0f * direction, 0);
 					prev_pC = pdf(-1.0f * direction, light_vertex, light_in, 1); //these 0s and 1s suck and should be fixed
 				}
 
-				//the parts based on camera_in (needs similar t == 1 override once we allow t == 1)
-				camera_in = normalize(camera_vertex.origin - CAMERA_VERTEX(t - 2).origin);
-				this_pC = pdf(camera_in, camera_vertex, direction, 1);
-				prev_pL = pdf(direction, camera_vertex, camera_in, 0);
+				//the parts based on camera_in
+				if (t == 1)
+				{
+					prev_pL = 1.0f; //placeholder
+					this_pC = 1.0f;
+				}
+				else
+				{
+					camera_in = normalize(CAMERA_VERTEX(t - 2).origin - camera_vertex.origin);
+					this_pC = pdf(camera_in, camera_vertex, direction, 1);
+					prev_pL = pdf(direction, camera_vertex, camera_in, 0);
+				}
 
 				//evaluate BDRF for both
 				BDRF_C = bdrf(camera_in, camera_vertex, direction);
 				BDRF_L = s == 1 ? 1.0f : bdrf(light_in, light_vertex, -1.0f * direction);
 
-				float3 contrib = light_vertex.mask * camera_vertex.mask * BDRF_C * BDRF_L * this_geom;
+				float3 contrib = light_vertex.mask * camera_vertex.mask * BDRF_L * BDRF_C * this_geom;
 				
 				//initialize with ratios
 				for (int k = 0; k < s + t; k++)
@@ -782,7 +793,7 @@ __kernel void trace_paths(__global Path *paths,
 		else if (specular)
 		{
 			mask *= spec;
-			spec_dir = direction - 2.0f * dot(direction, normal) * normal;
+			spec_dir = 2.0f * dot(-1.0f * direction, normal) * normal + direction;
 			out = gloss_BDRF_sample(normal, spec_dir, direction, 100.0f, &seed0, &seed1);
 		}
 		else
