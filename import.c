@@ -154,8 +154,10 @@ void	load_config(t_env *env)
 		}
 		if (strncmp(line, "mode=", 5) == 0 && strstr(line, "ia"))
 		{
-			env->mode = IA;
-			env->render = 0;
+			#ifdef __APPLE__
+				env->mode = IA;
+				env->render = 0;
+			#endif
 		}
 		else if (strncmp(line, "camera.position=", 16) == 0)
 			env->cam.pos = get_vec(line);
