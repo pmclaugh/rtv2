@@ -15,16 +15,16 @@ typedef struct s_gpu_handle
 	cl_mem *d_paths;
 	cl_mem *d_counts;
 
-	cl_mem *d_vertexes;
-	cl_mem *d_tex_coords;
-	cl_mem *d_normal;
-	cl_mem *d_tangent;
-	cl_mem *d_bitangent;
-	cl_mem *d_boxes;
-	cl_mem *d_materials;
-	cl_mem *d_tex;
-	cl_mem *d_material_indices;
-	cl_mem *d_lights;
+	cl_mem d_vertexes;
+	cl_mem d_tex_coords;
+	cl_mem d_normal;
+	cl_mem d_tangent;
+	cl_mem d_bitangent;
+	cl_mem d_boxes;
+	cl_mem d_materials;
+	cl_mem d_tex;
+	cl_mem d_material_indices;
+	cl_mem d_lights;
 }				gpu_handle;
 
 typedef struct s_gpu_path{
@@ -363,13 +363,13 @@ void recompile(gpu_context *CL, gpu_handle *handle)
 		clSetKernelArg(handle->init_paths[i], 1, sizeof(cl_mem), &handle->d_seeds[i]);
 		clSetKernelArg(handle->init_paths[i], 2, sizeof(cl_mem), &handle->d_paths[i]);
 		clSetKernelArg(handle->init_paths[i], 3, sizeof(cl_mem), &handle->d_counts[i]);
-		clSetKernelArg(handle->init_paths[i], 4, sizeof(cl_mem), &handle->d_lights[i]);
+		clSetKernelArg(handle->init_paths[i], 4, sizeof(cl_mem), &handle->d_lights);
 		clSetKernelArg(handle->init_paths[i], 5, sizeof(cl_uint), &handle->light_poly_count);
-		clSetKernelArg(handle->init_paths[i], 6, sizeof(cl_mem), &handle->d_vertexes[i]);
-		clSetKernelArg(handle->init_paths[i], 7, sizeof(cl_mem), &handle->d_normal[i]);
+		clSetKernelArg(handle->init_paths[i], 6, sizeof(cl_mem), &handle->d_vertexes);
+		clSetKernelArg(handle->init_paths[i], 7, sizeof(cl_mem), &handle->d_normal);
 		clSetKernelArg(handle->init_paths[i], 8, sizeof(cl_mem), &handle->d_outputs[i]);
-		clSetKernelArg(handle->init_paths[i], 9, sizeof(cl_mem), &handle->d_material_indices[i]);
-		clSetKernelArg(handle->init_paths[i], 10, sizeof(cl_mem), &handle->d_materials[i]);
+		clSetKernelArg(handle->init_paths[i], 9, sizeof(cl_mem), &handle->d_material_indices);
+		clSetKernelArg(handle->init_paths[i], 10, sizeof(cl_mem), &handle->d_materials);
 		/*
 		__kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -386,16 +386,16 @@ void recompile(gpu_context *CL, gpu_handle *handle)
 						__global float3 *output)
 		*/
 		clSetKernelArg(handle->trace_paths[i], 0, sizeof(cl_mem), &handle->d_paths[i]);
-		clSetKernelArg(handle->trace_paths[i], 1, sizeof(cl_mem), &handle->d_vertexes[i]);
-		clSetKernelArg(handle->trace_paths[i], 2, sizeof(cl_mem), &handle->d_tex_coords[i]);
-		clSetKernelArg(handle->trace_paths[i], 3, sizeof(cl_mem), &handle->d_normal[i]);
-		clSetKernelArg(handle->trace_paths[i], 4, sizeof(cl_mem), &handle->d_tangent[i]);
-		clSetKernelArg(handle->trace_paths[i], 5, sizeof(cl_mem), &handle->d_bitangent[i]);
-		clSetKernelArg(handle->trace_paths[i], 6, sizeof(cl_mem), &handle->d_material_indices[i]);
-		clSetKernelArg(handle->trace_paths[i], 7, sizeof(cl_mem), &handle->d_materials[i]);
-		clSetKernelArg(handle->trace_paths[i], 8, sizeof(cl_mem), &handle->d_tex[i]);
+		clSetKernelArg(handle->trace_paths[i], 1, sizeof(cl_mem), &handle->d_vertexes);
+		clSetKernelArg(handle->trace_paths[i], 2, sizeof(cl_mem), &handle->d_tex_coords);
+		clSetKernelArg(handle->trace_paths[i], 3, sizeof(cl_mem), &handle->d_normal);
+		clSetKernelArg(handle->trace_paths[i], 4, sizeof(cl_mem), &handle->d_tangent);
+		clSetKernelArg(handle->trace_paths[i], 5, sizeof(cl_mem), &handle->d_bitangent);
+		clSetKernelArg(handle->trace_paths[i], 6, sizeof(cl_mem), &handle->d_material_indices);
+		clSetKernelArg(handle->trace_paths[i], 7, sizeof(cl_mem), &handle->d_materials);
+		clSetKernelArg(handle->trace_paths[i], 8, sizeof(cl_mem), &handle->d_tex);
 		clSetKernelArg(handle->trace_paths[i], 9, sizeof(cl_mem), &handle->d_counts[i]);
-		clSetKernelArg(handle->trace_paths[i], 10, sizeof(cl_mem), &handle->d_boxes[i]);
+		clSetKernelArg(handle->trace_paths[i], 10, sizeof(cl_mem), &handle->d_boxes);
 		clSetKernelArg(handle->trace_paths[i], 11, sizeof(cl_mem), &handle->d_seeds[i]);
 		clSetKernelArg(handle->trace_paths[i], 12, sizeof(cl_mem), &handle->d_outputs[i]);
 
@@ -409,8 +409,8 @@ void recompile(gpu_context *CL, gpu_handle *handle)
 		*/
 		clSetKernelArg(handle->connect_paths[i], 0, sizeof(cl_mem), &handle->d_paths[i]);
 		clSetKernelArg(handle->connect_paths[i], 1, sizeof(cl_mem), &handle->d_counts[i]);
-		clSetKernelArg(handle->connect_paths[i], 2, sizeof(cl_mem), &handle->d_boxes[i]);
-		clSetKernelArg(handle->connect_paths[i], 3, sizeof(cl_mem), &handle->d_vertexes[i]);
+		clSetKernelArg(handle->connect_paths[i], 2, sizeof(cl_mem), &handle->d_boxes);
+		clSetKernelArg(handle->connect_paths[i], 3, sizeof(cl_mem), &handle->d_vertexes);
 		clSetKernelArg(handle->connect_paths[i], 4, sizeof(cl_mem), &handle->d_outputs[i]);
 	}
 }
@@ -425,23 +425,25 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 	handle->light_poly_count = scene->light_poly_count;
 	//alloc and copy memory
 
+	
+
+	//per-platform
+	handle->d_vertexes = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->V, NULL);
+	handle->d_tex_coords = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->T, NULL);
+	handle->d_normal = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->N, NULL);
+	handle->d_tangent = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->TN, NULL);
+	handle->d_bitangent = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->BTN, NULL);
+	handle->d_boxes = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_bin) * scene->bin_count, scene->bins, NULL);
+	handle->d_materials = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_mat) * scene->mat_count, scene->mats, NULL);
+	handle->d_tex = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * scene->tex_size, scene->tex, NULL);
+	handle->d_material_indices =clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * scene->tri_count / 3, scene->M, NULL);
+	handle->d_lights = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int3) * scene->light_poly_count, scene->lights, NULL);
+
 	//per-device
 	handle->d_outputs = calloc(CL->numDevices, sizeof(cl_mem));
 	handle->d_seeds = 	calloc(CL->numDevices, sizeof(cl_mem));
 	handle->d_paths = 	calloc(CL->numDevices, sizeof(cl_mem));
 	handle->d_counts = 	calloc(CL->numDevices, sizeof(cl_mem));
-
-	//formerly per-platform now per-device
-	handle->d_vertexes = calloc(CL->numDevices, sizeof(cl_mem));
-	handle->d_tex_coords = calloc(CL->numDevices, sizeof(cl_mem));
-	handle->d_normal = calloc(CL->numDevices, sizeof(cl_mem));
-	handle->d_tangent = calloc(CL->numDevices, sizeof(cl_mem));
-	handle->d_bitangent = calloc(CL->numDevices, sizeof(cl_mem));
-	handle->d_boxes = calloc(CL->numDevices, sizeof(cl_mem));
-	handle->d_materials = calloc(CL->numDevices, sizeof(cl_mem));
-	handle->d_tex = calloc(CL->numDevices, sizeof(cl_mem));
-	handle->d_material_indices = calloc(CL->numDevices, sizeof(cl_mem));
-	handle->d_lights = calloc(CL->numDevices, sizeof(cl_mem));
 	
 	cl_float3 *blank_output = calloc(half_worksize, sizeof(cl_float3));
 	gpu_path *empty_rays = calloc(worksize * 10, sizeof(gpu_path));
@@ -453,17 +455,6 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 		handle->d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * half_worksize, blank_output, NULL);
 		handle->d_paths[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(gpu_path) * worksize * 10, empty_rays, NULL);
 		handle->d_counts[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * worksize, zero_counts, NULL);
-
-		handle->d_vertexes[i] = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->V, NULL);
-		handle->d_tex_coords[i] = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->T, NULL);
-		handle->d_normal[i] = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->N, NULL);
-		handle->d_tangent[i] = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->TN, NULL);
-		handle->d_bitangent[i] = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->BTN, NULL);
-		handle->d_boxes[i] = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_bin) * scene->bin_count, scene->bins, NULL);
-		handle->d_materials[i] = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_mat) * scene->mat_count, scene->mats, NULL);
-		handle->d_tex[i] = 				clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * scene->tex_size, scene->tex, NULL);
-		handle->d_material_indices[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * scene->tri_count / 3, scene->M, NULL);
-		handle->d_lights[i] = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int3) * scene->light_poly_count, scene->lights, NULL);
 	}
 
 	free(blank_output);
@@ -503,13 +494,13 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 		clSetKernelArg(handle->init_paths[i], 1, sizeof(cl_mem), &handle->d_seeds[i]);
 		clSetKernelArg(handle->init_paths[i], 2, sizeof(cl_mem), &handle->d_paths[i]);
 		clSetKernelArg(handle->init_paths[i], 3, sizeof(cl_mem), &handle->d_counts[i]);
-		clSetKernelArg(handle->init_paths[i], 4, sizeof(cl_mem), &handle->d_lights[i]);
+		clSetKernelArg(handle->init_paths[i], 4, sizeof(cl_mem), &handle->d_lights);
 		clSetKernelArg(handle->init_paths[i], 5, sizeof(cl_uint), &handle->light_poly_count);
-		clSetKernelArg(handle->init_paths[i], 6, sizeof(cl_mem), &handle->d_vertexes[i]);
-		clSetKernelArg(handle->init_paths[i], 7, sizeof(cl_mem), &handle->d_normal[i]);
+		clSetKernelArg(handle->init_paths[i], 6, sizeof(cl_mem), &handle->d_vertexes);
+		clSetKernelArg(handle->init_paths[i], 7, sizeof(cl_mem), &handle->d_normal);
 		clSetKernelArg(handle->init_paths[i], 8, sizeof(cl_mem), &handle->d_outputs[i]);
-		clSetKernelArg(handle->init_paths[i], 9, sizeof(cl_mem), &handle->d_material_indices[i]);
-		clSetKernelArg(handle->init_paths[i], 10, sizeof(cl_mem), &handle->d_materials[i]);
+		clSetKernelArg(handle->init_paths[i], 9, sizeof(cl_mem), &handle->d_material_indices);
+		clSetKernelArg(handle->init_paths[i], 10, sizeof(cl_mem), &handle->d_materials);
 		/*
 		__kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -526,16 +517,16 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 						__global float3 *output)
 		*/
 		clSetKernelArg(handle->trace_paths[i], 0, sizeof(cl_mem), &handle->d_paths[i]);
-		clSetKernelArg(handle->trace_paths[i], 1, sizeof(cl_mem), &handle->d_vertexes[i]);
-		clSetKernelArg(handle->trace_paths[i], 2, sizeof(cl_mem), &handle->d_tex_coords[i]);
-		clSetKernelArg(handle->trace_paths[i], 3, sizeof(cl_mem), &handle->d_normal[i]);
-		clSetKernelArg(handle->trace_paths[i], 4, sizeof(cl_mem), &handle->d_tangent[i]);
-		clSetKernelArg(handle->trace_paths[i], 5, sizeof(cl_mem), &handle->d_bitangent[i]);
-		clSetKernelArg(handle->trace_paths[i], 6, sizeof(cl_mem), &handle->d_material_indices[i]);
-		clSetKernelArg(handle->trace_paths[i], 7, sizeof(cl_mem), &handle->d_materials[i]);
-		clSetKernelArg(handle->trace_paths[i], 8, sizeof(cl_mem), &handle->d_tex[i]);
+		clSetKernelArg(handle->trace_paths[i], 1, sizeof(cl_mem), &handle->d_vertexes);
+		clSetKernelArg(handle->trace_paths[i], 2, sizeof(cl_mem), &handle->d_tex_coords);
+		clSetKernelArg(handle->trace_paths[i], 3, sizeof(cl_mem), &handle->d_normal);
+		clSetKernelArg(handle->trace_paths[i], 4, sizeof(cl_mem), &handle->d_tangent);
+		clSetKernelArg(handle->trace_paths[i], 5, sizeof(cl_mem), &handle->d_bitangent);
+		clSetKernelArg(handle->trace_paths[i], 6, sizeof(cl_mem), &handle->d_material_indices);
+		clSetKernelArg(handle->trace_paths[i], 7, sizeof(cl_mem), &handle->d_materials);
+		clSetKernelArg(handle->trace_paths[i], 8, sizeof(cl_mem), &handle->d_tex);
 		clSetKernelArg(handle->trace_paths[i], 9, sizeof(cl_mem), &handle->d_counts[i]);
-		clSetKernelArg(handle->trace_paths[i], 10, sizeof(cl_mem), &handle->d_boxes[i]);
+		clSetKernelArg(handle->trace_paths[i], 10, sizeof(cl_mem), &handle->d_boxes);
 		clSetKernelArg(handle->trace_paths[i], 11, sizeof(cl_mem), &handle->d_seeds[i]);
 		clSetKernelArg(handle->trace_paths[i], 12, sizeof(cl_mem), &handle->d_outputs[i]);
 
@@ -549,8 +540,8 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 		*/
 		clSetKernelArg(handle->connect_paths[i], 0, sizeof(cl_mem), &handle->d_paths[i]);
 		clSetKernelArg(handle->connect_paths[i], 1, sizeof(cl_mem), &handle->d_counts[i]);
-		clSetKernelArg(handle->connect_paths[i], 2, sizeof(cl_mem), &handle->d_boxes[i]);
-		clSetKernelArg(handle->connect_paths[i], 3, sizeof(cl_mem), &handle->d_vertexes[i]);
+		clSetKernelArg(handle->connect_paths[i], 2, sizeof(cl_mem), &handle->d_boxes);
+		clSetKernelArg(handle->connect_paths[i], 3, sizeof(cl_mem), &handle->d_vertexes);
 		clSetKernelArg(handle->connect_paths[i], 4, sizeof(cl_mem), &handle->d_outputs[i]);
 	}
 
