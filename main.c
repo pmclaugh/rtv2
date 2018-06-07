@@ -190,7 +190,7 @@ int 		main(int ac, char **av)
 	sbvh(env);
 
 	//Performance metrics on BVH
-	study_tree(env->scene->bins, 100000);
+	//study_tree(env->scene->bins, 100000);
 
 	//Flatten BVH
 	flatten_faces(env->scene);

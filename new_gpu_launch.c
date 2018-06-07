@@ -105,7 +105,7 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int worksize)
 		simple_mats[i].Ni = s->materials[i].Ni;
 		simple_mats[i].Tr = s->materials[i].Tr;
 		simple_mats[i].roughness = s->materials[i].roughness;
-		printf("gpu mat %d will be a=%.2f, Ni=%.1f, Tr=%.1f\n", i, simple_mats[i].roughness, simple_mats[i].Ni, simple_mats[i].Tr);
+		//printf("gpu mat %d will be a=%.2f, Ni=%.1f, Tr=%.1f\n", i, simple_mats[i].roughness, simple_mats[i].Ni, simple_mats[i].Tr);
 
 		if (s->materials[i].map_Kd)
 		{
@@ -199,7 +199,6 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int worksize)
 			light_poly_count++;
 	}
 
-	printf("lights\n");
 	cl_int3 *lights = calloc(light_poly_count, sizeof(cl_int3));
 	light_poly_count = 0;
 	for (int i = 0; i < s->face_count; i++)
@@ -209,7 +208,6 @@ gpu_scene *prep_scene(Scene *s, gpu_context *CL, int worksize)
 			lights[light_poly_count++] = (cl_int3){i * 3, i * 3 + 1, i * 3 + 2};
 	}
 
-	printf("lights done\n");
 	//BINS
 	gpu_bin *flat_bvh = flatten_bvh(s);
 
@@ -426,28 +424,62 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 	//alloc and copy memory
 
 	
-
+	unsigned long int platform_size = 0;
+	printf("\nGPU memory stats:\n");
 	//per-platform
 	handle->d_vertexes = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->V, NULL);
 	handle->d_tex_coords = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->T, NULL);
 	handle->d_normal = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->N, NULL);
+	printf("vertexes, tex coords, normals are %lu bytes total\n", sizeof(cl_float3) * scene->tri_count * 3);
+	platform_size += sizeof(cl_float3) * scene->tri_count * 3;
+
 	handle->d_tangent = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->TN, NULL);
 	handle->d_bitangent = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->BTN, NULL);
+	printf("tangent and bitangent are %lu bytes total\n", (sizeof(cl_float3) * scene->tri_count * 2) / 3 );
+	platform_size += (sizeof(cl_float3) * scene->tri_count * 2) / 3;
+
 	handle->d_boxes = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_bin) * scene->bin_count, scene->bins, NULL);
+	printf("bvh is %lu bytes\n", sizeof(gpu_bin) * scene->bin_count);
+	platform_size += sizeof(gpu_bin) * scene->bin_count;
+
 	handle->d_materials = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_mat) * scene->mat_count, scene->mats, NULL);
+	printf("materials are %lu bytes\n", sizeof(gpu_mat) * scene->mat_count);
+	platform_size += sizeof(gpu_mat) * scene->mat_count;
+
 	handle->d_tex = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * scene->tex_size, scene->tex, NULL);
+	printf("megatexture is %lu bytes\n", sizeof(cl_uchar) * scene->tex_size);
+	platform_size += sizeof(cl_uchar) * scene->tex_size;
+
 	handle->d_material_indices =clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * scene->tri_count / 3, scene->M, NULL);
+	printf("mat indices are %lu bytes\n", sizeof(cl_int) * scene->tri_count / 3);
+	platform_size += sizeof(cl_int) * scene->tri_count / 3;
+
 	handle->d_lights = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int3) * scene->light_poly_count, scene->lights, NULL);
+	printf("lights are %lu bytes\n", sizeof(cl_int3) * scene->light_poly_count);
+	platform_size += sizeof(cl_int3) * scene->light_poly_count;
+
 
 	//per-device
+	unsigned long int device_size = 0;
 	handle->d_outputs = calloc(CL->numDevices, sizeof(cl_mem));
 	handle->d_seeds = 	calloc(CL->numDevices, sizeof(cl_mem));
 	handle->d_paths = 	calloc(CL->numDevices, sizeof(cl_mem));
 	handle->d_counts = 	calloc(CL->numDevices, sizeof(cl_mem));
 	
 	cl_float3 *blank_output = calloc(half_worksize, sizeof(cl_float3));
+	printf("output buffer is %lu bytes (per device)\n", half_worksize * sizeof(cl_float3));
+	device_size += half_worksize * sizeof(cl_float3);
+
 	gpu_path *empty_rays = calloc(worksize * 10, sizeof(gpu_path));
+	printf("path buffer is %lu bytes (per device)\n", worksize * 10 * sizeof(gpu_path));
+	device_size += worksize * 10 * sizeof(gpu_path);
+
 	cl_int *zero_counts = calloc(worksize, sizeof(cl_int));
+	printf("counts buffer is %lu bytes (per-device)\n", worksize * sizeof(cl_int));
+	device_size += worksize * sizeof(cl_int);
+
+	printf("platform load is %.2f MB, per-device is %.2f MB\n", (float)platform_size / (float)(1024 * 1024), (float)device_size / (float)(1024 * 1024));
+	printf("\n");
 
 	for (int i = 0; i < CL->numDevices; i++)
 	{
@@ -587,6 +619,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	for (int i = 0; i < CL->numDevices; i++)
 		clSetKernelArg(handle->init_paths[i], 0, sizeof(gpu_camera), &gcam);
 
+	printf("launching\n");
+
 	//ACTUAL LAUNCH TIME
 	cl_event begin, finish;
 	cl_ulong start, end;
@@ -609,7 +643,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	for (int i = 0; i < CL->numDevices; i++)
 		clFinish(CL->commands[i]);
 
-	// printf("made it out of kernel\n");
+	 printf("made it out of kernel\n");
 
 	clGetEventProfilingInfo(begin, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
 	clGetEventProfilingInfo(finish, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);

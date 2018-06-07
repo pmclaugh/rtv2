@@ -23,20 +23,6 @@
 
 #define SPECULAR 20.0f
 
-typedef struct s_ray {
-	float3 origin;
-	float3 direction;
-	float3 inv_dir;
-
-	float3 color;
-	float3 mask;
-
-	int hit_ind;
-	int bounce_count;
-	int status;
-	int type;
-}				Ray;
-
 typedef struct s_path {
 	float3 origin;
 	float3 direction;
