@@ -15,13 +15,13 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define RR_PROB 0.5f
+#define RR_PROB 0.3f
 #define RR_THRESHOLD 3
 
 #define CAMERA_LENGTH 10
 #define LIGHT_LENGTH 10
 
-#define SPECULAR 20.0f
+#define SPECULAR 50.0f
 
 typedef struct s_ray {
 	float3 origin;
@@ -200,7 +200,7 @@ static int intersect_triangle(const float3 origin, const float3 direction, __glo
 static void orthonormal(float3 z, float3 *x, float3 *y)
 {
 	//local orthonormal system
-	float3 axis = fabsf(z.x) > fabsf(z.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+	float3 axis = fabs(z.x) > fabs(z.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
 	axis = cross(axis, z);
 	*x = axis;
 	*y = cross(z, axis);
@@ -422,7 +422,7 @@ static float geometry_term(Path a, Path b)
 	float camera_cos = dot(a.normal, direction);
 	float light_cos = dot(b.normal, -1.0f * direction);
 
-	return fabsf(camera_cos * light_cos) / (t * t);
+	return fabs(camera_cos * light_cos) / (t * t);
 }
 
 static float pdf(float3 in, Path p, float3 out, int way)
@@ -803,7 +803,7 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			mask *= diff;
 			if (way)
-				mask *= fabsf(dot(-1.0f * direction, normal));
+				mask *= fabs(dot(-1.0f * direction, normal));
 			out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 		}
 
