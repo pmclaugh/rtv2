@@ -18,8 +18,8 @@
 #define RR_PROB 0.5f
 #define RR_THRESHOLD 3
 
-#define CAMERA_LENGTH 10
-#define LIGHT_LENGTH 10
+#define CAMERA_LENGTH 5
+#define LIGHT_LENGTH 5
 
 #define SPECULAR 20.0f
 
@@ -485,12 +485,12 @@ __kernel void connect_paths(__global Path *paths,
 	int jump = row_size / RESAMPLE_COUNT;
 
 	int camera_length = path_lengths[2 * index];
-	float p[16];
+	float p[32];
 
 	for (int sample = 0; sample < RESAMPLE_COUNT; sample++)
 	{
 		int light_length = path_lengths[(2 * index + 1 + sample * jump) % row_size];
-		for (int t = 2; t <= camera_length; t++)
+		for (int t = 1; t <= camera_length; t++)
 		{
 			Path camera_vertex = CAMERA_VERTEX(t - 1);
 
