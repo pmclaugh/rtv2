@@ -192,8 +192,6 @@ typedef struct s_new_scene
 	int face_count;
 	AABB *bins;
 	int bin_count;
-	Face *light_faces;
-	int light_face_count;
 }				Scene;
 
 typedef struct s_gpu_context
@@ -248,7 +246,7 @@ typedef struct s_gpu_scene
 	cl_float3 *BTN;
 	cl_uint tri_count;
 
-	cl_float3 *lights;
+	cl_int3 *lights;
 	cl_uint light_poly_count;
 
 	gpu_bin *bins;
