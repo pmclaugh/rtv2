@@ -176,6 +176,9 @@ static int intersect_triangle(const float3 origin, const float3 direction, __glo
 	float3 h = cross(direction, e2);
 	float a = dot(h, e1);
 
+	if (a < 0.0001f)
+		return 0;
+
 	float f = 1.0f / a;
 	float3 s = origin - v0;
 	this_u = f * dot(s, h);
@@ -312,8 +315,6 @@ __kernel void init_paths(const Camera cam,
 
 		float3 through = cam.origin + cam.d_x * (x + 0.98f * get_random(&seed0, &seed1)) + cam.d_y * (y + 0.98f * get_random(&seed0, &seed1));
 		direction = normalize(cam.focus - through);
-		through = cam.origin + cam.d_x * (x + 0.5f) + cam.d_y * (y + 0.5f);
-		float3 prime_direction = normalize(cam.focus - through);
 
 		float3 aperture;
 		aperture.x = (get_random(&seed0, &seed1) - 0.5f) * cam.aperture;
@@ -490,7 +491,7 @@ __kernel void connect_paths(__global Path *paths,
 	for (int sample = 0; sample < RESAMPLE_COUNT; sample++)
 	{
 		int light_length = path_lengths[(2 * index + 1 + sample * jump) % row_size];
-		for (int t = 1; t <= camera_length; t++)
+		for (int t = 2; t <= camera_length; t++)
 		{
 			Path camera_vertex = CAMERA_VERTEX(t - 1);
 
@@ -498,9 +499,7 @@ __kernel void connect_paths(__global Path *paths,
 			int s = 0;
 			if (camera_vertex.hit_light)
 			{
-
 				//causes fireflies with specular objects. needs some sort of fix.
-
 				float3 contrib = camera_vertex.mask * BRIGHTNESS;
 				//initialize with ratios
 				for (int k = 0; k < t; k++)
@@ -801,7 +800,7 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			mask *= diff;
 			if (way)
-				mask *= fabs(dot(-1.0f * direction, normal));
+				mask *= max(0.0f, dot(-1.0f * direction, normal));
 			out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
 		}
 
