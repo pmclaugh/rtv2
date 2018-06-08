@@ -16,6 +16,7 @@
 #define KEY_ENTER	36
 #define KEY_PLUS	24
 #define KEY_MINUS	27
+#define KEY_P		35
 
 #define MOVE_KEYS		(key == KEY_W || (key >= KEY_A && key <= KEY_D) || key == KEY_SPACE || key == KEY_SHIFT)
 #define ARR_KEYS		(key >= KEY_LARR  && key <= KEY_UARR)
@@ -23,6 +24,12 @@
 
 #define MOVE_SPEED	10
 #define TURN_SPEED	M_PI / 30
+
+void	print_config(t_env *env)
+{
+	printf("camera.position= %f, %f, %f\n", env->cam.pos.x, env->cam.pos.y, env->cam.pos.z);
+	printf("camera.normal= %f, %f, %f\n", env->cam.dir.x, env->cam.dir.y, env->cam.dir.z);
+}
 
 int		exit_hook(int key, t_env *env)
 {
@@ -149,6 +156,8 @@ int		key_press(int key, t_env *env)
 		if (key == KEY_MINUS)
 			env->key.minus = 1;
 	}
+	else if (key == KEY_P)
+		print_config(env);
 	return 0;
 }
 
