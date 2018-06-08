@@ -551,7 +551,7 @@ __kernel void connect_paths(__global Path *paths,
 				//the parts based on camera_in
 				if (t == 1)
 				{
-					prev_pL = 1.0f; //placeholder
+					prev_pL = 1.0f; //placeholder. won't be accessed
 					this_pC = 1.0f;
 				}
 				else
@@ -840,5 +840,3 @@ __kernel void trace_paths(__global Path *paths,
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
 }
-
-//pC = 100.0f * pow(dot(out, spec_dir), 100.0f) / (2.0f * PI);

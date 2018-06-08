@@ -255,12 +255,12 @@ gpu_context *prep_gpu(void)
     	gpu->contexts[i] = clCreateContext(0, d, &device_ids[offset], NULL, NULL, &err);
     	for (int j = 0; j < d; j++)
     	{
-    		// #ifndef __APPLE__
-    		// 	gpu->commands[offset + j] = clCreateCommandQueueWithProperties(gpu->contexts[i], device_ids[offset + j], NULL, &err);
-    		// #endif
-    		// #ifdef __APPLE__
+    		#ifndef __APPLE__
+    			gpu->commands[offset + j] = clCreateCommandQueueWithProperties(gpu->contexts[i], device_ids[offset + j], NULL, &err);
+    		#endif
+    		#ifdef __APPLE__
     			gpu->commands[offset + j] = clCreateCommandQueue(gpu->contexts[i], device_ids[offset + j], CL_QUEUE_PROFILING_ENABLE, &err);
-    		// #endif
+    		#endif
     	}
     	offset += d;
     }
@@ -413,6 +413,18 @@ void recompile(gpu_context *CL, gpu_handle *handle)
 	}
 }
 
+void print_size(unsigned long int size)
+{
+	if (size < 1024)
+		printf("%lu B\n", size);
+	else if (size < 1024 * 1024)
+		printf("%lu KB\n", size / 1024);
+	else if (size < 1024 * 1024 * 1024)
+		printf("%.2f MB\n", (float)size / (float)(1024 * 1024));
+	else
+		printf("%.2f GB\n", (float)size / (float)(1024 * 1024 * 1024));
+}
+
 gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 {
 
@@ -430,32 +442,39 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 	handle->d_vertexes = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->V, NULL);
 	handle->d_tex_coords = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->T, NULL);
 	handle->d_normal = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count, scene->N, NULL);
-	printf("vertexes, tex coords, normals are %lu bytes total\n", sizeof(cl_float3) * scene->tri_count * 3);
+	printf("vertexes, tex coords, normals: ");
+	print_size(sizeof(cl_float3) * scene->tri_count * 3);
 	platform_size += sizeof(cl_float3) * scene->tri_count * 3;
 
 	handle->d_tangent = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->TN, NULL);
 	handle->d_bitangent = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * scene->tri_count / 3, scene->BTN, NULL);
-	printf("tangent and bitangent are %lu bytes total\n", (sizeof(cl_float3) * scene->tri_count * 2) / 3 );
+	printf("tangent and bitangent: ");
+	print_size((sizeof(cl_float3) * scene->tri_count * 2) / 3 );
 	platform_size += (sizeof(cl_float3) * scene->tri_count * 2) / 3;
 
 	handle->d_boxes = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_bin) * scene->bin_count, scene->bins, NULL);
-	printf("bvh is %lu bytes\n", sizeof(gpu_bin) * scene->bin_count);
+	printf("bvh: ");
+	print_size(sizeof(gpu_bin) * scene->bin_count);
 	platform_size += sizeof(gpu_bin) * scene->bin_count;
 
 	handle->d_materials = 		clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(gpu_mat) * scene->mat_count, scene->mats, NULL);
-	printf("materials are %lu bytes\n", sizeof(gpu_mat) * scene->mat_count);
+	printf("materials: ");
+	print_size(sizeof(gpu_mat) * scene->mat_count);
 	platform_size += sizeof(gpu_mat) * scene->mat_count;
 
 	handle->d_tex = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uchar) * scene->tex_size, scene->tex, NULL);
-	printf("megatexture is %lu bytes\n", sizeof(cl_uchar) * scene->tex_size);
+	printf("megatexture: ");
+	print_size(sizeof(cl_uchar) * scene->tex_size);
 	platform_size += sizeof(cl_uchar) * scene->tex_size;
 
 	handle->d_material_indices =clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * scene->tri_count / 3, scene->M, NULL);
-	printf("mat indices are %lu bytes\n", sizeof(cl_int) * scene->tri_count / 3);
+	printf("mat indices: ");
+	print_size(sizeof(cl_int) * scene->tri_count / 3);
 	platform_size += sizeof(cl_int) * scene->tri_count / 3;
 
 	handle->d_lights = 			clCreateBuffer(CL->contexts[0], CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_int3) * scene->light_poly_count, scene->lights, NULL);
-	printf("lights are %lu bytes\n", sizeof(cl_int3) * scene->light_poly_count);
+	printf("lights: ");
+	print_size(sizeof(cl_int3) * scene->light_poly_count);
 	platform_size += sizeof(cl_int3) * scene->light_poly_count;
 
 
@@ -467,18 +486,24 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 	handle->d_counts = 	calloc(CL->numDevices, sizeof(cl_mem));
 	
 	cl_float3 *blank_output = calloc(half_worksize, sizeof(cl_float3));
-	printf("output buffer is %lu bytes (per device)\n", half_worksize * sizeof(cl_float3));
+	printf("output buffer: (per device) ");
+	print_size(half_worksize * sizeof(cl_float3));
 	device_size += half_worksize * sizeof(cl_float3);
 
 	gpu_path *empty_rays = calloc(worksize * 10, sizeof(gpu_path));
-	printf("path buffer is %lu bytes (per device)\n", worksize * 10 * sizeof(gpu_path));
+	printf("path buffer: (per-device) ");
+	print_size(worksize * 10 * sizeof(gpu_path));
 	device_size += worksize * 10 * sizeof(gpu_path);
 
 	cl_int *zero_counts = calloc(worksize, sizeof(cl_int));
-	printf("counts buffer is %lu bytes (per-device)\n", worksize * sizeof(cl_int));
+	printf("counts buffer: (per-device) ");
+	print_size(worksize * sizeof(cl_int));
 	device_size += worksize * sizeof(cl_int);
 
-	printf("platform load is %.2f MB, per-device is %.2f MB\n", (float)platform_size / (float)(1024 * 1024), (float)device_size / (float)(1024 * 1024));
+	printf("platform load is ");
+	print_size(platform_size);
+	printf("per-device load is ");
+	print_size(device_size);
 	printf("\n");
 
 	for (int i = 0; i < CL->numDevices; i++)
