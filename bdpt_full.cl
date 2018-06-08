@@ -9,7 +9,7 @@
 #define BLUE (float3)(0.2f, 0.2f, 0.8f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
-#define BRIGHTNESS 100000.0f
+#define BRIGHTNESS 1.0f //current state of tonemapping makes brightness value irrelevant
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
@@ -195,33 +195,33 @@ static void orthonormal(float3 z, float3 *x, float3 *y)
 	*y = cross(z, axis);
 }
 
-static float3 direction_uniform_hemisphere(float3 x, float3 y, float u1, float theta, float3 normal)
+static float3 direction_uniform_hemisphere(float3 x, float3 y, float u1, float phi, float3 normal)
 {
 	float r = native_sqrt(1.0f - u1 * u1);
-	return normalize(x * r * native_cos(theta) + y * r * native_sin(theta) + normal * u1);
+	return normalize(x * r * native_cos(phi) + y * r * native_sin(phi) + normal * u1);
 }
 
-static float3 direction_cos_hemisphere(float3 x, float3 y, float u1, float theta, float3 normal)
+static float3 direction_cos_hemisphere(float3 x, float3 y, float u1, float phi, float3 normal)
 {
 	float r = native_sqrt(u1);
-	return normalize(x * r * native_cos(theta) + y * r * native_sin(theta) + normal * native_sqrt(max(0.0f, 1.0f - u1)));
+	return normalize(x * r * native_cos(phi) + y * r * native_sin(phi) + normal * native_sqrt(max(0.0f, 1.0f - u1)));
 }
 
-static float3 diffuse_BDRF_sample(float3 normal, int way, uint *seed0, uint *seed1)
+static float3 diffuse_BRDF_sample(float3 normal, int way, uint *seed0, uint *seed1)
 {
 	float3 x, y;
 	orthonormal(normal, &x, &y);
 
 	float u1 = get_random(seed0, seed1);
 	float u2 = get_random(seed0, seed1);
-	float theta = 2.0f * PI * u2;
+	float phi = 2.0f * PI * u2;
 	if (way)
-		return direction_uniform_hemisphere(x, y, u1, theta, normal);
+		return direction_uniform_hemisphere(x, y, u1, phi, normal);
 	else
-		return direction_cos_hemisphere(x, y, u1, theta, normal);
+		return direction_cos_hemisphere(x, y, u1, phi, normal);
 }
 
-static float3 gloss_BDRF_sample(float3 normal, float3 spec_dir, float3 in, float exponent, uint *seed0, uint *seed1)
+static float3 gloss_BRDF_sample(float3 normal, float3 spec_dir, float3 in, float exponent, uint *seed0, uint *seed1)
 {
 	//pure specular direction
 	float3 x, y;
@@ -278,7 +278,7 @@ __kernel void init_paths(const Camera cam,
 		v1 = V[light.y];
 		v2 = V[light.z];
 		normal = normalize(N[light.x]);
-		direction = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
+		direction = diffuse_BRDF_sample(normal, way, &seed0, &seed1);
 
 		float3 Ke = mats[M[light.x / 3]].Ke;
 		mask = Ke * BRIGHTNESS;	
@@ -427,7 +427,7 @@ static float pdf(float3 in, Path p, float3 out, int way)
 			return max(0.0f, dot(p.normal, out)) / PI;
 }
 
-static float bdrf(float3 in, const Path p, float3 out)
+static float BRDF(float3 in, const Path p, float3 out)
 {
 	//in and out should both point away from p.
 	if (p.specular)
@@ -532,7 +532,7 @@ __kernel void connect_paths(__global Path *paths,
 					continue ;
 
 				float this_geom = geometry_term(camera_vertex, light_vertex);
-				float this_pL, this_pC, BDRF_L, BDRF_C, prev_pL, prev_pC;
+				float this_pL, this_pC, BRDF_L, BRDF_C, prev_pL, prev_pC;
 				float3 light_in, camera_in;
 
 				//the parts based on light_in
@@ -561,11 +561,11 @@ __kernel void connect_paths(__global Path *paths,
 					prev_pL = pdf(direction, camera_vertex, camera_in, 0);
 				}
 
-				//evaluate BDRF for both
-				BDRF_C = bdrf(camera_in, camera_vertex, direction);
-				BDRF_L = s == 1 ? 1.0f : bdrf(light_in, light_vertex, -1.0f * direction);
+				//evaluate BRDF for both
+				BRDF_C = BRDF(camera_in, camera_vertex, direction);
+				BRDF_L = s == 1 ? 1.0f : BRDF(light_in, light_vertex, -1.0f * direction);
 
-				float3 contrib = light_vertex.mask * camera_vertex.mask * BDRF_L * BDRF_C * this_geom;
+				float3 contrib = light_vertex.mask * camera_vertex.mask * BRDF_L * BRDF_C * this_geom;
 				
 				//initialize with ratios
 				for (int k = 0; k < s + t; k++)
@@ -780,14 +780,14 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			mask *= spec;
 			spec_dir = 2.0f * dot(-1.0f * direction, normal) * normal + direction;
-			out = gloss_BDRF_sample(normal, spec_dir, direction, SPECULAR, &seed0, &seed1);
+			out = gloss_BRDF_sample(normal, spec_dir, direction, SPECULAR, &seed0, &seed1);
 		}
 		else
 		{
 			mask *= diff;
 			if (way)
 				mask *= max(0.0f, dot(-1.0f * direction, normal));
-			out = diffuse_BDRF_sample(normal, way, &seed0, &seed1);
+			out = diffuse_BRDF_sample(normal, way, &seed0, &seed1);
 		}
 
 
