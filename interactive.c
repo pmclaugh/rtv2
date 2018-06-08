@@ -205,17 +205,12 @@ void	trace_scene(AABB *tree, t_ray *ray, int view)
 		ray->color = (cl_double3){.25, .25, .25};
 	cl_float3 focal_point = vec_scale(unit_vec(vec_sub(g_focus, g_through)), g_focal_length);
 	cl_float3 dist = vec_sub(vec_scale(ray->direction, ray->t), focal_point);
-	if (fabsf(dist.x) < 5 && fabsf(dist.y) < 5 && fabsf(dist.z) < 5)
-		ray->color = (cl_double3){1, 0, 0};
-	else
-	{
-		// cl_float3	light = unit_vec((cl_float3){.5, 1, -.25});
-		float		cost = dot(ray->N, ray->direction);
-		if (cost < 0)
-			cost *= -1.0f;
-		cost = ((cost - .5) / 2) + .5; //make greyscale contrast less extreme
-		ray->color = (cl_double3){cost, cost, cost};
-	}
+	// cl_float3	light = unit_vec((cl_float3){.5, 1, -.25});
+	float		cost = dot(ray->N, ray->direction);
+	if (cost < 0)
+		cost *= -1.0f;
+	cost = ((cost - .5) / 2) + .5; //make greyscale contrast less extreme
+	ray->color = (cl_double3){cost, cost, cost};
 }
 
 //////////////////////////////////////////////////////////////
