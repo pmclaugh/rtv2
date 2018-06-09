@@ -15,13 +15,15 @@
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
+#define H_FOV (60.0 * (2 * PI / 360.0))
+
 #define RR_PROB 0.5f
 #define RR_THRESHOLD 3
 
 #define CAMERA_LENGTH 5
 #define LIGHT_LENGTH 5
 
-#define SPECULAR 20.0f
+#define SPECULAR 200.0f
 
 typedef struct s_path {
 	float3 origin;
@@ -91,6 +93,41 @@ typedef struct s_box
 	float max_z;
 	int r_ind;
 }				Box;
+
+typedef struct s_3x3
+{
+	float3 row1;
+	float3 row2;
+	float3 row3;
+}				t_3x3;
+
+#define WIN_DIM 1024.0f
+
+static t_3x3 rotation_matrix(const float3 a, const float3 b)
+{
+	//returns a matrix that will rotate vector a to be parallel with vector b.
+
+	const float angle = acos(dot(a,b));
+	const float3 axis = normalize(cross(a, b));
+	t_3x3 rotation;
+	rotation.row1 = (float3){	cos(angle) + axis.x * axis.x * (1 - cos(angle)),
+								axis.x * axis.y * (1 - cos(angle)) - axis.z * sin(angle),
+								axis.x * axis.z * (1 - cos(angle)) + axis.y * sin(angle)};
+	
+	rotation.row2 = (float3){	axis.y * axis.x * (1 - cos(angle)) + axis.z * sin(angle),
+								cos(angle) + axis.y * axis.y * (1 - cos(angle)),
+								axis.y * axis.z * (1 - cos(angle)) - axis.x * sin(angle)};
+
+	rotation.row3 = (float3){	axis.z * axis.x * (1 - cos(angle)) - axis.y * sin(angle),
+								axis.z * axis.y * (1 - cos(angle)) + axis.x * sin(angle),
+								cos(angle) + axis.z * axis.z * (1 - cos(angle))};
+	return rotation;
+}
+
+static float3 mat_vec_mult(const t_3x3 mat, const float3 vec)
+{
+	return (float3){dot(mat.row1, vec), dot(mat.row2, vec), dot(mat.row3, vec)};
+}
 
 static float get_random(unsigned int *seed0, unsigned int *seed1) {
 
@@ -331,6 +368,8 @@ __kernel void init_paths(const Camera cam,
 
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
+
+	// output[index] = 0;
 }
 
 
@@ -457,11 +496,13 @@ static float BRDF(float3 in, const Path p, float3 out)
 
 #define RESAMPLE_COUNT 1
 
-__kernel void connect_paths(__global Path *paths,
+__kernel void connect_paths(const Camera cam,
+							__global Path *paths,
 							__global int *path_lengths,
 							__global Box *boxes,
 							__global float3 *V,
-							__global float3 *output)
+							__global float3 *output,
+							__global float3 *light_img)
 {
 	//uses half global size
 	int index = get_global_id(0);
@@ -474,10 +515,12 @@ __kernel void connect_paths(__global Path *paths,
 	int camera_length = path_lengths[2 * index];
 	float p[32];
 
+	int light_img_index = -1;
+
 	for (int sample = 0; sample < RESAMPLE_COUNT; sample++)
 	{
 		int light_length = path_lengths[(2 * index + 1 + sample * jump) % row_size];
-		for (int t = 2; t <= camera_length; t++)
+		for (int t = 1; t <= camera_length; t++)
 		{
 			Path camera_vertex = CAMERA_VERTEX(t - 1);
 
@@ -549,10 +592,26 @@ __kernel void connect_paths(__global Path *paths,
 				}
 
 				//the parts based on camera_in
+				light_img_index = -1;
 				if (t == 1)
 				{
+					this_pC = 1.0f; // 1 / SA (SA of camera plane is 1x1)
 					prev_pL = 1.0f; //placeholder. won't be accessed
-					this_pC = 1.0f;
+
+					float 		dist = 0.5f / tan(H_FOV / 2);
+					t_3x3 		rot_hor = rotation_matrix(normalize(cam.d_x), UNIT_X);
+					t_3x3 		rot_vert = rotation_matrix(normalize(cam.d_y), UNIT_Y);
+
+					float		ratio, x, y;
+					float3		dir = direction;
+					dir = mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir));
+					if (dir.z <= 0.0f)
+						continue ;
+					ratio = dist / dir.z;
+					x = ((dir.x * -ratio) * WIN_DIM) + (WIN_DIM / 2);
+					y = ((dir.y * -ratio) * WIN_DIM) + (WIN_DIM / 2);
+					if (x >= 0 && x < WIN_DIM && y >= 0 && y <= WIN_DIM)
+						light_img_index = (int)x + ((int)y * (int)WIN_DIM);
 				}
 				else
 				{
@@ -590,11 +649,17 @@ __kernel void connect_paths(__global Path *paths,
 				float test = 1.0f / (ratio * weight);
 
 				if (test == test)
-					sum += contrib * test;
+				{
+					if (light_img_index >= 0 && light_img_index < row_size / 2)
+						light_img[light_img_index] += contrib * test / (float)RESAMPLE_COUNT;
+					else
+						sum += contrib * test;
+				}
 			}
 		}
 	}
 	output[index] = sum / (float)RESAMPLE_COUNT;
+	
 }
 
 static void surface_vectors(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *true_N_out, float3 *txcrd_out)
