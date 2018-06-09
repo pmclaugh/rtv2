@@ -428,6 +428,8 @@ void print_size(unsigned long int size)
 		printf("%.2f GB\n", (float)size / (float)(1024 * 1024 * 1024));
 }
 
+#define PATH_LENGTH 5
+
 gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 {
 
@@ -494,10 +496,10 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 	print_size(half_worksize * sizeof(cl_float3));
 	device_size += half_worksize * sizeof(cl_float3);
 
-	gpu_path *empty_rays = calloc(worksize * 5, sizeof(gpu_path));
+	gpu_path *empty_rays = calloc(worksize * PATH_LENGTH, sizeof(gpu_path));
 	printf("path buffer: (per-device) ");
-	print_size(worksize * 5 * sizeof(gpu_path));
-	device_size += worksize * 5 * sizeof(gpu_path);
+	print_size(worksize * PATH_LENGTH * sizeof(gpu_path));
+	device_size += worksize * PATH_LENGTH * sizeof(gpu_path);
 
 	cl_int *zero_counts = calloc(worksize, sizeof(cl_int));
 	printf("counts buffer: (per-device) ");
@@ -515,7 +517,7 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 		handle->d_seeds[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_uint) * 2 * worksize, &scene->seeds[2 * worksize * i], NULL);
 		handle->d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * half_worksize, blank_output, NULL);
 		handle->d_light_img[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * half_worksize, blank_output, NULL);
-		handle->d_paths[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(gpu_path) * worksize * 5, empty_rays, NULL);
+		handle->d_paths[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(gpu_path) * worksize * PATH_LENGTH, empty_rays, NULL);
 		handle->d_counts[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * worksize, zero_counts, NULL);
 	}
 
