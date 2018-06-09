@@ -83,6 +83,7 @@ void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
 
 void		path_tracer(t_env *env)
 {
+	static int frame_number;
 	int first = (env->samples == 0) ? 1 : 0;
 	env->samples += 1;
 	set_camera(&env->cam, DIM_PT);
@@ -96,11 +97,13 @@ void		path_tracer(t_env *env)
 	draw_pixels(env->pt, DIM_PT, DIM_PT);
 	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
 	mlx_key_hook(env->pt->win, exit_hook, env);
-	// save_file(env, env->samples);
+	
 	if (env->samples >= env->spp)
 	{
 		env->samples = 0;
-		env->render = 0;
+		env->render = 1;
+		save_file(env, frame_number);
+		frame_number++;
 		for (int i = 0; i < DIM_PT * DIM_PT; i++)
 		{
 			env->pt->total_clr[i].x = 0;

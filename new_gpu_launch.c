@@ -629,6 +629,11 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		handle = gpu_alloc(CL, scene, worksize);
 
 
+	if (first)
+	{
+		scene->mats[2].roughness -= 0.01f;
+	}
+
 	gpu_camera gcam;
 	gcam.pos = cam.pos;
 	gcam.focus = cam.focus;
@@ -643,6 +648,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	//camera may need update
 	for (int i = 0; i < CL->numDevices; i++)
 		clSetKernelArg(handle->init_paths[i], 0, sizeof(gpu_camera), &gcam);
+	//materials may need update
+	clEnqueueWriteBuffer(CL->commands[0], handle->d_materials, CL_TRUE, 0, sizeof(gpu_mat) * scene->mat_count, scene->mats, 0, NULL, NULL);
 
 	//ACTUAL LAUNCH TIME
 	cl_event begin, finish;
