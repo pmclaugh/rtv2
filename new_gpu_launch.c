@@ -652,8 +652,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		clSetKernelArg(handle->connect_paths[i], 0, sizeof(gpu_camera), &gcam);
 	}
 
-	printf("launching\n");
-
 	//ACTUAL LAUNCH TIME
 	cl_event begin, finish;
 	cl_ulong start, end;
@@ -675,8 +673,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 
 	for (int i = 0; i < CL->numDevices; i++)
 		clFinish(CL->commands[i]);
-
-	 printf("made it out of kernel\n");
 
 	clGetEventProfilingInfo(begin, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
 	clGetEventProfilingInfo(finish, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);

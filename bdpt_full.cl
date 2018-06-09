@@ -25,6 +25,7 @@
 
 #define SPECULAR 200.0f
 
+
 typedef struct s_path {
 	float3 origin;
 	float3 direction;
@@ -47,7 +48,6 @@ typedef struct s_material
 	float Tr;
 	float roughness;
 
-	//here's where texture and stuff goes
 	int d_index;
 	int d_height;
 	int d_width;
@@ -336,7 +336,7 @@ __kernel void init_paths(const Camera cam,
 		float y = (float)((index / 2) / cam.width);
 		origin = cam.focus;
 
-		float3 through = cam.origin + cam.d_x * (x + 0.98f * get_random(&seed0, &seed1)) + cam.d_y * (y + 0.98f * get_random(&seed0, &seed1));
+		float3 through = cam.origin + cam.d_x * (x + get_random(&seed0, &seed1)) + cam.d_y * (y + get_random(&seed0, &seed1));
 		direction = normalize(cam.focus - through);
 
 		float3 aperture;
@@ -492,6 +492,7 @@ static float BRDF(float3 in, const Path p, float3 out)
 #define PC(x) ((x) == s - 2 ? prev_pC : (x) < s - 1 ? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x) - 1).pC))
 
 #define QC(x) (s + t - (x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
+
 #define QL(x) ((x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
 
 #define RESAMPLE_COUNT 1
@@ -549,9 +550,7 @@ __kernel void connect_paths(const Camera cam,
 				for (int k = 0; k < t + 1; k++)
 					weight += p[k];
 
-				float ratio = (float)(t + 1);
-
-				float test = 1.0f / (ratio * weight);
+				float test = 1.0f / (weight);
 
 				if (test == test && weight == weight)
 					sum += contrib * test;
@@ -640,13 +639,12 @@ __kernel void connect_paths(const Camera cam,
 				for (int k = 0; k < s + t + 1; k++)
 					p[k] /= pivot;
 
+				//sum weight ratios
 				float weight = 0.0f;
 				for (int k = 0; k < s + t + 1; k++)
 					weight += p[k];
 
-				float ratio = (float)(s + t + 1);
-
-				float test = 1.0f / (ratio * weight);
+				float test = 1.0f / (weight);
 
 				if (test == test)
 				{
@@ -704,7 +702,7 @@ static float3 fetch_tex(	float3 txcrd,
 	return out;
 }
 
-static void fetch_all_tex(__global int *M, __global Material *mats, __global uchar *tex, int ind, float3 txcrd, float3 *diff, float3 *spec, float3 *bump, float3 *trans, float3 *Ke)
+static void fetch_all_tex(__global int *M, __global Material *mats, __global uchar *tex, int ind, float3 txcrd, float3 *diff, float3 *spec, float3 *bump, float3 *trans, float3 *Ke, float *roughness)
 {
 	const Material mat = mats[M[ind / 3]];
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : BLACK;
@@ -712,6 +710,7 @@ static void fetch_all_tex(__global int *M, __global Material *mats, __global uch
 	*spec = mat.s_height ? fetch_tex(txcrd, mat.s_index, mat.s_height, mat.s_width, tex) : mat.Ks;
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 	*Ke = mat.Ke;
+	*roughness = mat.roughness;
 }
 
 static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float3 sample_N, float3 bump)
@@ -814,7 +813,6 @@ __kernel void trace_paths(__global Path *paths,
 		if (ind == -1)
 			break ;
 
-
 		//get normal and texture coordinate
 		float3 normal, true_normal, txcrd;
 		surface_vectors(V, N, T, direction, ind, u, v, &normal, &true_normal, &txcrd);
@@ -824,7 +822,8 @@ __kernel void trace_paths(__global Path *paths,
 
 		//get all texture-like values
 		float3 diff, spec, bump, trans, Ke;
-		fetch_all_tex(M, mats, tex, ind, txcrd, &diff, &spec, &bump, &trans, &Ke);
+		float roughness;
+		fetch_all_tex(M, mats, tex, ind, txcrd, &diff, &spec, &bump, &trans, &Ke, &roughness);
 
 		// bump map
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
@@ -833,6 +832,7 @@ __kernel void trace_paths(__global Path *paths,
 		float3 out;
 		int specular = dot(spec, spec) > 0.0f ? 1 : 0;
 		float3 spec_dir;
+		float spec_roll = get_random(&seed0, &seed1);
 		if (dot(Ke, Ke) > 0.0f)
 		{
 			if (way)
@@ -841,7 +841,7 @@ __kernel void trace_paths(__global Path *paths,
 			hit_light = 1;
 			paths[index + row_size * (LENGTH - 1)].pL = 1.0f / (2.0f * PI);
 		}
-		else if (specular)
+		else if (specular && spec_roll <= roughness)
 		{
 			mask *= spec;
 			spec_dir = 2.0f * dot(-1.0f * direction, normal) * normal + direction;
@@ -853,6 +853,7 @@ __kernel void trace_paths(__global Path *paths,
 			if (way)
 				mask *= max(0.0f, dot(-1.0f * direction, normal));
 			out = diffuse_BRDF_sample(normal, way, &seed0, &seed1);
+			specular = 0;
 		}
 
 
