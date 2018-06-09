@@ -367,8 +367,9 @@ void recompile(gpu_context *CL, gpu_handle *handle)
 		clSetKernelArg(handle->init_paths[i], 6, sizeof(cl_mem), &handle->d_vertexes);
 		clSetKernelArg(handle->init_paths[i], 7, sizeof(cl_mem), &handle->d_normal);
 		clSetKernelArg(handle->init_paths[i], 8, sizeof(cl_mem), &handle->d_outputs[i]);
-		clSetKernelArg(handle->init_paths[i], 9, sizeof(cl_mem), &handle->d_material_indices);
-		clSetKernelArg(handle->init_paths[i], 10, sizeof(cl_mem), &handle->d_materials);
+		clSetKernelArg(handle->init_paths[i], 9, sizeof(cl_mem), &handle->d_light_img[i]);
+		clSetKernelArg(handle->init_paths[i], 10, sizeof(cl_mem), &handle->d_material_indices);
+		clSetKernelArg(handle->init_paths[i], 11, sizeof(cl_mem), &handle->d_materials);
 		/*
 		__kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -493,10 +494,10 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 	print_size(half_worksize * sizeof(cl_float3));
 	device_size += half_worksize * sizeof(cl_float3);
 
-	gpu_path *empty_rays = calloc(worksize * 10, sizeof(gpu_path));
+	gpu_path *empty_rays = calloc(worksize * 5, sizeof(gpu_path));
 	printf("path buffer: (per-device) ");
-	print_size(worksize * 10 * sizeof(gpu_path));
-	device_size += worksize * 10 * sizeof(gpu_path);
+	print_size(worksize * 5 * sizeof(gpu_path));
+	device_size += worksize * 5 * sizeof(gpu_path);
 
 	cl_int *zero_counts = calloc(worksize, sizeof(cl_int));
 	printf("counts buffer: (per-device) ");
@@ -514,7 +515,7 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 		handle->d_seeds[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_uint) * 2 * worksize, &scene->seeds[2 * worksize * i], NULL);
 		handle->d_outputs[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * half_worksize, blank_output, NULL);
 		handle->d_light_img[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_float3) * half_worksize, blank_output, NULL);
-		handle->d_paths[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(gpu_path) * worksize * 10, empty_rays, NULL);
+		handle->d_paths[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(gpu_path) * worksize * 5, empty_rays, NULL);
 		handle->d_counts[i] = clCreateBuffer(CL->contexts[0], CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(cl_int) * worksize, zero_counts, NULL);
 	}
 
@@ -560,8 +561,9 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 		clSetKernelArg(handle->init_paths[i], 6, sizeof(cl_mem), &handle->d_vertexes);
 		clSetKernelArg(handle->init_paths[i], 7, sizeof(cl_mem), &handle->d_normal);
 		clSetKernelArg(handle->init_paths[i], 8, sizeof(cl_mem), &handle->d_outputs[i]);
-		clSetKernelArg(handle->init_paths[i], 9, sizeof(cl_mem), &handle->d_material_indices);
-		clSetKernelArg(handle->init_paths[i], 10, sizeof(cl_mem), &handle->d_materials);
+		clSetKernelArg(handle->init_paths[i], 9, sizeof(cl_mem), &handle->d_light_img[i]);
+		clSetKernelArg(handle->init_paths[i], 10, sizeof(cl_mem), &handle->d_material_indices);
+		clSetKernelArg(handle->init_paths[i], 11, sizeof(cl_mem), &handle->d_materials);
 		/*
 		__kernel void trace_paths(__global Path *paths,
 						__global float3 *V,
@@ -709,7 +711,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	for (int i = 0; i < CL->numDevices; i++)
 		for (int j = 0; j < half_worksize; j++)
 		{
-			output[j] = vec_add(vec_add(output[j], outputs[i][j]), light_img[i][j]);
+			output[j] = vec_add(output[j], light_img[i][j]);
 			count[j] += 1;//counts[i][2 * j] * counts[i][2 * j + 1];
 			camera_count += counts[i][2 * j];
 			light_count += counts[i][2 * j + 1];

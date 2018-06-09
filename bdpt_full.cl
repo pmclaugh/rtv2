@@ -291,6 +291,7 @@ __kernel void init_paths(const Camera cam,
 						__global float3 *V,
 						__global float3 *N,
 						__global float3 *output,
+						__global float3 *light_img,
 						__global int *M,
 						__global Material *mats
 						)
@@ -369,7 +370,7 @@ __kernel void init_paths(const Camera cam,
 	seeds[2 * index] = seed0;
 	seeds[2 * index + 1] = seed1;
 
-	// output[index] = 0;
+	light_img[index / 2] = BLACK;
 }
 
 
@@ -556,7 +557,7 @@ __kernel void connect_paths(const Camera cam,
 					sum += contrib * test;
 				continue;
 			}
-			for (s = 1; s <= light_length; s++)
+			for (s = (t > 1) ? 1 : 2; s <= light_length; s++)
 			{
 				Path light_vertex = LIGHT_VERTEX(s - 1);
 
@@ -620,7 +621,7 @@ __kernel void connect_paths(const Camera cam,
 				}
 
 				//evaluate BRDF for both
-				BRDF_C = BRDF(camera_in, camera_vertex, direction);
+				BRDF_C = t == 1 ? 1.0f : BRDF(camera_in, camera_vertex, direction);
 				BRDF_L = s == 1 ? 1.0f : BRDF(light_in, light_vertex, -1.0f * direction);
 
 				float3 contrib = light_vertex.mask * camera_vertex.mask * BRDF_L * BRDF_C * this_geom;
