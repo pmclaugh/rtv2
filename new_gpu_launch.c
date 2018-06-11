@@ -637,7 +637,6 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	if (!handle)
 		handle = gpu_alloc(CL, scene, worksize);
 
-	printf("pos, focus, origin, direction, d_x, d_y\n");
 	gpu_camera gcam;
 	gcam.pos = cam.pos;
 	gcam.focus = cam.focus;
