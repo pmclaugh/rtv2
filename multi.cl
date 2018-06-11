@@ -9,17 +9,13 @@
 #define BLUE (float3)(0.2f, 0.2f, 0.8f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
-#define LUMA (float3)(0.2126f, 0.7152f, 0.0722f)
-
-#define SUN (float3)(0.0f, 10000.0f, 0.0f)
 #define SUN_BRIGHTNESS 60000.0f
-#define SUN_RAD 1.0f;
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
 #define UNIT_Z (float3)(0.0f, 0.0f, 1.0f)
 
-#define RR_PROB 0.3f
+#define RR_PROB 0.1f
 
 #define NEW 0
 #define TRAVERSE 1
@@ -283,9 +279,9 @@ __kernel void fetch(	__global Ray *rays,
 	ray.N = bump_map(TN, BTN, ray.hit_ind / 3, ray.N, ray.bump);
 	ray.status = BOUNCE;
 
-	if (dot(mat.Ke, mat.Ke) > 0.0f)
+	if (dot(ray.N, ray.direction) < 0.0f && dot(mat.Ke, mat.Ke) > 0.0f)
 	{
-		ray.color += SUN_BRIGHTNESS * ray.mask;
+		ray.color += SUN_BRIGHTNESS * mat.Ke * ray.mask;
 		ray.status = DEAD;
 	}
 
@@ -325,7 +321,7 @@ static float GGX_F(float3 i, float3 m, float n1, float n2)
 	float num = n1 - n2;
 	float denom = n1 + n2;
 	float r0 = (num * num) / (denom * denom);
-	float cos_term = pow(1.0f - dot(i, m), 5.0f);
+	float cos_term = pow(1.0f - fmax(0.0f, dot(i, m)), 5.0f);
 	return r0 + (1.0f - r0) * cos_term;
 }
 
@@ -350,17 +346,49 @@ static float3 GGX_NDF(float3 i, float3 n, float r1, float r2, float a)
 
 static float GGX_weight(float3 i, float3 o, float3 m, float3 n, float a, float norm_sign)
 {
-	// if (fabs(dot(i,m)) > 1.0f)
-	// {
-	// 	printf("dot > 1.0f!\n");
-	// 	printf("length of i: %.2f m:%.2f\n", sqrt(dot(i, i)), sqrt(dot(m, m)));
-	// }
 	float num = fabs(dot(i,m)) * GGX_G(i, o, m, n, a, norm_sign);
-	float denom = fabs(dot(i, n));// * fabs(dot(m, n));
+	float denom = fabs(dot(i, n)) * fabs(dot(m, n));
 	float weight = denom > 0.0f ? num / denom : 0.0f;
 
-	return weight;
+	return fmin(10.0f, weight);
 }
+
+static float3 diffuse_direction(float3 N, uint *seed0, uint *seed1)
+{
+	//Cosine-weighted pure diffuse reflection
+	//local orthonormal system
+	float3 axis = fabs(N.x) > fabs(N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
+	float3 hem_x = cross(axis, N);
+	float3 hem_y = cross(N, hem_x);
+
+	//generate random direction on the unit hemisphere (cosine-weighted)
+	float r1 = get_random(seed0, seed1);
+	float r2 = get_random(seed0, seed1);
+	float r = native_sqrt(r1);
+	float theta = 2.0f * PI * r2;
+
+	//combine for new direction
+	return normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + N * native_sqrt(max(0.0f, 1.0f - r1)));
+}
+
+static float3 unweighted_direction(uint *seed0, uint *seed1)
+{
+	float r1 = get_random(seed0, seed1);
+	float r = sqrt(1.0f - r1 * r1);
+	float phi = 2.0f * PI * get_random(seed0, seed1);
+
+	float sign = get_random(seed0, seed1) < 0.5f ? 1.0f : -1.0f;
+
+	return normalize((float3)(cos(phi) * r, sin(phi) * r, sign * r1));
+}
+
+#define SCATTER 0.8f
+
+//macros for branch conditions to improve clarity
+#define DEFAULT (dot(ray.spec, ray.spec) == 0.0f)
+#define SUBSURFACE (inside && log(subsurface) / (-1.0f * SCATTER) < ray.t)
+#define REFLECT (ray.transparency == 0.0f || get_random(&seed0, &seed1) < fresnel)
+#define TRANSMIT (get_random(&seed0, &seed1) <= ray.transparency)
 
 __kernel void bounce( 	__global Ray *rays,
 						__global uint *seeds)
@@ -369,6 +397,11 @@ __kernel void bounce( 	__global Ray *rays,
 	Ray ray = rays[gid];
 	if (ray.status != BOUNCE)
 		return;
+
+	// ray.color = (ray.N + 1.0f) / 2.0f;
+	// ray.status = DEAD;
+	// rays[gid] = ray;
+	// return;
 
 	uint seed0 = seeds[2 * gid];
 	uint seed1 = seeds[2 * gid + 1];
@@ -394,54 +427,53 @@ __kernel void bounce( 	__global Ray *rays,
 	}
 
 	float a = ray.roughness;
-	//a *= pow(dot(i,n), 10.0f);
 	float3 m = GGX_NDF(i, n, r1, r2, a);
 	//reflect or transmit?
 	float fresnel = GGX_F(i, m, ni, nt);
-	if (dot(ray.spec, ray.spec) == 0.0f)
+	float subsurface = get_random(&seed0, &seed1);
+
+	if DEFAULT
 	{
-		//Cosine-weighted pure diffuse reflection
-		//local orthonormal system
-		float3 axis = fabs(ray.N.x) > fabs(ray.N.y) ? (float3)(0.0f, 1.0f, 0.0f) : (float3)(1.0f, 0.0f, 0.0f);
-		float3 hem_x = cross(axis, ray.N);
-		float3 hem_y = cross(ray.N, hem_x);
-
-		//generate random direction on the unit hemisphere (cosine-weighted)
-		float r = native_sqrt(r1);
-		float theta = 2.0f * PI * r2;
-
-		//combine for new direction
-		o = normalize(hem_x * r * native_cos(theta) + hem_y * r * native_sin(theta) + ray.N * native_sqrt(max(0.0f, 1.0f - r1)));
+		o = diffuse_direction(ray.N, &seed0, &seed1);
 		weight = ray.diff;
 	}
-	else if (get_random(&seed0, &seed1) < fresnel)
-	{
-		//reflect
-		o = normalize(2.0f * dot(i,m) * m - i);
-		weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
-	}
+	// else if SUBSURFACE
+	// {
+	// 	ray.t = log(subsurface) / (-1.0f * SCATTER);
+	// 	o = unweighted_direction(&seed0, &seed1);
+	// 	weight = ray.diff; //will be ray.subsurf
+	// }
+	// else if REFLECT
+	// {
+	// 	o = normalize(2.0f * dot(i,m) * m - i);
+	// 	weight = GGX_weight(i, o, m, n, a, 1.0f) * ray.spec;
+	// }
+	// else if TRANSMIT
+	// {
+	// 	float index = ni / nt;
+	// 	float c = dot(i, m);
+	// 	float radicand = 1.0f + index * (c * c - 1.0f);
+	// 	if (radicand < 0.0f)
+	// 	{
+	// 		//Total internal reflection
+	// 		o = normalize(2.0f * dot(i,m) * m - i);
+	// 		weight = WHITE;
+	// 	}
+	// 	else
+	// 	{
+	// 		//transmission
+	// 		float coeff = index * c - sqrt(radicand);
+	// 		o = normalize(coeff * -1.0f * m - index * i);
+	// 		weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.diff;
+	// 	}
+	// }
 	else
 	{
-		//transmit
-		float index = ni / nt;
-		float c = dot(i, m);
-		float radicand = 1.0f + index * (c * c - 1.0f);
-		if (radicand < 0.0f)
-		{
-			//Total internal reflection
-			o = normalize(2.0f * dot(i,m) * m - i);
-			weight = GGX_weight(i, o, m, n, a, 1.0f) * WHITE;
-		}
-		else
-		{
-			//transmission
-			float coeff = index * c - sqrt(radicand);
-			o = normalize(coeff * m - index * i);
-			weight = GGX_weight(i, o, m, n, a, -1.0f) * ray.spec;
-		}
+		o = diffuse_direction(ray.N, &seed0, &seed1);
+		weight = WHITE / 1.1f;
 	}
 
-	float o_sign = dot(n, o) > 0.0f ? 1.0f : -1.0f;  
+	float o_sign = dot(m, o) > 0.0f ? 1.0f : -1.0f;  
 	ray.mask *= weight;
 	ray.origin = ray.origin + ray.direction * ray.t + n * o_sign * NORMAL_SHIFT;
 	ray.direction = o;
@@ -482,8 +514,6 @@ __kernel void collect(	__global Ray *rays,
 	}
 	if (ray.status == DEAD)
 	{
-		if (ray.hit_ind == -1)
-			output[ray.pixel_id] += ray.mask * SUN_BRIGHTNESS * pow(fmax(0.0f, dot(ray.direction, UNIT_Y)), 10.0f);
 		output[ray.pixel_id] += ray.color;
 		sample_counts[ray.pixel_id] += 1;
 		ray.status = NEW;
@@ -524,9 +554,8 @@ __kernel void traverse(	__global Ray *rays,
 						__global float3 *V)
 {
 	int gid = get_global_id(0);
-	Ray ray = rays[gid];
 
-	if (ray.status != TRAVERSE)
+	if (rays[gid].status != TRAVERSE)
 		return ;
 
 	float t = FLT_MAX;
@@ -536,6 +565,9 @@ __kernel void traverse(	__global Ray *rays,
 	int stack[32];
 	stack[0] = 0;
 	int s_i = 1;
+	const float3 origin = rays[gid].origin;
+	const float3 direction = rays[gid].direction;
+	const float3 inv_dir = rays[gid].inv_dir;
   
 	while (s_i)
 	{
@@ -544,14 +576,14 @@ __kernel void traverse(	__global Ray *rays,
 		b = boxes[b_i];
 
 		//check
-		if (intersect_box(ray.origin, ray.inv_dir, b, t, 0))
+		if (intersect_box(origin, inv_dir, b, t, 0))
 		{
 			if (b.rind < 0)
 			{
 				const int count = -1 * b.rind;
 				const int start = -1 * b.lind;
 				for (int i = start; i < start + count; i += 3)
-					intersect_triangle(ray.origin, ray.direction, V, i, &ind, &t, &u, &v);	
+					intersect_triangle(origin, direction, V, i, &ind, &t, &u, &v);	
 			}
 			else
 			{
@@ -560,8 +592,8 @@ __kernel void traverse(	__global Ray *rays,
 				r = boxes[b.rind];
                 float t_l = FLT_MAX;
                 float t_r = FLT_MAX;
-                int lhit = intersect_box(ray.origin, ray.inv_dir, l, t, &t_l);
-                int rhit = intersect_box(ray.origin, ray.inv_dir, r, t, &t_r);
+                int lhit = intersect_box(origin, inv_dir, l, t, &t_l);
+                int rhit = intersect_box(origin, inv_dir, r, t, &t_r);
                 if (lhit && t_l >= t_r)
                     stack[s_i++] = b.lind;
                 if (rhit)
@@ -572,10 +604,9 @@ __kernel void traverse(	__global Ray *rays,
 		}
 	}
 
-	ray.t = t;
-	ray.u = u;
-	ray.v = v;
-	ray.hit_ind = ind;
-	ray.status = ind == -1 ? DEAD : FETCH;
-	rays[gid] = ray;
+	rays[gid].t = t;
+	rays[gid].u = u;
+	rays[gid].v = v;
+	rays[gid].hit_ind = ind;
+	rays[gid].status = ind == -1 ? DEAD : FETCH;
 }
