@@ -109,7 +109,7 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 	if (pt_count > 6)
 	{
 		printf("too many points!\n");
-		getchar();
+		//getchar();
 	}
 	if (pt_count <= 2)
 	{
@@ -124,7 +124,7 @@ AABB *clip(AABB *member, Bin *bin, int axis)
 		printf("bin was (axis %d)\n", axis);
 		print_vec(bin->bin_min);
 		print_vec(bin->bin_max);
-		getchar();
+		//getchar();
 	}
 
 	AABB *fit = box_from_points(pt_cloud, pt_count);

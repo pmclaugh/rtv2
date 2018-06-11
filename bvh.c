@@ -49,7 +49,7 @@ Split *scan_tallies(AABB *ltr, AABB *rtl, int count, AABB *parent, enum axis ax)
 			printf("left SA %f right SA %f\n", SA(&ltr[i]), SA(&rtl[i + 1]));
 			print_vec(ltr[i].min);
 			print_vec(ltr[i].max);
-			getchar();
+			//getchar();
 		}
 		if (this_SAH < best_SAH)
 		{
@@ -264,12 +264,12 @@ void partition(AABB *box)
 	if (chosen->left_count != box->left->member_count)
 	{
 		printf("left count %d, expected %d\n", box->left->member_count, spatial->left_count);
-		getchar();
+		//getchar();
 	}
 	if (chosen->right_count != box->right->member_count)
 	{
 		printf("right count %d, expected %d\n", box->right->member_count, spatial->right_count);
-		getchar();
+		//getchar();
 	}
 
 	for (AABB *b = box->left->members; b; b = b->next)

@@ -637,7 +637,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	if (!handle)
 		handle = gpu_alloc(CL, scene, worksize);
 
-
+	printf("pos, focus, origin, direction, d_x, d_y\n");
 	gpu_camera gcam;
 	gcam.pos = cam.pos;
 	gcam.focus = cam.focus;
@@ -713,7 +713,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	for (int i = 0; i < CL->numDevices; i++)
 		for (int j = 0; j < half_worksize; j++)
 		{
-			output[j] = vec_add(vec_add(output[j], outputs[i][j]), light_img[i][j]);
+			output[j] = vec_add(output[j], vec_add(outputs[i][j], light_img[i][j]));
 			count[j] += 1;//counts[i][2 * j] * counts[i][2 * j + 1];
 			camera_count += counts[i][2 * j];
 			light_count += counts[i][2 * j + 1];

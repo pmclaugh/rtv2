@@ -9,7 +9,7 @@
 #define BLUE (float3)(0.2f, 0.2f, 0.8f)
 #define GREY (float3)(0.5f, 0.5f, 0.5f)
 
-#define BRIGHTNESS 1.0f //current state of tonemapping makes brightness value irrelevant
+#define BRIGHTNESS 10000.0f
 
 #define UNIT_X (float3)(1.0f, 0.0f, 0.0f)
 #define UNIT_Y (float3)(0.0f, 1.0f, 0.0f)
@@ -23,7 +23,7 @@
 #define CAMERA_LENGTH 5
 #define LIGHT_LENGTH 5
 
-#define SPECULAR 200.0f
+#define SPECULAR 40.0f
 
 
 typedef struct s_path {
@@ -352,7 +352,7 @@ __kernel void init_paths(const Camera cam,
 		normal = direction;
 		mask = WHITE;
 
-		pC = 1.0f / (float)(cam.width * cam.width);
+		pC = 1.0f;// / (float)(cam.width * cam.width);
 		pL = 1.0f / (2.0f * PI);
 		mask /= pC;
 	}
@@ -434,6 +434,19 @@ static inline int visibility_test(float3 origin, float3 direction, float t, __gl
 	if (ind == -1)
 		return 1;
 	return 0;
+}
+
+static float3 vec_project(float3 a, float3 b)
+{
+	//vector projection of a onto b
+	float3 norm_b = normalize(b);
+	return norm_b * dot(a, norm_b);
+}
+
+static float scalar_project(float3 a, float3 b)
+{
+	//scalar projection of a onto b aka mag(vec_project(a,b))
+	return dot(a, normalize(b));
 }
 
 static float geometry_term(Path a, Path b)
@@ -560,6 +573,31 @@ __kernel void connect_paths(const Camera cam,
 			for (s = (t > 1) ? 1 : 2; s <= light_length; s++)
 			{
 				Path light_vertex = LIGHT_VERTEX(s - 1);
+				Path backup_camera_vertex = camera_vertex;
+				light_img_index = -1;
+				if (t == 1)
+				{
+					float3 to_light = light_vertex.origin - cam.focus;
+					float dist = native_sqrt(dot(to_light, to_light));
+					float proj_n = scalar_project(to_light, cam.direction);
+					if (proj_n <= 0.001f)
+						continue;
+					float focus_to_plane = 0.5f / tan(H_FOV / 2);
+					float ratio = (proj_n + focus_to_plane) / proj_n;
+
+					float3 point_on_camera = normalize(-1.0f * to_light) * dist * ratio + light_vertex.origin;
+					//translate to x,y pixel coordinates
+					float3 plane_vec = point_on_camera - cam.origin;
+					float x = floor(scalar_project(plane_vec, cam.d_x) / native_sqrt(dot(cam.d_x, cam.d_x)));
+					float y = floor(scalar_project(plane_vec, cam.d_y) / native_sqrt(dot(cam.d_y, cam.d_y)));
+
+					if (x >= 0.0 && x <= WIN_DIM && y >= 0.0 && y <= WIN_DIM)
+						light_img_index = (int)x + (int)(y * WIN_DIM);
+					else
+						continue;
+
+					camera_vertex = paths[2 * light_img_index];
+				}
 
 				float3 direction, distance;
 				distance = light_vertex.origin - camera_vertex.origin;
@@ -592,26 +630,11 @@ __kernel void connect_paths(const Camera cam,
 				}
 
 				//the parts based on camera_in
-				light_img_index = -1;
+				
 				if (t == 1)
 				{
 					this_pC = 1.0f; // 1 / SA (SA of camera plane is 1x1)
 					prev_pL = 1.0f; //placeholder. won't be accessed
-
-					float 		dist = 0.5f / tan(H_FOV / 2);
-					t_3x3 		rot_hor = rotation_matrix(normalize(cam.d_x), UNIT_X);
-					t_3x3 		rot_vert = rotation_matrix(normalize(cam.d_y), UNIT_Y);
-
-					float		ratio, x, y;
-					float3		dir = direction;
-					dir = mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir));
-					if (dir.z <= 0.0f)
-						continue ;
-					ratio = dist / dir.z;
-					x = ((dir.x * -ratio) * WIN_DIM) + (WIN_DIM / 2);
-					y = ((dir.y * -ratio) * WIN_DIM) + (WIN_DIM / 2);
-					if (x >= 0 && x < WIN_DIM && y >= 0 && y <= WIN_DIM)
-						light_img_index = (int)x + ((int)y * (int)WIN_DIM);
 				}
 				else
 				{
@@ -654,6 +677,8 @@ __kernel void connect_paths(const Camera cam,
 					else
 						sum += contrib * test;
 				}
+
+				camera_vertex = backup_camera_vertex;
 			}
 		}
 	}
