@@ -496,194 +496,130 @@ static float BRDF(float3 in, const Path p, float3 out)
 		return max(0.0f, dot(p.normal, out)) / PI;
 }
 
-#define CAMERA_VERTEX(x) (paths[2 * index + row_size * (x)])
-#define LIGHT_VERTEX(x) (paths[(2 * index + 1 + sample * jump) % row_size + row_size * (x)])
 
-#define GEOM(x) ((x) < s ? (LIGHT_VERTEX(x).G) : ((x) == s ? this_geom : (CAMERA_VERTEX(s + t - (x)).G)))
+#define CAMERA_VERTEX(x) (vertices[2 * (x)])
+#define LIGHT_VERTEX(x) (vertices[2 * (x) + 1])
 
 #define PL(x) ((x) == t - 2 ? prev_pL : (x) < s ? (LIGHT_VERTEX(x).pL) : (x) == s ? this_pL : (CAMERA_VERTEX(s + t - (x)).pL))
-
 #define PC(x) ((x) == s - 2 ? prev_pC : (x) < s - 1 ? (LIGHT_VERTEX(x).pC) : (x) == s - 1 ? this_pC : (CAMERA_VERTEX(s + t - (x) - 1).pC))
+
+#define GEOM(x) ((x) < s ? (LIGHT_VERTEX(x).G) : ((x) == s ? this_geom : (CAMERA_VERTEX(s + t - (x)).G)))
 
 #define QC(x) (s + t - (x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
 
 #define QL(x) ((x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
 
-#define RESAMPLE_COUNT 1
-
-__kernel void connect_paths(const Camera cam,
+__kernel void new_connect_paths(const Camera cam,
 							__global Path *paths,
 							__global int *path_lengths,
 							__global Box *boxes,
 							__global float3 *V,
 							__global float3 *output,
-							__global float3 *light_img)
+							__global float3 *light_img,
+							__local Path *vertices,
+							__local float3 *contributions)
 {
-	//uses half global size
-	int index = get_global_id(0);
-	int row_size = 2 * get_global_size(0);
+	//get our bearings
+	int index = get_group_id(0);
+	int thread_id = get_local_id(0);
+	int row_size = get_num_groups(0) * 2;
+	int group_size = get_local_size(0);
 
-	float3 sum = BLACK;
+	//populate local memory buffers
+	contributions[thread_id] = BLACK;
+	vertices[thread_id] = paths[2 * index + (thread_id % 2) + row_size * (thread_id / 2)];
+	//vertices = [c0,l0,c1,l1,c2,l2...]
 
-	int jump = row_size / RESAMPLE_COUNT;
-
-	int camera_length = path_lengths[2 * index];
-	float p[32];
-
-	int light_img_index = -1;
-
-	for (int sample = 0; sample < RESAMPLE_COUNT; sample++)
-	{
-		int light_length = path_lengths[(2 * index + 1 + sample * jump) % row_size];
-		for (int t = 1; t <= camera_length; t++)
-		{
-			Path camera_vertex = CAMERA_VERTEX(t - 1);
-
-			// //handle s==0
-			int s = 0;
-			if (camera_vertex.hit_light)
-			{
-				//causes fireflies with specular objects. needs some sort of fix.
-				float3 contrib = camera_vertex.mask * BRIGHTNESS;
-				//initialize with ratios
-				for (int k = 0; k < t; k++)
-				{
-					if (k == 0)
-						p[k] = (LIGHT_VERTEX(0).pL) / (camera_vertex.pC * camera_vertex.G);
-					else
-						p[k] = (QL(k) * CAMERA_VERTEX(t - k - 1).pL * CAMERA_VERTEX(t - k).G) / (QC(k) * CAMERA_VERTEX(t - k - 1).pC * CAMERA_VERTEX(t - k - 1).G);
-				}
-				//multiply through
-				for (int k = 0; k < t; k++)
-					p[k + 1] = p[k + 1] * p[k];
-
-				//append 1.0f
-				p[t] = 1.0f;
-
-				float weight = 0.0f;
-				for (int k = 0; k < t + 1; k++)
-					weight += p[k];
-
-				float test = 1.0f / (weight);
-
-				if (test == test && weight == weight)
-					sum += contrib * test;
-				continue;
-			}
-			for (s = (t > 1) ? 1 : 2; s <= light_length; s++)
-			{
-				Path light_vertex = LIGHT_VERTEX(s - 1);
-				Path backup_camera_vertex = camera_vertex;
-				light_img_index = -1;
-				if (t == 1)
-				{
-					float3 to_light = light_vertex.origin - cam.focus;
-					float dist = native_sqrt(dot(to_light, to_light));
-					float proj_n = scalar_project(to_light, cam.direction);
-					if (proj_n <= 0.001f)
-						continue;
-					float focus_to_plane = 0.5f / tan(H_FOV / 2);
-					float ratio = (proj_n + focus_to_plane) / proj_n;
-
-					float3 point_on_camera = normalize(-1.0f * to_light) * dist * ratio + light_vertex.origin;
-					//translate to x,y pixel coordinates
-					float3 plane_vec = point_on_camera - cam.origin;
-					float x = floor(scalar_project(plane_vec, cam.d_x) / native_sqrt(dot(cam.d_x, cam.d_x)));
-					float y = floor(scalar_project(plane_vec, cam.d_y) / native_sqrt(dot(cam.d_y, cam.d_y)));
-
-					if (x >= 0.0 && x <= WIN_DIM && y >= 0.0 && y <= WIN_DIM)
-						light_img_index = (int)x + (int)(y * WIN_DIM);
-					else
-						continue;
-
-					camera_vertex = paths[2 * light_img_index];
-				}
-
-				float3 direction, distance;
-				distance = light_vertex.origin - camera_vertex.origin;
-				float d = native_sqrt(dot(distance, distance));
-				direction = normalize(distance);
-
-				float camera_cos = dot(camera_vertex.normal, direction);
-				float light_cos = dot(light_vertex.normal, -1.0f * direction);
-
-				if (camera_cos <= 0.0f || light_cos <= 0.0f)
-					continue ;
-				if (!visibility_test(camera_vertex.origin, direction, d, boxes, V))
-					continue ;
-
-				float this_geom = geometry_term(camera_vertex, light_vertex);
-				float this_pL, this_pC, BRDF_L, BRDF_C, prev_pL, prev_pC;
-				float3 light_in, camera_in;
-
-				//the parts based on light_in
-				if (s == 1)
-				{
-					prev_pC = 1.0f; //placeholder, won't be accessed
-					this_pL = 1.0f / (2.0f * PI);
-				}
-				else
-				{
-					light_in = normalize(LIGHT_VERTEX(s - 2).origin - light_vertex.origin);
-					this_pL = pdf(light_in, light_vertex, -1.0f * direction, 0);
-					prev_pC = pdf(-1.0f * direction, light_vertex, light_in, 1); //these 0s and 1s suck and should be fixed
-				}
-
-				//the parts based on camera_in
-				
-				if (t == 1)
-				{
-					this_pC = 1.0f; // 1 / SA (SA of camera plane is 1x1)
-					prev_pL = 1.0f; //placeholder. won't be accessed
-				}
-				else
-				{
-					camera_in = normalize(CAMERA_VERTEX(t - 2).origin - camera_vertex.origin);
-					this_pC = pdf(camera_in, camera_vertex, direction, 1);
-					prev_pL = pdf(direction, camera_vertex, camera_in, 0);
-				}
-
-				//evaluate BRDF for both
-				BRDF_C = t == 1 ? 1.0f : BRDF(camera_in, camera_vertex, direction);
-				BRDF_L = s == 1 ? 1.0f : BRDF(light_in, light_vertex, -1.0f * direction);
-
-				float3 contrib = light_vertex.mask * camera_vertex.mask * BRDF_L * BRDF_C * this_geom;
-				
-				//initialize with ratios
-				for (int k = 0; k < s + t; k++)
-					p[k] = (QL(k) * GEOM(k) * PL(k)) / (QC(k) * GEOM(k + 1) * PC(k));
-
-				//multiply through
-				for (int k = 0; k < s + t; k++)
-					p[k + 1] = p[k + 1] * p[k];
-
-				//pick pivot and append a 1.0f
-				float pivot = p[s - 1];
-				p[s + t] = 1.0f;
-				for (int k = 0; k < s + t + 1; k++)
-					p[k] /= pivot;
-
-				//sum weight ratios
-				float weight = 0.0f;
-				for (int k = 0; k < s + t + 1; k++)
-					weight += p[k];
-
-				float test = 1.0f / (weight);
-
-				if (test == test)
-				{
-					if (light_img_index >= 0 && light_img_index < row_size / 2)
-						light_img[light_img_index] += contrib * test / (float)RESAMPLE_COUNT;
-					else
-						sum += contrib * test;
-				}
-
-				camera_vertex = backup_camera_vertex;
-			}
-		}
-	}
-	output[index] = sum / (float)RESAMPLE_COUNT;
+	//synchronize
+	barrier(CLK_LOCAL_MEM_FENCE);
 	
+	int camera_length = path_lengths[2 * index];
+	int light_length = path_lengths[2 * index + 1];
+
+	//generating correct t and s avoiding unused combos is tricky but definitely doable, skipping for now
+	int t, s;
+
+	//the core code will assume t >= 1 s >= 1
+
+	Path camera_vertex = vertices[(t - 1) * 2];
+	Path light_vertex = vertices[(s - 1) * 2 + 1];
+
+	float3 direction, distance;
+	distance = light_vertex.origin - camera_vertex.origin;
+	float d = native_sqrt(dot(distance, distance));
+	direction = normalize(distance);
+
+	float camera_cos = dot(camera_vertex.normal, direction);
+	float light_cos = dot(light_vertex.normal, -1.0f * direction);
+
+	if (camera_cos <= 0.0f || light_cos <= 0.0f)
+		if (visibility_test(camera_vertex.origin, direction, d, boxes, V))
+		{
+			float this_geom = camera_cos * light_cos / (d * d);
+
+			// a bunch of variables to populate
+			float this_pL, this_pC, BRDF_L, BRDF_C, prev_pL, prev_pC;
+			float3 light_in, camera_in;
+
+			//defaults
+			prev_pC = 1.0f;
+			prev_pL = 1.0f;
+			this_pC = 1.0f;
+			this_pL = 1.0f / (2.0f * PI);
+			//overrides
+			if (s > 1)
+			{
+				light_in = normalize(LIGHT_VERTEX(s - 2).origin - light_vertex.origin);
+				this_pL = pdf(light_in, light_vertex, -1.0f * direction, 0);
+				prev_pC = pdf(-1.0f * direction, light_vertex, light_in, 1); //these 0s and 1s suck and should be fixed
+			}
+			if (t > 1)
+			{
+				camera_in = normalize(CAMERA_VERTEX(t - 2).origin - camera_vertex.origin);
+				this_pC = pdf(camera_in, camera_vertex, direction, 1);
+				prev_pL = pdf(direction, camera_vertex, camera_in, 0);
+			}
+
+			//evaluate BRDF for both
+			BRDF_C = t == 1 ? 1.0f : BRDF(camera_in, camera_vertex, direction);
+			BRDF_L = s == 1 ? 1.0f : BRDF(light_in, light_vertex, -1.0f * direction);
+
+			float3 contrib = light_vertex.mask * camera_vertex.mask * BRDF_L * BRDF_C * this_geom;
+			
+			float p[12];
+			//initialize with ratios
+			for (int k = 0; k < s + t; k++)
+				p[k] = (QL(k) * GEOM(k) * PL(k)) / (QC(k) * GEOM(k + 1) * PC(k));
+
+			//multiply through
+			for (int k = 0; k < s + t; k++)
+				p[k + 1] = p[k + 1] * p[k];
+
+			//pick pivot and append a 1.0f
+			float pivot = 1.0f / p[s - 1];
+			p[s + t] = 1.0f;
+			float weight = 0.0f;
+
+			//sum p[k] / pivot
+			for (int k = 0; k < s + t + 1; k++)
+				weight += p[k] * pivot;
+
+			//protect against NaNs
+			float test = 1.0f / (weight);
+			if (test == test)
+				contributions[thread_id] = contrib * test;
+		}
+	
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	//collect contributions (could be more parallel)
+	if (thread_id == 0)
+	{
+		float3 sum = BLACK;
+		for (int i = 0; i < group_size; i++)
+			sum += contributions[i];
+		output[index] = sum;
+	}
 }
 
 static void surface_vectors(__global float3 *V, __global float3 *N, __global float3 *T, float3 dir, int ind, float u, float v, float3 *N_out, float3 *true_N_out, float3 *txcrd_out)
