@@ -401,7 +401,6 @@ typedef struct s_env
 	int			view;
 	int			spp;
 	int			samples;
-	int			depth;
 	_Bool		render;
 	float		eps;
 	int			min_bounces;

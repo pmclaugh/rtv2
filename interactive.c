@@ -1,6 +1,6 @@
 #include "rt.h"
 
-#define EPS 0.00005
+#define EPS 0.00002f
 #define MIN_EDGE_WIDTH 1000
 #define HEATMAP_RATIO .02f
 

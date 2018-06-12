@@ -121,9 +121,10 @@ t_env		*init_env(void)
 {
 	t_env	*env = malloc(sizeof(t_env));
 	env->cam = init_camera();
-	//load camera settings from config file and import scene
-	env->mode = PT;
-	env->view = 1;
+
+	env->ia = NULL;
+	env->pt = NULL;
+
 	env->key.w = 0;
 	env->key.a = 0;
 	env->key.s = 0;
@@ -134,18 +135,22 @@ t_env		*init_env(void)
 	env->key.rarr = 0;
 	env->key.space = 0;
 	env->key.shift = 0;
-	env->samples = 0;
+	env->key.plus = 0;
+	env->key.minus = 0;
+
+	env->mode = PT;
+	env->view = 1;
 	env->spp = 0;
-	env->depth = 6;
+	env->samples = 0;
 	env->render = 1;
-	env->eps = 0.00005;
+	env->eps = 0.00002;
+
 	env->running = 1;
 	env->current_tick = 0;
 	env->previous_tick = 0;
 
-	env->ia = NULL;
-	env->pt = NULL;
 	load_config(env);
+
 	return env;
 }
 

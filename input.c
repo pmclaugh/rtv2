@@ -79,6 +79,7 @@ void		exit_hook(t_env *env)
 		// SDL_FreeSurface(env->pt->screen);
 		free(env->pt->pixels);
 		free(env->pt->total_clr);
+		free(env->pt->count);
 		free(env->pt);
 	}
 	
@@ -93,15 +94,15 @@ void		key_press(int key, t_env *env)
 	// printf("%d\n", key);
 	if (key == SDLK_ESCAPE)
 		exit_hook(env);
-	else if (key == SDLK_RETURN)
+	if (key == SDLK_RETURN)
 		env->render = 1;
-	else if (key == SDLK_TAB)
+	if (key == SDLK_TAB)
 	{
 		env->view++;
 		if (env->view > 4)
 			env->view = 1;
 	}
-	else if (MOVE_KEYS || ARR_KEYS)
+	if (MOVE_KEYS || ARR_KEYS)
 	{
 		if (MOVE_KEYS)
 		{
@@ -130,7 +131,7 @@ void		key_press(int key, t_env *env)
 				env->key.uarr = 1;
 		}
 	}
-	else if (key == SDLK_KP_PLUS || key == SDLK_KP_MINUS)
+	if (key == SDLK_KP_PLUS || key == SDLK_KP_MINUS)
 	{
 		if (key == SDLK_KP_PLUS)
 			env->key.plus = 1;
@@ -172,7 +173,7 @@ void		key_release(int key, t_env *env)
 				env->key.uarr = 0;
 		}
 	}
-	else if (key == SDLK_KP_PLUS || key == SDLK_KP_MINUS)
+	if (key == SDLK_KP_PLUS || key == SDLK_KP_MINUS)
 	{
 		if (key == SDLK_KP_PLUS)
 			env->key.plus = 0;

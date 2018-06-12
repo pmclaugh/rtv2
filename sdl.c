@@ -21,40 +21,25 @@ void	draw_pixels(t_sdl *sdl)
 	}
 	SDL_UnlockSurface(sdl->screen);
 	SDL_UpdateWindowSurface(sdl->win);
-
-	// SDL_Renderer	*renderer = SDL_GetRenderer(sdl->win);
-	// // SDL_Renderer	*renderer = SDL_CreateRenderer(sdl->win, -1, SDL_RENDERER_ACCELERATED);
-	// // SDL_SetRenderDrawColor(renderer, 255, 0, 0, 1);
-	// SDL_Surface		*surface = SDL_LoadBMP("Smiley.bmp");
-
-	// SDL_Texture		*texture = SDL_CreateTextureFromSurface(renderer, surface);
-
-	// SDL_RendererInfo info;
-	// SDL_GetRendererInfo(renderer, &info);
-	// // printf("%d\t%d\n", info.max_texture_width, info.max_texture_height);
-	// printf("%s\n", info.name);
-
-	// // SDL_Rect rect;
-	// // rect.x = 0;
-	// // rect.y = 0;
-	// // rect.w = 100;
-	// // rect.h = 100;
-
-	// SDL_RenderClear(renderer);
-	// SDL_RenderCopy(renderer, texture, NULL, NULL);
-	// SDL_RenderPresent(renderer);
 }
 
 void		init_sdl_pt(t_env *env)
 {
 	env->pt = malloc(sizeof(t_sdl));
-	env->pt->win = SDL_CreateWindow("CLIVE - Path Tracer", 900, 500, DIM_PT, DIM_PT, 0);
+	if (env->mode == IA)
+	{
+		int	pos_x, pos_y;
+		SDL_GetWindowPosition(env->ia->win, &pos_x, &pos_y);
+		env->pt->win = SDL_CreateWindow("CLIVE - Bidirectional Path Tracer", pos_x + DIM_IA, pos_y, DIM_PT, DIM_PT, 0);
+	}
+	else
+		env->pt->win = SDL_CreateWindow("CLIVE - Bidirectional Path Tracer", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DIM_PT, DIM_PT, 0);
+
 	env->pt->screen = SDL_GetWindowSurface(env->pt->win);
 	SDL_SetSurfaceRLE(env->pt->screen, 1);
 	env->pt->pixels = calloc(sizeof(cl_float3), (DIM_PT * DIM_PT));
 	env->pt->total_clr = calloc(sizeof(cl_float3), (DIM_PT * DIM_PT));
 	env->pt->count = calloc(sizeof(cl_int), (DIM_PT * DIM_PT));
-	// env->pt->renderer = SDL_GetRenderer(env->pt->win);
 }
 
 void		init_sdl_ia(t_env *env)
@@ -66,30 +51,14 @@ void		init_sdl_ia(t_env *env)
 	env->ia->pixels = calloc(sizeof(cl_float3), (DIM_IA * DIM_IA));
 	env->ia->total_clr = NULL;
 	env->ia->count = NULL;
-	// env->ia->renderer = SDL_GetRenderer(env->ia->win);
-	// env->ia->renderer = SDL_CreateRenderer(env->ia->win, -1, SDL_RENDERER_ACCELERATED);
-	// if (env->ia->renderer == NULL)
-	// 	printf("RENDERER IS NULL\n");
-	// SDL_RendererInfo info;
-	// SDL_GetRendererInfo(env->ia->renderer, &info);
-	// printf("%d\t%d\n", info.max_texture_width, info.max_texture_height);
-	// printf("%s\n", info.name);
-	// printf("%u\n", info.flags);
 }
 
 void		run_sdl(t_env *env)
 {
 	SDL_Init(SDL_INIT_VIDEO);
+	
 	if (env->mode == IA)
 		init_sdl_ia(env);
-
-	// SDL_Window		*window = SDL_CreateWindow("CLIVE", 500, 500, DIM_IA, DIM_IA, SDL_WINDOW);
-	// SDL_Renderer	*renderer = SDL_CreateRenderer(env->ia->win, -1, SDL_RENDERER_ACCELERATED);
-	// SDL_RendererInfo info;
-	// SDL_GetRendererInfo(env->ia->renderer, &info);
-	// // printf("%d\t%d\n", info.max_texture_width, info.max_texture_height);
-	// printf("%s\n", info.name);
-	// printf("%u\n", info.flags);
 
 	while (env->running) //MAIN LOOP
 	{
