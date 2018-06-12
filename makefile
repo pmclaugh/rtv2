@@ -1,16 +1,14 @@
-NAME = raytrace
+NAME = clive
 
-SRC =	vec.c \
+SRC =	main.c \
+		vec.c \
 		obj_import.c \
-		main.c \
-		mlx_stuff.c \
 		ply_import.c \
 		new_gpu_launch.c \
 		bvh.c \
 		bvh_lab.c \
 		spatial.c \
 		interactive.c \
-		key_command.c \
 		import.c \
 		str.c \
 		itoa.c \
@@ -21,41 +19,15 @@ SRC =	vec.c \
 		bvh_util.c \
 		stl_import.c \
 		get_face.c \
-		libjpeg/jerror.c \
-		libjpeg/jdapimin.c \
-		libjpeg/jdatasrc.c \
-		libjpeg/jdapistd.c \
-		libjpeg/jdmaster.c \
-		libjpeg/jmemmgr.c \
-		libjpeg/jdmarker.c \
-		libjpeg/jdinput.c \
-		libjpeg/jcomapi.c \
-		libjpeg/jutils.c \
-		libjpeg/jmemansi.c \
-		libjpeg/jquant1.c \
-		libjpeg/jquant2.c \
-		libjpeg/jdcolor.c \
-		libjpeg/jdsample.c \
-		libjpeg/jddctmgr.c \
-		libjpeg/jidctint.c \
-		libjpeg/jidctfst.c \
-		libjpeg/jidctflt.c \
-		libjpeg/jdmerge.c \
-		libjpeg/jdmainct.c \
-		libjpeg/jdpostct.c \
-		libjpeg/jdarith.c \
-		libjpeg/jdhuff.c \
-		libjpeg/jdcoefct.c \
-		libjpeg/jaricom.c
-
+		sdl.c \
+		input.c
 
 OBJ = $(SRC:.c=.o)
 
 
-INC = libjpeg
 FLAGS = -O3 -m64 -march=native -funroll-loops -flto
-MACLIBS = mac-mlx/libmlx.a -framework OpenCL -framework OpenGL -framework AppKit
-LINUXLIBS = -fopenmp linux-mlx/libmlx.a -lOpenCL -lm -lXext -lX11 
+MACLIBS = -framework OpenCL -framework OpenGL -framework AppKit
+LINUXLIBS = -fopenmp -lOpenCL -lm -lXext -lX11 
 
 
 OS := $(shell uname)
@@ -69,15 +41,11 @@ endif
 all: $(NAME)
 
 $(NAME): $(OBJ)
-	gcc -o $(NAME) $(FLAGS) -I $(INC) $(OBJ) $(LIBS)
+	gcc -o $(NAME) $(FLAGS) $(OBJ) $(LIBS) -I -L -lSDL2
 %.o: %.c rt.h
-	gcc $(FLAGS) -I $(INC) -c -o $@ $<
+	gcc $(FLAGS) -c -o $@ $<
 libjpeg/%.o: %.c rt.h
-	gcc $(FLAGS) -I $(INC) -c -o $@ $<
-mac-mlx/libmlx.a:
-	make -C mac-mlx
-linux-mlx/libmlx.a:
-	make -C linux-mlx
+	gcc $(FLAGS) -c -o $@ $<
 clean:
 	rm -f $(OBJ)
 fclean: clean

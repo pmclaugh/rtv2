@@ -5,7 +5,7 @@
 #else
 #endif
 
-void	sum_color(cl_double3 *a, cl_float3 *b, int size)
+void	sum_color(cl_float3 *a, cl_float3 *b, int size)
 {
 	for (int i = 0; i < size; i++)
 	{
@@ -36,7 +36,7 @@ void save_file(t_env *env, int frame_no)
 	fclose(f);
 }
 
-void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
+void	alt_composite(t_sdl *data, int resolution, cl_int *count)
 {
 	double Lw = 0.0;
 	int *nanflags = calloc(resolution, sizeof(int));
@@ -83,6 +83,8 @@ void	alt_composite(t_mlx_data *data, int resolution, cl_int *count)
 
 void		path_tracer(t_env *env)
 {
+	if (!env->pt)
+		init_sdl_pt(env);
 	int first = (env->samples == 0) ? 1 : 0;
 	env->samples += 1;
 	set_camera(&env->cam, DIM_PT);
@@ -93,9 +95,7 @@ void		path_tracer(t_env *env)
 	add_counts(env->pt->count, count, DIM_PT * DIM_PT);
 	free(count);
 	alt_composite(env->pt, DIM_PT * DIM_PT, env->pt->count);
-	draw_pixels(env->pt, DIM_PT, DIM_PT);
-	mlx_put_image_to_window(env->mlx, env->pt->win, env->pt->img, 0, 0);
-	mlx_key_hook(env->pt->win, exit_hook, env);
+	draw_pixels(env->pt);
 	// save_file(env, env->samples);
 	if (env->samples >= env->spp)
 	{
@@ -117,43 +117,6 @@ void		path_tracer(t_env *env)
 	printf("sample %d done\n", env->samples);
 }
 
-void		init_mlx_data(t_env *env)
-{
-	env->mlx = mlx_init();
-
-	env->pt = malloc(sizeof(t_mlx_data));
-	env->pt->bpp = 0;
-	env->pt->size_line = 0;
-	env->pt->endian = 0;
-	env->pt->win = mlx_new_window(env->mlx, DIM_PT, DIM_PT, "CLIVE - Path Tracer");
-	env->pt->img = mlx_new_image(env->mlx, DIM_PT, DIM_PT);
-	env->pt->imgbuff = mlx_get_data_addr(env->pt->img, &env->pt->bpp, &env->pt->size_line, &env->pt->endian);
-	env->pt->bpp /= 8;
-	env->pt->pixels = calloc(DIM_PT * DIM_PT, sizeof(cl_double3));
-	env->pt->total_clr = calloc(DIM_PT * DIM_PT, sizeof(cl_double3));
-	env->pt->count = calloc(DIM_PT * DIM_PT, sizeof(cl_int));
-	
-	if (env->mode == IA)
-	{
-		env->ia = malloc(sizeof(t_mlx_data));
-		env->ia->bpp = 0;
-		env->ia->size_line = 0;
-		env->ia->endian = 0;
-		env->ia->win = mlx_new_window(env->mlx, DIM_IA, DIM_IA, "CLIVE - Interactive Mode");
-		env->ia->img = mlx_new_image(env->mlx, DIM_IA, DIM_IA);
-		env->ia->imgbuff = mlx_get_data_addr(env->ia->img, &env->ia->bpp, &env->ia->size_line, &env->ia->endian);
-		env->ia->bpp /= 8;
-		env->ia->pixels = calloc(DIM_IA * DIM_IA, sizeof(cl_double3));
-		env->ia->total_clr = NULL;
-		mlx_hook(env->ia->win, 2, 0, key_press, env);
-		mlx_hook(env->ia->win, 3, 0, key_release, env);
-		mlx_hook(env->ia->win, 17, 0, exit_hook, env);
-	}
-
-	mlx_loop_hook(env->mlx, forever_loop, env);
-	mlx_loop(env->mlx);
-}
-
 t_env		*init_env(void)
 {
 	t_env	*env = malloc(sizeof(t_env));
@@ -161,7 +124,6 @@ t_env		*init_env(void)
 	//load camera settings from config file and import scene
 	env->mode = PT;
 	env->view = 1;
-	env->show_fps = 0;
 	env->key.w = 0;
 	env->key.a = 0;
 	env->key.s = 0;
@@ -173,8 +135,16 @@ t_env		*init_env(void)
 	env->key.space = 0;
 	env->key.shift = 0;
 	env->samples = 0;
+	env->spp = 0;
+	env->depth = 6;
 	env->render = 1;
 	env->eps = 0.00005;
+	env->running = 1;
+	env->current_tick = 0;
+	env->previous_tick = 0;
+
+	env->ia = NULL;
+	env->pt = NULL;
 	load_config(env);
 	return env;
 }
@@ -196,7 +166,7 @@ int 		main(int ac, char **av)
 	flatten_faces(env->scene);
 
 	//launch core loop
-	init_mlx_data(env);
+	run_sdl(env);
 	
 	return 0;
 }

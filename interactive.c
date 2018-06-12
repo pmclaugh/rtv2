@@ -4,23 +4,19 @@
 #define MIN_EDGE_WIDTH 1000
 #define HEATMAP_RATIO .02f
 
-static cl_float3 g_focus;
-static cl_float3 g_through;
-static float g_focal_length;
-
 typedef struct	s_ray
 {
 	cl_float3	origin;
 	cl_float3	direction;
 	cl_float3	inv_dir;
 	cl_float3	N;
-	cl_double3	color;
+	cl_float3	color;
 	float		t;
 	_Bool		poly_edge;
 	float		eps;
 }				t_ray;
 
-/////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static int inside_box(t_ray *ray, AABB *box)
 {
@@ -106,6 +102,8 @@ void check_triangles(t_ray *ray, AABB *box)
 		intersect_triangle(ray, member->f->verts[0], member->f->verts[1], member->f->verts[2]);
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 static void stack_push(AABB **stack, AABB *box)
 {
 	box->next = *stack;
@@ -128,7 +126,7 @@ void	trace_bvh_heatmap(AABB *tree, t_ray *ray)
 	tree->next = NULL;
 	AABB *stack = tree;
 
-	ray->color = (cl_double3){0, 0, 1};
+	ray->color = (cl_float3){0, 0, 1};
 	while(stack)
 	{
 		AABB *box = stack_pop(&stack);
@@ -141,7 +139,7 @@ void	trace_bvh_heatmap(AABB *tree, t_ray *ray)
 			}
 			else if (ray->color.x < 1.0f)
 				ray->color.x += HEATMAP_RATIO;
-			else
+			else if (ray->color.y > 0.0f)
 				ray->color.y -= HEATMAP_RATIO;
 			if (box->left) //boxes have either 0 or 2 children
 			{
@@ -157,7 +155,7 @@ void	trace_bvh(AABB *tree, t_ray *ray)
 	tree->next = NULL;
 	AABB *stack = tree;
 
-	ray->color = (cl_double3){1, 1, 1};
+	ray->color = (cl_float3){1, 1, 1};
 	while(stack)
 	{
 		AABB *box = stack_pop(&stack);
@@ -202,27 +200,25 @@ void	trace_scene(AABB *tree, t_ray *ray, int view)
 		}
 	}
 	if (ray->poly_edge && view == 2)
-		ray->color = (cl_double3){.25, .25, .25};
-	cl_float3 focal_point = vec_scale(unit_vec(vec_sub(g_focus, g_through)), g_focal_length);
-	cl_float3 dist = vec_sub(vec_scale(ray->direction, ray->t), focal_point);
-	// cl_float3	light = unit_vec((cl_float3){.5, 1, -.25});
-	float		cost = dot(ray->N, ray->direction);
-	if (cost < 0)
-		cost *= -1.0f;
-	cost = ((cost - .5) / 2) + .5; //make greyscale contrast less extreme
-	ray->color = (cl_double3){cost, cost, cost};
+		ray->color = (cl_float3){.25, .25, .25};
+	else
+	{
+		// cl_float3	light = unit_vec((cl_float3){.5, 1, -.25});
+		float		cost = dot(ray->N, ray->direction);
+		if (cost < 0)
+			cost *= -1.0f;
+		cost = ((cost - .5) / 2) + .5; //make greyscale contrast less extreme
+		ray->color = (cl_float3){cost, cost, cost};
+	}
 }
 
-//////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 t_ray	generate_ray(t_env *env, float x, float y)
 {
 	t_ray ray;
 	ray.origin = env->cam.focus;
-	g_focus = env->cam.focus;
 	cl_float3 through = vec_add(env->cam.origin, vec_add(vec_scale(env->cam.d_x, x), vec_scale(env->cam.d_y, y)));
-	g_through = through;
-	g_focal_length = env->cam.focal_length;
 	ray.direction = unit_vec(vec_sub(env->cam.focus, through));
 	ray.inv_dir.x = 1.0f / ray.direction.x;
 	ray.inv_dir.y = 1.0f / ray.direction.y;
@@ -234,60 +230,12 @@ t_ray	generate_ray(t_env *env, float x, float y)
 	return ray;
 }
 
-void	plot_line(t_env *env, int x1, int y1, int x2, int y2)
-{
-	int		dx, dy, sx, sy, err, err2;
-
-	dx = abs(x2 - x1);
-	sx = x1 < x2 ? 1 : -1;
-	dy = abs(y2 - y1);
-	sy = y1 < y2 ? 1 : -1;
-	err = (dx > dy ? dx : -dy) / 2;
-	while (x1 != x2)
-	{
-		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
-			env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = (cl_double3){0, 1, 0}; //is the image being flipped horizontally in draw_pixels?
-			// mlx_pixel_put(env->mlx, env->ia->win, x1, y1, 0x0000ff);
-		err2 = err;
-		if (err2 > -dx)
-		{
-			err -= dy;
-			x1 += sx;
-		}
-		if (err2 < dy)
-		{
-			err += dx;
-			y1 += sy;
-		}
-	}
-}
-
-void	draw_line(t_env *env, cl_float3 p1, cl_float3 p2)
-{
-	float 		dist = (env->cam.width / 2) / tan(H_FOV / 2);
-	t_3x3 		rot = rotation_matrix(env->cam.dir, UNIT_Z); //still not working perfectly
-	float		pix_x1, pix_y1, pix_x2, pix_y2, ratio;
-	cl_float3	dir1, dir2;
-
-	dir1 = unit_vec(vec_sub(p1, env->cam.pos));
-	dir1 = mat_vec_mult(rot, dir1);
-	ratio = dist / dir1.z;
-	pix_x1 = ((dir1.x * ratio) * DIM_IA) + (DIM_IA / 2);
-	pix_y1 = ((dir1.y * -ratio) * DIM_IA) + (DIM_IA / 2);
-
-	dir2 = unit_vec(vec_sub(p2, env->cam.pos));
-	dir2 = mat_vec_mult(rot, dir2);
-	ratio = dist / dir2.z;
-	pix_x2 = ((dir2.x * ratio) * DIM_IA) + (DIM_IA / 2);
-	pix_y2 = ((dir2.y * -ratio) * DIM_IA) + (DIM_IA / 2);
-
-	plot_line(env, pix_x1, pix_y1, pix_x2, pix_y2);
-}
-
 void	interactive(t_env *env)
 {
 	clock_t	frame_start = clock();
 	set_camera(&env->cam, (float)DIM_IA);
+	float	*t_array = calloc(sizeof(float), DIM_IA * DIM_IA);
+	
 	for (int y = 0; y < DIM_IA; y += 2)
 	{
 		for (int x = 0; x < DIM_IA; x += 2)
@@ -301,20 +249,15 @@ void	interactive(t_env *env)
 			else if (env->view == 4)
 				trace_bvh_heatmap(env->scene->bins, &ray);
 			//upscaling the resolution by 2x
-			env->ia->pixels[x + (y * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[(x + 1) + (y * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[x + ((y + 1) * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
-			env->ia->pixels[(x + 1) + ((y + 1) * DIM_IA)] = (cl_double3){ray.color.x, ray.color.y, ray.color.z};
+			env->ia->pixels[x + (y * DIM_IA)] = ray.color;
+			env->ia->pixels[(x + 1) + (y * DIM_IA)] = ray.color;
+			env->ia->pixels[x + ((y + 1) * DIM_IA)] = ray.color;
+			env->ia->pixels[(x + 1) + ((y + 1) * DIM_IA)] = ray.color;
+			t_array[x + (y * DIM_IA)] = ray.t;
+			t_array[(x + 1) + (y * DIM_IA)] = ray.t;
+			t_array[x + ((y + 1) * DIM_IA)] = ray.t;
+			t_array[(x + 1) + ((y + 1) * DIM_IA)] = ray.t;
 		}
 	}
-	// draw_line(env, (cl_float3){-5, 0, 0}, (cl_float3){5, 0, 0});
-	draw_pixels(env->ia, DIM_IA, DIM_IA);
-	mlx_put_image_to_window(env->mlx, env->ia->win, env->ia->img, 0, 0);
-	if (env->show_fps)
-	{
-		float frames = 1.0f / (((float)clock() - (float)frame_start) / (float)CLOCKS_PER_SEC);
-		char *fps = NULL;
-		asprintf(&fps, "%lf", frames);
-		mlx_string_put(env->mlx, env->ia->win, 0, 0, 0x00ff00, fps);
-	}
+	draw_pixels(env->ia);
 }

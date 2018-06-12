@@ -570,7 +570,7 @@ __kernel void connect_paths(const Camera cam,
 					sum += contrib * test;
 				continue;
 			}
-			for (s = (t > 1) ? 1 : 2; s <= light_length; s++)
+			for (s = 1; s <= light_length; s++)
 			{
 				Path light_vertex = LIGHT_VERTEX(s - 1);
 				Path backup_camera_vertex = camera_vertex;

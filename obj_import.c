@@ -1,12 +1,5 @@
 #include "rt.h"
 #include <string.h>
-#include "libjpeg/jpeglib.h"
-#include "libjpeg/jerror.h"
-#include "libjpeg/jconfig.h"
-#include "libjpeg/jinclude.h"
-#include "libjpeg/jpegint.h"
-#include "libjpeg/jmemsys.h"
-#include "libjpeg/jversion.h"
 
 #define VERBOSE 0
 
