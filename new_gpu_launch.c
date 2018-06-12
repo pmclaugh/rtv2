@@ -677,9 +677,23 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	for (int i = 0; i < CL->numDevices; i++)
 		clFinish(CL->commands[i]);
 
+	clGetEventProfilingInfo(init, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+	clGetEventProfilingInfo(init, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+	printf("init took %.4f seconds\n", (float)(end - start) / 1000000000.0f);
+
+	clGetEventProfilingInfo(trace, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+	clGetEventProfilingInfo(trace, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+	printf("trace took %.4f seconds\n", (float)(end - start) / 1000000000.0f);
+
+	clGetEventProfilingInfo(connect, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+	clGetEventProfilingInfo(connect, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+	printf("connect took %.4f seconds\n", (float)(end - start) / 1000000000.0f);
+
+
 	clGetEventProfilingInfo(begin, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
 	clGetEventProfilingInfo(finish, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-	printf("took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
+	printf("total took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
+	
 	clReleaseEvent(begin);
 	clReleaseEvent(finish);
 

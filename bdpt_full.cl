@@ -436,20 +436,20 @@ static inline int visibility_test(float3 origin, float3 direction, float t, __gl
 	return 0;
 }
 
-static float3 vec_project(float3 a, float3 b)
+static float3 vec_project(const float3 a, const float3 b)
 {
 	//vector projection of a onto b
 	float3 norm_b = normalize(b);
 	return norm_b * dot(a, norm_b);
 }
 
-static float scalar_project(float3 a, float3 b)
+static float scalar_project(const float3 a, const float3 b)
 {
 	//scalar projection of a onto b aka mag(vec_project(a,b))
 	return dot(a, normalize(b));
 }
 
-static float geometry_term(Path a, Path b)
+static float geometry_term(const Path a, const Path b)
 {
 	float3 origin, direction, distance;
 	float t;
@@ -465,7 +465,7 @@ static float geometry_term(Path a, Path b)
 	return fabs(camera_cos * light_cos) / (t * t);
 }
 
-static float pdf(float3 in, Path p, float3 out, int way)
+static float pdf(float3 in, const Path p, float3 out, int way)
 {
 	//in and out should both point away from p.
 	if (p.specular)
