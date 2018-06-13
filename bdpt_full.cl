@@ -509,7 +509,7 @@ static float BRDF(float3 in, const Path p, float3 out)
 
 #define QL(x) ((x) < RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB)
 
-__kernel void new_connect_paths(const Camera cam,
+__kernel void connect_paths(const Camera cam,
 							__global Path *paths,
 							__global int *path_lengths,
 							__global Box *boxes,
@@ -527,7 +527,8 @@ __kernel void new_connect_paths(const Camera cam,
 
 	//populate local memory buffers
 	contributions[thread_id] = BLACK;
-	vertices[thread_id] = paths[2 * index + (thread_id % 2) + row_size * (thread_id / 2)];
+	if (thread_id < CAMERA_LENGTH + LIGHT_LENGTH)
+		vertices[thread_id] = paths[2 * index + (thread_id % 2) + row_size * (thread_id / 2)];
 	//vertices = [c0,l0,c1,l1,c2,l2...]
 
 	//synchronize
@@ -536,79 +537,103 @@ __kernel void new_connect_paths(const Camera cam,
 	int camera_length = path_lengths[2 * index];
 	int light_length = path_lengths[2 * index + 1];
 
-	//generating correct t and s avoiding unused combos is tricky but definitely doable, skipping for now
-	int t, s;
+	//generate unique s,t pair avoiding useless combos (0-0, 0-1, 1-0, 1-1)
+		//1-1 isn't technically useless but it should be covered by 2-0
+	//makes exactly 32 combinations for t_max == 5 s_max == 5
+	int virtual_thread_id = thread_id;
+	if (thread_id == 0)
+		virtual_thread_id = group_size + 1;
+	if (thread_id == 1)
+		virtual_thread_id = group_size + 2;
+	if (thread_id == CAMERA_LENGTH + 1)
+		virtual_thread_id = group_size + 3;
+	if (thread_id == CAMERA_LENGTH + 2)
+		virtual_thread_id = group_size + 4;
 
-	//the core code will assume t >= 1 s >= 1
+	int t = virtual_thread_id % (CAMERA_LENGTH + 1);
+	int s = virtual_thread_id / (CAMERA_LENGTH + 1);
 
-	Path camera_vertex = vertices[(t - 1) * 2];
-	Path light_vertex = vertices[(s - 1) * 2 + 1];
+	if (t < camera_length && s < light_length && t != 0 && t != 1 && s != 0) //those need exceptions
+	{
+		Path camera_vertex = CAMERA_VERTEX(t - 1);
+		Path light_vertex = LIGHT_VERTEX(s - 1);
 
-	float3 direction, distance;
-	distance = light_vertex.origin - camera_vertex.origin;
-	float d = native_sqrt(dot(distance, distance));
-	direction = normalize(distance);
+		float3 direction, distance;
+		distance = light_vertex.origin - camera_vertex.origin;
+		float d = native_sqrt(dot(distance, distance));
+		direction = normalize(distance);
 
-	float camera_cos = dot(camera_vertex.normal, direction);
-	float light_cos = dot(light_vertex.normal, -1.0f * direction);
+		float camera_cos = dot(camera_vertex.normal, direction);
+		float light_cos = dot(light_vertex.normal, -1.0f * direction);
 
-	if (camera_cos <= 0.0f || light_cos <= 0.0f)
-		if (visibility_test(camera_vertex.origin, direction, d, boxes, V))
-		{
-			float this_geom = camera_cos * light_cos / (d * d);
-
-			// a bunch of variables to populate
-			float this_pL, this_pC, BRDF_L, BRDF_C, prev_pL, prev_pC;
-			float3 light_in, camera_in;
-
-			//defaults
-			prev_pC = 1.0f;
-			prev_pL = 1.0f;
-			this_pC = 1.0f;
-			this_pL = 1.0f / (2.0f * PI);
-			//overrides
-			if (s > 1)
+		if (camera_cos <= 0.0f || light_cos <= 0.0f)
+			if (visibility_test(camera_vertex.origin, direction, d, boxes, V))
 			{
-				light_in = normalize(LIGHT_VERTEX(s - 2).origin - light_vertex.origin);
-				this_pL = pdf(light_in, light_vertex, -1.0f * direction, 0);
-				prev_pC = pdf(-1.0f * direction, light_vertex, light_in, 1); //these 0s and 1s suck and should be fixed
+				float this_geom = fabs(camera_cos * light_cos) / (d * d);
+
+				// a bunch of variables to populate
+				float this_pL, this_pC, BRDF_L, BRDF_C, prev_pL, prev_pC;
+				float3 light_in, camera_in;
+				
+				//the parts based on light_in
+				if (s == 1)
+				{
+					prev_pC = 1.0f; //placeholder, won't be accessed
+					this_pL = 1.0f / (2.0f * PI);
+				}
+				else
+				{
+					light_in = normalize(LIGHT_VERTEX(s - 2).origin - light_vertex.origin);
+					this_pL = pdf(light_in, light_vertex, -1.0f * direction, 0);
+					prev_pC = pdf(-1.0f * direction, light_vertex, light_in, 1); //these 0s and 1s suck and should be fixed
+				}
+
+				//the parts based on camera_in
+				if (t == 1)
+				{
+					this_pC = 1.0f; // 1 / SA (SA of camera plane is 1x1)
+					prev_pL = 1.0f; //placeholder. won't be accessed
+				}
+				else
+				{
+					camera_in = normalize(CAMERA_VERTEX(t - 2).origin - camera_vertex.origin);
+					this_pC = pdf(camera_in, camera_vertex, direction, 1);
+					prev_pL = pdf(direction, camera_vertex, camera_in, 0);
+				}
+
+
+				//evaluate BRDF for both
+				BRDF_C = t == 1 ? 1.0f : BRDF(camera_in, camera_vertex, direction);
+				BRDF_L = s == 1 ? 1.0f : BRDF(light_in, light_vertex, -1.0f * direction);
+
+				float3 contrib = light_vertex.mask * camera_vertex.mask * BRDF_L * BRDF_C * this_geom;
+				
+				float p[16];
+				//initialize with ratios
+				for (int k = 0; k < s + t; k++)
+					p[k] = (QL(k) * GEOM(k) * PL(k)) / (QC(k) * GEOM(k + 1) * PC(k));
+
+				//multiply through
+				for (int k = 0; k < s + t; k++)
+					p[k + 1] = p[k + 1] * p[k];
+
+				//pick pivot and append a 1.0f
+				float pivot = p[s - 1];
+				p[s + t] = 1.0f;
+				for (int k = 0; k < s + t + 1; k++)
+					p[k] /= pivot;
+
+				//sum weight ratios
+				float weight = 0.0f;
+				for (int k = 0; k < s + t + 1; k++)
+					weight += p[k];
+
+				//protect against NaNs
+				float test = 1.0f / (weight);
+				if (test == test)
+					contributions[thread_id] = contrib * test;
 			}
-			if (t > 1)
-			{
-				camera_in = normalize(CAMERA_VERTEX(t - 2).origin - camera_vertex.origin);
-				this_pC = pdf(camera_in, camera_vertex, direction, 1);
-				prev_pL = pdf(direction, camera_vertex, camera_in, 0);
-			}
-
-			//evaluate BRDF for both
-			BRDF_C = t == 1 ? 1.0f : BRDF(camera_in, camera_vertex, direction);
-			BRDF_L = s == 1 ? 1.0f : BRDF(light_in, light_vertex, -1.0f * direction);
-
-			float3 contrib = light_vertex.mask * camera_vertex.mask * BRDF_L * BRDF_C * this_geom;
-			
-			float p[12];
-			//initialize with ratios
-			for (int k = 0; k < s + t; k++)
-				p[k] = (QL(k) * GEOM(k) * PL(k)) / (QC(k) * GEOM(k + 1) * PC(k));
-
-			//multiply through
-			for (int k = 0; k < s + t; k++)
-				p[k + 1] = p[k + 1] * p[k];
-
-			//pick pivot and append a 1.0f
-			float pivot = 1.0f / p[s - 1];
-			p[s + t] = 1.0f;
-			float weight = 0.0f;
-
-			//sum p[k] / pivot
-			for (int k = 0; k < s + t + 1; k++)
-				weight += p[k] * pivot;
-
-			//protect against NaNs
-			float test = 1.0f / (weight);
-			if (test == test)
-				contributions[thread_id] = contrib * test;
-		}
+	}
 	
 	barrier(CLK_LOCAL_MEM_FENCE);
 

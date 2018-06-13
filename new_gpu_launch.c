@@ -413,6 +413,8 @@ void recompile(gpu_context *CL, gpu_handle *handle)
 		clSetKernelArg(handle->connect_paths[i], 4, sizeof(cl_mem), &handle->d_vertexes);
 		clSetKernelArg(handle->connect_paths[i], 5, sizeof(cl_mem), &handle->d_outputs[i]);
 		clSetKernelArg(handle->connect_paths[i], 6, sizeof(cl_mem), &handle->d_light_img[i]);
+		clSetKernelArg(handle->connect_paths[i], 7, sizeof(gpu_path) * 10, NULL);
+		clSetKernelArg(handle->connect_paths[i], 8, sizeof(cl_float3) * 32, NULL);
 	}
 }
 
@@ -609,6 +611,8 @@ gpu_handle *gpu_alloc(gpu_context *CL, gpu_scene *scene, int worksize)
 		clSetKernelArg(handle->connect_paths[i], 4, sizeof(cl_mem), &handle->d_vertexes);
 		clSetKernelArg(handle->connect_paths[i], 5, sizeof(cl_mem), &handle->d_outputs[i]);
 		clSetKernelArg(handle->connect_paths[i], 6, sizeof(cl_mem), &handle->d_light_img[i]);
+		clSetKernelArg(handle->connect_paths[i], 7, sizeof(gpu_path) * 10, NULL);
+		clSetKernelArg(handle->connect_paths[i], 8, sizeof(cl_float3) * 32, NULL);
 	}
 
 	return handle;
@@ -618,8 +622,11 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 {
 	size_t half_worksize = xdim * ydim;
 	size_t worksize =  half_worksize * 2;
+
 	
 	size_t localsize = 64;
+	size_t connect_localsize = 32;
+	size_t connect_worksize = connect_localsize * half_worksize;
 	size_t sample_max = samples;
 	size_t width = xdim;
 
@@ -662,11 +669,15 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	for (int i = 0; i < CL->numDevices; i++)
 		for (int j = 0; j < samples; j++)
 		{
-			clEnqueueNDRangeKernel(CL->commands[i], handle->init_paths[i], 1, 0, &worksize, &localsize, j == 0 ? 0 : 1, j == 0 ? NULL : &connect, &init);
+			cl_int err;
+			err = clEnqueueNDRangeKernel(CL->commands[i], handle->init_paths[i], 1, 0, &worksize, &localsize, j == 0 ? 0 : 1, j == 0 ? NULL : &connect, &init);
+			printf("err is %d\n", err);
 			if (j == 0 && i == 0)
 				begin = init;
-			clEnqueueNDRangeKernel(CL->commands[i], handle->trace_paths[i], 1, 0, &worksize, &localsize, 1, &init, &trace);
-			clEnqueueNDRangeKernel(CL->commands[i], handle->connect_paths[i], 1, 0, &half_worksize, &localsize, 1, &trace, &connect);
+			err = clEnqueueNDRangeKernel(CL->commands[i], handle->trace_paths[i], 1, 0, &worksize, &localsize, 1, &init, &trace);
+			printf("err is %d\n", err);
+			err = clEnqueueNDRangeKernel(CL->commands[i], handle->connect_paths[i], 1, 0, &connect_worksize, &connect_localsize, 1, &trace, &connect);
+			printf("err is %d\n", err);
 			if (j == samples - 1 && i == CL->numDevices - 1)
 				finish = connect;
 		}
@@ -676,6 +687,8 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 
 	for (int i = 0; i < CL->numDevices; i++)
 		clFinish(CL->commands[i]);
+
+	printf("out and done\n");
 
 	clGetEventProfilingInfo(init, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
 	clGetEventProfilingInfo(init, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
@@ -689,13 +702,14 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 	clGetEventProfilingInfo(connect, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 	printf("connect took %.4f seconds\n", (float)(end - start) / 1000000000.0f);
 
-
 	clGetEventProfilingInfo(begin, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
 	clGetEventProfilingInfo(finish, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 	printf("total took %.3f seconds\n", (float)(end - start) / 1000000000.0f);
 	
 	clReleaseEvent(begin);
 	clReleaseEvent(finish);
+
+	printf("clear\n");
 
 	cl_float3 **outputs = calloc(CL->numDevices, sizeof(cl_float3 *));
 	for (int i = 0; i < CL->numDevices; i++)
