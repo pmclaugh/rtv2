@@ -542,13 +542,13 @@ __kernel void connect_paths(const Camera cam,
 	//makes exactly 32 combinations for t_max == 5 s_max == 5
 	int virtual_thread_id = thread_id;
 	if (thread_id == 0)
-		virtual_thread_id = group_size + 1;
+		virtual_thread_id = group_size;
 	if (thread_id == 1)
-		virtual_thread_id = group_size + 2;
+		virtual_thread_id = group_size + 1;
 	if (thread_id == CAMERA_LENGTH + 1)
-		virtual_thread_id = group_size + 3;
+		virtual_thread_id = group_size + 2;
 	if (thread_id == CAMERA_LENGTH + 2)
-		virtual_thread_id = group_size + 4;
+		virtual_thread_id = group_size + 3;
 
 	int t = virtual_thread_id % (CAMERA_LENGTH + 1);
 	int s = virtual_thread_id / (CAMERA_LENGTH + 1);
@@ -803,7 +803,7 @@ __kernel void trace_paths(__global Path *paths,
 		//get normal and texture coordinate
 		float3 normal, true_normal, txcrd;
 		surface_vectors(V, N, T, direction, ind, u, v, &normal, &true_normal, &txcrd);
-
+		normal = true_normal;
 		//update position
 		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
 
