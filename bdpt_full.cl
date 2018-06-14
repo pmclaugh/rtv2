@@ -553,7 +553,7 @@ __kernel void connect_paths(const Camera cam,
 	int t = virtual_thread_id % (CAMERA_LENGTH + 1);
 	int s = virtual_thread_id / (CAMERA_LENGTH + 1);
 
-	if (t < camera_length && s < light_length && t != 0 && t != 1 && s != 0) //those need exceptions
+	if (t <= camera_length && s <= light_length && t != 0 && t != 1 && s != 0) //those need exceptions
 	{
 		Path camera_vertex = CAMERA_VERTEX(t - 1);
 		Path light_vertex = LIGHT_VERTEX(s - 1);
