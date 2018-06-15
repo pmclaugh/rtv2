@@ -123,32 +123,40 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 
 static int intersect_box(const float3 origin, const float3 inv_dir, Box b, float t, float *t_out)
 {
-	float3 min = (float3)(b.min_x, b.min_y, b.min_z);
-	float3 max = (float3)(b.max_x, b.max_y, b.max_z);
-	float3 t0 = (min - origin) * inv_dir;
-	float3 t1 = (max - origin) * inv_dir;
+	float tx0 = (b.min_x - origin.x) * inv_dir.x;
+	float tx1 = (b.max_x - origin.x) * inv_dir.x;
+	float tmin = fmin(tx0, tx1);
+	float tmax = fmax(tx0, tx1);
 
-	min = fmin(t0, t1);
-	max = fmax(t0, t1);
+	float ty0 = (b.min_y - origin.y) * inv_dir.y;
+	float ty1 = (b.max_y - origin.y) * inv_dir.y;
+	float tymin = fmin(ty0, ty1);
+	float tymax = fmax(ty0, ty1);
 
-	if ((min.x >= max.y) || (min.y >= max.x))
+
+	if ((tmin >= tymax) || (tymin >= tmax))
 		return (0);
 
-	min.x = fmax(min.y, min.x);
-	max.x = fmin(max.y, max.x);
+	tmin = fmax(tymin, tmin);
+	tmax = fmin(tymax, tmax);
 
-	if ((min.x >= max.z) || (min.z >= max.x))
+	float tz0 = (b.min_z - origin.z) * inv_dir.z;
+	float tz1 = (b.max_z - origin.z) * inv_dir.z;
+	float tzmin = fmin(tz0, tz1);
+	float tzmax = fmax(tz0, tz1);
+
+	if ((tmin >= tzmax) || (tzmin >= tmax))
 		return (0);
 
-    min.x = fmax(min.z, min.x);
-	max.x = fmin(max.z, max.x);
+    tmin = fmax(tzmin, tmin);
+	tmax = fmin(tzmax, tmax);
 
-	if (min.x > t)
+	if (tmin > t)
 		return (0);
-	if (max.x <= 0.0f)
+	if (tmin <= 0.0f && tmax <= 0.0f)
 		return (0);
 	if (t_out)
-		*t_out = fmax(0.0f, min.x);
+		*t_out = fmax(0.0f, tmin);
 	return (1);
 }
 
