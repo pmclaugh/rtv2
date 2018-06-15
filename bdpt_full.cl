@@ -117,10 +117,9 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 
 static int intersect_box(const float3 origin, const float3 inv_dir, Box b, float t, float *t_out)
 {
-	float3 bmin = (float3)(b.b_min.x, b.b_min.y, b.b_min.z);
-	float3 bmax = (float3)(b.b_max.x, b.b_max.y, b.b_max.z);
-	float3 t0 = (bmin - origin) * inv_dir;
-	float3 t1 = (bmax - origin) * inv_dir;
+	
+	float3 t0 = ((float3)b.b_min - origin) * inv_dir;
+	float3 t1 = ((float3)b.b_max - origin) * inv_dir;
 
 	float3 tmin = fmin(t0, t1);
 	float3 tmax = fmax(t0, t1);
@@ -336,12 +335,15 @@ __kernel void init_paths(const Camera cam,
 
 static inline int inside_box(float3 point, Box box)
 {
-	if (box.b_min.x <= point.x && point.x <= box.b_max.x)
-		if (box.b_min.y <= point.y && point.y <= box.b_max.y)
-			if (box.b_min.z <= point.z && point.z <= box.b_max.z)
+	float3 comp_min = fmin(point, (float3)box.b_min);
+	float3 comp_max = fmax(point, (float3)box.b_max);
+	if (comp_min.x == box.b_min.x && comp_max.x == box.b_max.x)
+		if (comp_min.y == box.b_min.y && comp_max.y == box.b_max.y)
+			if (comp_min.z == box.b_min.z && comp_max.z == box.b_max.z)
 				return 1;
 	return 0;
 }
+
 static inline int visibility_test(float3 origin, float3 direction, float t, __global Box *boxes, __global float3 *V)
 {
 	int stack[32];
