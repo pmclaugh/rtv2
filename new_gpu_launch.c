@@ -671,13 +671,13 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		{
 			cl_int err;
 			err = clEnqueueNDRangeKernel(CL->commands[i], handle->init_paths[i], 1, 0, &worksize, &localsize, j == 0 ? 0 : 1, j == 0 ? NULL : &connect, &init);
-			printf("err is %d\n", err);
+			// printf("err is %d\n", err);
 			if (j == 0 && i == 0)
 				begin = init;
 			err = clEnqueueNDRangeKernel(CL->commands[i], handle->trace_paths[i], 1, 0, &worksize, &localsize, 1, &init, &trace);
-			printf("err is %d\n", err);
+			// printf("err is %d\n", err);
 			err = clEnqueueNDRangeKernel(CL->commands[i], handle->connect_paths[i], 1, 0, &connect_worksize, &connect_localsize, 1, &trace, &connect);
-			printf("err is %d\n", err);
+			// printf("err is %d\n", err);
 			if (j == samples - 1 && i == CL->numDevices - 1)
 				finish = connect;
 		}
