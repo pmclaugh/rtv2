@@ -435,23 +435,18 @@ gpu_bin bin_from_box(AABB *box)
 {
 	gpu_bin bin;
 
-	bin.minx = box->min.x;
-	bin.miny = box->min.y;
-	bin.minz = box->min.z;
-
-	bin.maxx = box->max.x;
-	bin.maxy = box->max.y;
-	bin.maxz = box->max.z;
+	bin.min = (cl_float4){box->min.x, box->min.y, box->min.z, 0.0f};
+	bin.max = (cl_float4){box->max.x, box->max.y, box->max.z, 0.0f};
 
 	if (box->left)
 	{
-		bin.lind = box->left->flat_ind;
-		bin.rind = box->right->flat_ind;
+		bin.min.w = (float)box->left->flat_ind;
+		bin.max.w = (float)box->right->flat_ind;
 	}
 	else
 	{
-		bin.lind = -3 * box->start_ind;
-		bin.rind = -3 * box->member_count;
+		bin.min.w = -3.0f * (float)box->start_ind;
+		bin.max.w = -3.0f * (float)box->member_count;
 	}
 
 	return bin;

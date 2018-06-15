@@ -84,14 +84,8 @@ typedef struct s_camera
 
 typedef struct s_box
 {
-	float min_x;
-	float min_y;
-	float min_z;
-	int l_ind;
-	float max_x;
-	float max_y;
-	float max_z;
-	int r_ind;
+	float4 b_min;
+	float4 b_max;
 }				Box;
 
 typedef struct s_3x3
@@ -123,32 +117,31 @@ static float get_random(unsigned int *seed0, unsigned int *seed1) {
 
 static int intersect_box(const float3 origin, const float3 inv_dir, Box b, float t, float *t_out)
 {
-	float3 min = (float3)(b.min_x, b.min_y, b.min_z);
-	float3 max = (float3)(b.max_x, b.max_y, b.max_z);
-	float3 t0 = (min - origin) * inv_dir;
-	float3 t1 = (max - origin) * inv_dir;
+	
+	float3 t0 = ((float3)b.b_min - origin) * inv_dir;
+	float3 t1 = ((float3)b.b_max - origin) * inv_dir;
 
-	min = fmin(t0, t1);
-	max = fmax(t0, t1);
+	float3 tmin = fmin(t0, t1);
+	float3 tmax = fmax(t0, t1);
 
-	if ((min.x >= max.y) || (min.y >= max.x))
+	if ((tmin.x >= tmax.y) || (tmin.y >= tmax.x))
 		return (0);
 
-	min.x = fmax(min.y, min.x);
-	max.x = fmin(max.y, max.x);
+	tmin.x = fmax(tmin.y, tmin.x);
+	tmax.x = fmin(tmax.y, tmax.x);
 
-	if ((min.x >= max.z) || (min.z >= max.x))
+	if ((tmin.x >= tmax.z) || (tmin.z >= tmax.x))
 		return (0);
 
-    min.x = fmax(min.z, min.x);
-	max.x = fmin(max.z, max.x);
+    tmin.x = fmax(tmin.z, tmin.x);
+	tmax.x = fmin(tmax.z, tmax.x);
 
-	if (min.x > t)
+	if (tmin.x > t)
 		return (0);
-	if (max.x <= 0.0f)
+	if (tmax.x <= 0.0f)
 		return (0);
 	if (t_out)
-		*t_out = fmax(0.0f, min.x);
+		*t_out = fmax(0.0f, tmin.x);
 	return (1);
 }
 
@@ -342,9 +335,11 @@ __kernel void init_paths(const Camera cam,
 
 static inline int inside_box(float3 point, Box box)
 {
-	if (box.min_x <= point.x && point.x <= box.max_x)
-		if (box.min_y <= point.y && point.y <= box.max_y)
-			if (box.min_z <= point.z && point.z <= box.max_z)
+	float3 comp_min = fmin(point, (float3)box.b_min);
+	float3 comp_max = fmax(point, (float3)box.b_max);
+	if (comp_min.x == box.b_min.x && comp_max.x == box.b_max.x)
+		if (comp_min.y == box.b_min.y && comp_max.y == box.b_max.y)
+			if (comp_min.z == box.b_min.z && comp_max.z == box.b_max.z)
 				return 1;
 	return 0;
 }
@@ -369,10 +364,10 @@ static inline int visibility_test(float3 origin, float3 direction, float t, __gl
 		int result = intersect_box(origin, inv_dir, box, t, &this_t);
 		if (result)
 		{
-			if (box.r_ind < 0)
+			if (box.b_max.w < 0.0f)
 			{
-				const int count = -1 * box.r_ind;
-				const int start = -1 * box.l_ind;
+				const int start = -1 * (int)box.b_min.w;
+				const int count = -1 * (int)box.b_max.w;
 				for (int i = start; i < start + count; i += 3)
 					if (intersect_triangle(origin, direction, V, i, &ind, &t, &u, &v))
 						break ;
@@ -380,19 +375,19 @@ static inline int visibility_test(float3 origin, float3 direction, float t, __gl
 			else
 			{
 				Box l, r;
-				l = boxes[box.l_ind];
-				r = boxes[box.r_ind];
+				l = boxes[(int)box.b_min.w];
+				r = boxes[(int)box.b_max.w];
                 float t_l = FLT_MAX;
                 float t_r = FLT_MAX;
                 int lhit = intersect_box(origin, inv_dir, l, t, &t_l);
                 int rhit = intersect_box(origin, inv_dir, r, t, &t_r);
 
                 if (lhit && t_l >= t_r)
-                    stack[s_i++] = box.l_ind;
+                    stack[s_i++] = (int)box.b_min.w;
                 if (rhit && t_r < t)
-                    stack[s_i++] = box.r_ind;
+                    stack[s_i++] = (int)box.b_max.w;
                 if (lhit && t_l < t_r)
-                    stack[s_i++] = box.l_ind;
+                    stack[s_i++] = (int)box.b_min.w;
 			}
 		}
 	}
@@ -774,28 +769,28 @@ __kernel void trace_paths(__global Path *paths,
 			//check
 			if (intersect_box(origin, inv_dir, box, t, 0))
 			{
-				if (box.r_ind < 0)
+				if (box.b_max.w < 0.0f)
 				{
-					const int count = -1 * box.r_ind;
-					const int start = -1 * box.l_ind;
+					const int start = -1 * (int)box.b_min.w;
+					const int count = -1 * (int)box.b_max.w;
 					for (int i = start; i < start + count; i += 3)
 						intersect_triangle(origin, direction, V, i, &ind, &t, &u, &v);	
 				}
 				else
 				{
 					Box l, r;
-					l = boxes[box.l_ind];
-					r = boxes[box.r_ind];
+					l = boxes[(int)box.b_min.w];
+					r = boxes[(int)box.b_max.w];
 	                float t_l = FLT_MAX;
 	                float t_r = FLT_MAX;
 	                int lhit = intersect_box(origin, inv_dir, l, t, &t_l);
 	                int rhit = intersect_box(origin, inv_dir, r, t, &t_r);
 	                if (lhit && t_l >= t_r)
-	                    stack[s_i++] = box.l_ind;
+	                    stack[s_i++] = (int)box.b_min.w;
 	                if (rhit)
-	                    stack[s_i++] = box.r_ind;
+	                    stack[s_i++] = (int)box.b_max.w;
 	                if (lhit && t_l < t_r)
-	                    stack[s_i++] = box.l_ind;
+	                    stack[s_i++] = (int)box.b_min.w;
 				}
 			}
 		}
