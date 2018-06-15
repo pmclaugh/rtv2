@@ -156,8 +156,14 @@ typedef struct s_face
 
 typedef struct s_gpu_bin
 {
-	cl_float4 min;
-	cl_float4 max;
+	cl_float minx;
+	cl_float miny;
+	cl_float minz;
+	cl_int lind;
+	cl_float maxx;
+	cl_float maxy;
+	cl_float maxz;
+	cl_int rind;
 }				gpu_bin;
 
 typedef struct s_AABB

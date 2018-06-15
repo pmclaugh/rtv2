@@ -278,10 +278,11 @@ gpu_context *prep_gpu(void)
     	err = clBuildProgram(gpu->programs[i], 0, NULL, NULL, NULL, NULL);
     	if (err != CL_SUCCESS)
     	{
-    	 	printf("bad compile, err %d\n", err);
+    	 	printf("bad compile\n");
     	 	char *build_log;
 			size_t ret_val_size = 0;
 			clGetProgramBuildInfo(gpu->programs[i], device_ids[i], CL_PROGRAM_BUILD_LOG, 0, NULL, &ret_val_size);
+			printf("ret val %lu\n", ret_val_size);
 			build_log = malloc(ret_val_size + 1);
 			clGetProgramBuildInfo(gpu->programs[i], device_ids[i], CL_PROGRAM_BUILD_LOG, ret_val_size, build_log, NULL);
 			printf("%s\n", build_log);
