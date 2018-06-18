@@ -526,6 +526,7 @@ __kernel void connect_paths(const Camera cam,
 	int t = virtual_thread_id % (CAMERA_LENGTH + 1);
 	int s = virtual_thread_id / (CAMERA_LENGTH + 1);
 
+	int light_img_index = -1;
 	float p[16];
 	
 	//synchronize
@@ -533,10 +534,34 @@ __kernel void connect_paths(const Camera cam,
 
 	if (t <= camera_length && s <= light_length)
 	{
-		if (t != 0 && t != 1 && s != 0) //those need exceptions
+		if (t != 0 && s != 0) //those need exceptions
 		{
-			Path camera_vertex = CAMERA_VERTEX(t - 1);
 			Path light_vertex = LIGHT_VERTEX(s - 1);
+			Path camera_vertex = CAMERA_VERTEX(t - 1);
+			if (t < 2)
+			{
+				float3 to_light = light_vertex.origin - cam.focus;
+				float dist = native_sqrt(dot(to_light, to_light));
+				float proj_n = scalar_project(to_light, cam.direction);
+				if (proj_n >= 0.001f)
+				{
+					float focus_to_plane = 0.5f / tan(H_FOV / 2);
+					float ratio = (proj_n + focus_to_plane) / proj_n;
+
+					float3 point_on_camera = normalize(-1.0f * to_light) * dist * ratio + light_vertex.origin;
+					//translate to x,y pixel coordinates
+					float3 plane_vec = point_on_camera - cam.origin;
+					float x = floor(scalar_project(plane_vec, cam.d_x) / native_sqrt(dot(cam.d_x, cam.d_x)));
+					float y = floor(scalar_project(plane_vec, cam.d_y) / native_sqrt(dot(cam.d_y, cam.d_y)));
+
+					if (x >= 0.0 && x <= WIN_DIM && y >= 0.0 && y <= WIN_DIM)
+					{
+						light_img_index = (int)x + (int)(y * WIN_DIM);
+						camera_vertex = paths[2 * light_img_index];
+					}
+				}
+			}
+				
 
 			float3 direction, distance;
 			distance = light_vertex.origin - camera_vertex.origin;
@@ -609,12 +634,17 @@ __kernel void connect_paths(const Camera cam,
 						//protect against NaNs
 						float test = 1.0f / (weight);
 						if (test == test)
-							contributions[thread_id] = contrib * test;
+						{
+							if (t > 1)
+								contributions[thread_id] = contrib * test;
+							else if (light_img_index >= 0 && light_img_index < row_size / 2)
+								light_img[light_img_index] += contrib * test;
+						}
 					}
 				}
 			}
 		}
-		else if (s == 0)
+		else if (s == 0 && t != 0)
 		{
 			Path camera_vertex = CAMERA_VERTEX(t - 1);
 			if (camera_vertex.hit_light)

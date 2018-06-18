@@ -661,7 +661,7 @@ cl_float3 *gpu_render(Scene *S, t_camera cam, int xdim, int ydim, int samples, i
 		clSetKernelArg(handle->init_paths[i], 0, sizeof(gpu_camera), &gcam);
 		clSetKernelArg(handle->connect_paths[i], 0, sizeof(gpu_camera), &gcam);
 	}
-
+	
 	//ACTUAL LAUNCH TIME
 	cl_event begin, finish;
 	cl_ulong start, end;
