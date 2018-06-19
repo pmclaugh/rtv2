@@ -534,7 +534,7 @@ __kernel void connect_paths(const Camera cam,
 
 	if (t <= camera_length && s <= light_length)
 	{
-		if (t != 0 && s != 0) //those need exceptions
+		if (t != 0 && s != 0)
 		{
 			Path light_vertex = LIGHT_VERTEX(s - 1);
 			Path camera_vertex = CAMERA_VERTEX(t - 1);
@@ -637,7 +637,7 @@ __kernel void connect_paths(const Camera cam,
 						{
 							if (t > 1)
 								contributions[thread_id] = contrib * test;
-							else if (light_img_index >= 0 && light_img_index < row_size / 2)
+							else if (light_img_index >= 0 && light_img_index < (1024 * 1024))
 								light_img[light_img_index] += contrib * test;
 						}
 					}
