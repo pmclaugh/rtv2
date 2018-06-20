@@ -55,7 +55,8 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 		return ;
 	while (fgets(*line, 512, fp))
 	{
-		if (*line[0] == '#')
+		char c = 0;
+		if (sscanf(*line, " %c", &c) == 1 && c == '#')
 			continue ;
 		if (strstr(*line, "scale"))
 			edit_info->scale = strtof(strchr(*line, '=') + 1, NULL);
@@ -112,7 +113,8 @@ static int	count_files(FILE *fp)
 	int num_files = 0;
 	while (fgets(line, 512, fp))
 	{
-		if (line[0] == '#')
+		char c = 0;
+		if (sscanf(line, " %c", &c) == 1 && c == '#')
 			continue ;
 		if (strncmp(line, "import=", 7) == 0)
 			++num_files;
@@ -149,7 +151,8 @@ void	load_config(t_env *env)
 	i = 0;
 	while (fgets(line, 512, fp))
 	{
-		if (line[0] == '#')
+		char c = 0;
+		if (sscanf(line, " %c", &c) == 1 && c == '#')
 			continue ;
 		
 		while (strncmp(line, "import=", 7) == 0 && i < num_files)
