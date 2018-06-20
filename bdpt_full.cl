@@ -425,8 +425,8 @@ static float geometry_term(const Path a, const Path b)
 	t = native_sqrt(dot(distance, distance));
 	direction = normalize(distance);
 
-	float camera_cos = dot(a.true_normal, direction);
-	float light_cos = dot(b.true_normal, -1.0f * direction);
+	float camera_cos = dot(a.normal, direction);
+	float light_cos = dot(b.normal, -1.0f * direction);
 
 	return fabs(camera_cos * light_cos) / (t * t);
 }
@@ -483,7 +483,7 @@ static float pdf(float3 in, const Path p, float3 out, int way)
 			f = 1.0f - f;
 		}
 
-		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
+		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
 	}
 	else
 		if (!way) //NB "way" seems flipped here but that's the point
@@ -534,7 +534,7 @@ static float BRDF(float3 in, const Path p, float3 out)
 			f = 1.0f - f;
 		}
 
-		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
+		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
 	}
 	else
 		return fmax(0.0f, dot(p.normal, out)) / PI;
@@ -598,7 +598,9 @@ __kernel void connect_paths(const Camera cam,
 
 	int light_img_index = -1;
 	float p[16];
-	
+
+	// t = 1;
+
 	//synchronize
 	barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -638,11 +640,11 @@ __kernel void connect_paths(const Camera cam,
 			float d = native_sqrt(dot(distance, distance));
 			direction = normalize(distance);
 
-			float camera_cos = dot(camera_vertex.true_normal, direction);
-			float light_cos = dot(light_vertex.true_normal, -1.0f * direction);
+			float camera_cos = dot(camera_vertex.normal, direction);
+			float light_cos = dot(light_vertex.normal, -1.0f * direction);
 			if (!camera_vertex.hit_light)
 			{
-				if ((camera_cos > 0.0f) && (light_cos > 0.0f))
+				if ((camera_cos > 0.0f || camera_vertex.specular) && (light_cos > 0.0f || light_vertex.specular))
 				{
 					if (visibility_test(camera_vertex.origin, direction, d, boxes, V))
 					{
@@ -980,6 +982,7 @@ __kernel void trace_paths(__global Path *paths,
 				float coeff = index * c - sqrt(radicand);
 				spec_dir = normalize(coeff * -1.0f * oriented_normal - index * in);
 				f = 1.0f - f;
+				oriented_normal *= -1.0f;
 			}
 			out = gloss_BRDF_sample(oriented_normal, spec_dir, SPECULAR, &seed0, &seed1);
 		}
@@ -1008,7 +1011,8 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			paths[index + row_size * (LENGTH - 1)].pC = pdf(out, paths[index + row_size * LENGTH], in, way);
 			pL = pdf(in, paths[index + row_size * LENGTH], out, way);
-			mask *= 2.0f * (1 - specular);
+			if (!specular)
+				mask *= 2.0f;
 		}
 		else
 		{
