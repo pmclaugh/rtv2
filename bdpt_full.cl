@@ -294,7 +294,7 @@ __kernel void init_paths(const Camera cam,
 		direction = diffuse_BRDF_sample(normal, way, &seed0, &seed1);
 
 		float3 Ke = mats[M[light.x / 3]].Ke;
-		mask = Ke * BRIGHTNESS;	
+		mask = Ke * BRIGHTNESS * dot(normal, direction);	
 
 		//pick random point just off of that triangle
 		float r1 = get_random(&seed0, &seed1);
@@ -341,6 +341,7 @@ __kernel void init_paths(const Camera cam,
 	paths[index].hit_light = 0;
 	paths[index].pC = pC;
 	paths[index].pL = pL;
+	paths[index].specular = 0;
 	path_lengths[index] = 0;
 
 	seeds[2 * index] = seed0;
@@ -448,7 +449,7 @@ static float pdf(float3 in, const Path p, float3 out, int way)
 	{
 		float ni, nt;
 		float3 normal;
-		if (dot(in, p.normal) > 0.0f)
+		if (dot(in, p.true_normal) > 0.0f)
 		{
 			ni = 1.0f;
 			nt = 1.5f;
@@ -483,7 +484,7 @@ static float pdf(float3 in, const Path p, float3 out, int way)
 			f = 1.0f - f;
 		}
 
-		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
+		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
 	}
 	else
 		if (!way) //NB "way" seems flipped here but that's the point
@@ -499,7 +500,7 @@ static float BRDF(float3 in, const Path p, float3 out)
 	{
 		float ni, nt;
 		float3 normal;
-		if (dot(in, p.normal) > 0.0f)
+		if (dot(in, p.true_normal) > 0.0f)
 		{
 			ni = 1.0f;
 			nt = 1.5f;
@@ -534,7 +535,7 @@ static float BRDF(float3 in, const Path p, float3 out)
 			f = 1.0f - f;
 		}
 
-		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
+		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
 	}
 	else
 		return fmax(0.0f, dot(p.normal, out)) / PI;
@@ -598,8 +599,6 @@ __kernel void connect_paths(const Camera cam,
 
 	int light_img_index = -1;
 	float p[16];
-
-	// t = 1;
 
 	//synchronize
 	barrier(CLK_LOCAL_MEM_FENCE);
