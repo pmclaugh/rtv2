@@ -24,7 +24,7 @@
 #define LIGHT_LENGTH 5
 
 #define SPECULAR 40.0f
-
+#define SPEC_XMIT 500.0f
 
 typedef struct s_path {
 	float3 origin;
@@ -467,24 +467,28 @@ static float pdf(float3 in, const Path p, float3 out, int way)
 		float c = dot(in, normal);
 		float radicand = 1.0f + index * (c * c - 1.0f);
 
+		float spec_mult;
 		if (radicand < 0.0f) //TIR
 		{
 			spec_dir = 2.0f * dot(in, normal) * normal - in;
 			f = 1.0f;
+			spec_mult = SPEC_XMIT;
 		}
-		else if (dot(out, p.normal) * dot(in, p.normal) > 0.0f) // regular reflection
+		else if (dot(out, normal) * dot(in, normal) > 0.0f) // regular reflection
 		{
 			spec_dir = 2.0f * dot(in, normal) * normal - in;
 			f = f;
+			spec_mult = 1.0f;
 		}
 		else //transmssion
 		{
 			float coeff = index * c - sqrt(radicand);
 			spec_dir = normalize(coeff * -1.0f * normal - index * in);
 			f = 1.0f - f;
+			spec_mult = SPEC_XMIT;
 		}
 
-		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
+		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR * spec_mult) / (2.0f * PI);
 	}
 	else
 		if (!way) //NB "way" seems flipped here but that's the point
@@ -518,24 +522,29 @@ static float BRDF(float3 in, const Path p, float3 out)
 		float c = dot(in, normal);
 		float radicand = 1.0f + index * (c * c - 1.0f);
 
+
+		float spec_mult;
 		if (radicand < 0.0f) //TIR
 		{
 			spec_dir = 2.0f * dot(in, normal) * normal - in;
 			f = 1.0f;
+			spec_mult = SPEC_XMIT;
 		}
-		else if (dot(out, p.normal) * dot(in, p.normal) > 0.0f) // regular reflection
+		else if (dot(out, normal) * dot(in, normal) > 0.0f) // regular reflection
 		{
 			spec_dir = 2.0f * dot(in, normal) * normal - in;
 			f = f;
+			spec_mult = 1.0f;
 		}
 		else //transmssion
 		{
 			float coeff = index * c - sqrt(radicand);
 			spec_dir = normalize(coeff * -1.0f * normal - index * in);
 			f = 1.0f - f;
+			spec_mult = SPEC_XMIT;
 		}
 
-		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
+		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR * spec_mult) / (2.0f * PI);
 	}
 	else
 		return fmax(0.0f, dot(p.normal, out)) / PI;
@@ -625,14 +634,13 @@ __kernel void connect_paths(const Camera cam,
 					float x = floor(scalar_project(plane_vec, cam.d_x) / native_sqrt(dot(cam.d_x, cam.d_x)));
 					float y = floor(scalar_project(plane_vec, cam.d_y) / native_sqrt(dot(cam.d_y, cam.d_y)));
 
-					if (x >= 0.0 && x <= WIN_DIM && y >= 0.0 && y <= WIN_DIM)
+					if (x >= 0.0 && x < WIN_DIM && y >= 0.0 && y < WIN_DIM)
 					{
 						light_img_index = (int)x + (int)(y * WIN_DIM);
 						camera_vertex = paths[2 * light_img_index];
 					}
 				}
 			}
-				
 
 			float3 direction, distance;
 			distance = light_vertex.origin - camera_vertex.origin;
@@ -750,7 +758,7 @@ __kernel void connect_paths(const Camera cam,
 	
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	//collect contributions
+	// collect contributions
 	if (thread_id == 0)
 	{
 		float3 sum = BLACK;
@@ -961,29 +969,33 @@ __kernel void trace_paths(__global Path *paths,
 				oriented_normal = -1.0f * normal;
 			}
 			float f = fresnel(in, oriented_normal, ni, nt);
-			float3 spec_dir;
 			float index = ni / nt;
 			float c = dot(in, oriented_normal);
 			float radicand = 1.0f + index * (c * c - 1.0f);
+
+			float spec_mult;
 
 			if (radicand < 0.0f) //TIR
 			{
 				spec_dir = 2.0f * dot(in, oriented_normal) * oriented_normal - in;
 				f = 1.0f;
+				spec_mult = 100.0f;
 			}
 			else if (get_random(&seed0, &seed1) < f) // regular reflection
 			{
 				spec_dir = 2.0f * dot(in, oriented_normal) * oriented_normal - in;
 				f = f;
+				spec_mult = 1.0f;
 			}
 			else //transmssion
 			{
+				spec_mult = 100.0f;
 				float coeff = index * c - sqrt(radicand);
 				spec_dir = normalize(coeff * -1.0f * oriented_normal - index * in);
 				f = 1.0f - f;
 				oriented_normal *= -1.0f;
 			}
-			out = gloss_BRDF_sample(oriented_normal, spec_dir, SPECULAR, &seed0, &seed1);
+			out = gloss_BRDF_sample(oriented_normal, spec_dir, SPECULAR * spec_mult, &seed0, &seed1);
 		}
 		else
 		{
@@ -993,6 +1005,10 @@ __kernel void trace_paths(__global Path *paths,
 			out = diffuse_BRDF_sample(normal, way, &seed0, &seed1);
 			specular = 0;
 		}
+
+		// if (!way)
+		// 	output[index / 2] = mask;//(spec_dir + 1.0f) / 2.0f;
+		// return;
 
 		//write vertex
 		paths[index + row_size * LENGTH].origin = origin;
@@ -1029,6 +1045,7 @@ __kernel void trace_paths(__global Path *paths,
 			break;
 		}
 		direction = out;
+
 	}
 
 	path_lengths[index] = length;
