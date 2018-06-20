@@ -177,9 +177,6 @@ static int intersect_triangle(const float3 origin, const float3 direction, __glo
 	float3 h = cross(direction, e2);
 	float a = dot(h, e1);
 
-	if (a < 0.0001f)
-		return 0;
-
 	float f = 1.0f / a;
 	float3 s = origin - v0;
 	this_u = f * dot(s, h);
@@ -453,15 +450,15 @@ static float pdf(float3 in, const Path p, float3 out, int way)
 		float3 normal;
 		if (dot(in, p.normal) > 0.0f)
 		{
-			ni = 1.5f;
-			nt = 1.0f;
-			normal = -1.0f * p.normal;
-		}
-		else
-		{
 			ni = 1.0f;
 			nt = 1.5f;
 			normal = p.normal;
+		}
+		else
+		{
+			ni = 1.5f;
+			nt = 1.0f;
+			normal = -1.0f * p.normal;
 		}
 		float f = fresnel(in, normal, ni, nt);
 		float3 spec_dir;
@@ -486,7 +483,7 @@ static float pdf(float3 in, const Path p, float3 out, int way)
 			f = 1.0f - f;
 		}
 
-		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI * f);
+		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
 	}
 	else
 		if (!way) //NB "way" seems flipped here but that's the point
@@ -500,12 +497,44 @@ static float BRDF(float3 in, const Path p, float3 out)
 	//in and out should both point away from p.
 	if (p.specular)
 	{
-		float3 spec_dir = 2.0f * dot(in, p.normal) * p.normal - in;
-		float ret = (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
-		if (ret > 0.0f && ret == ret)
-			return ret;
+		float ni, nt;
+		float3 normal;
+		if (dot(in, p.normal) > 0.0f)
+		{
+			ni = 1.0f;
+			nt = 1.5f;
+			normal = p.normal;
+		}
 		else
-			return 0.0f;
+		{
+			ni = 1.5f;
+			nt = 1.0f;
+			normal = -1.0f * p.normal;
+		}
+		float f = fresnel(in, normal, ni, nt);
+		float3 spec_dir;
+		float index = ni / nt;
+		float c = dot(in, normal);
+		float radicand = 1.0f + index * (c * c - 1.0f);
+
+		if (radicand < 0.0f) //TIR
+		{
+			spec_dir = 2.0f * dot(in, normal) * normal - in;
+			f = 1.0f;
+		}
+		else if (dot(out, p.normal) * dot(in, p.normal) > 0.0f) // regular reflection
+		{
+			spec_dir = 2.0f * dot(in, normal) * normal - in;
+			f = f;
+		}
+		else //transmssion
+		{
+			float coeff = index * c - sqrt(radicand);
+			spec_dir = normalize(coeff * -1.0f * normal - index * in);
+			f = 1.0f - f;
+		}
+
+		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
 	}
 	else
 		return fmax(0.0f, dot(p.normal, out)) / PI;
@@ -613,7 +642,7 @@ __kernel void connect_paths(const Camera cam,
 			float light_cos = dot(light_vertex.true_normal, -1.0f * direction);
 			if (!camera_vertex.hit_light)
 			{
-				if (camera_cos > 0.0f && light_cos > 0.0f)
+				if ((camera_cos > 0.0f) && (light_cos > 0.0f))
 				{
 					if (visibility_test(camera_vertex.origin, direction, d, boxes, V))
 					{
@@ -889,6 +918,7 @@ __kernel void trace_paths(__global Path *paths,
 		surface_vectors(V, N, T, direction, ind, u, v, &normal, &true_normal, &txcrd);
 		//update position
 		origin = origin + direction * t;
+		float3 in = -1.0f * direction;
 
 		//get all texture-like values
 		float3 diff, spec, bump, trans, Ke;
@@ -914,14 +944,50 @@ __kernel void trace_paths(__global Path *paths,
 		else if (specular && spec_roll <= roughness)
 		{
 			mask *= spec;
-			spec_dir = 2.0f * dot(-1.0f * direction, normal) * normal + direction;
-			out = gloss_BRDF_sample(normal, spec_dir, SPECULAR, &seed0, &seed1);
+
+			float ni, nt;
+			float3 oriented_normal;
+			if (dot(in, normal) > 0.0f)
+			{
+				ni = 1.0f;
+				nt = 1.5f;
+				oriented_normal = normal;
+			}
+			else
+			{
+				ni = 1.5f;
+				nt = 1.0f;
+				oriented_normal = -1.0f * normal;
+			}
+			float f = fresnel(in, oriented_normal, ni, nt);
+			float3 spec_dir;
+			float index = ni / nt;
+			float c = dot(in, oriented_normal);
+			float radicand = 1.0f + index * (c * c - 1.0f);
+
+			if (radicand < 0.0f) //TIR
+			{
+				spec_dir = 2.0f * dot(in, oriented_normal) * oriented_normal - in;
+				f = 1.0f;
+			}
+			else if (get_random(&seed0, &seed1) < f) // regular reflection
+			{
+				spec_dir = 2.0f * dot(in, oriented_normal) * oriented_normal - in;
+				f = f;
+			}
+			else //transmssion
+			{
+				float coeff = index * c - sqrt(radicand);
+				spec_dir = normalize(coeff * -1.0f * oriented_normal - index * in);
+				f = 1.0f - f;
+			}
+			out = gloss_BRDF_sample(oriented_normal, spec_dir, SPECULAR, &seed0, &seed1);
 		}
 		else
 		{
 			mask *= diff;
 			if (way)
-				mask *= max(0.0f, dot(-1.0f * direction, normal));
+				mask *= max(0.0f, dot(in, normal));
 			out = diffuse_BRDF_sample(normal, way, &seed0, &seed1);
 			specular = 0;
 		}
@@ -940,14 +1006,14 @@ __kernel void trace_paths(__global Path *paths,
 		//probability updates
 		if (way)
 		{
-			paths[index + row_size * (LENGTH - 1)].pC = pdf(out, paths[index + row_size * LENGTH], -1.0f * direction, way);
-			pL = pdf(-1.0f * direction, paths[index + row_size * LENGTH], out, way);
+			paths[index + row_size * (LENGTH - 1)].pC = pdf(out, paths[index + row_size * LENGTH], in, way);
+			pL = pdf(in, paths[index + row_size * LENGTH], out, way);
 			mask *= 2.0f * (1 - specular);
 		}
 		else
 		{
-			paths[index + row_size * (LENGTH - 1)].pL = pdf(out, paths[index + row_size * LENGTH], -1.0f * direction, way);
-			pC = pdf(-1.0f * direction, paths[index + row_size * LENGTH], out, way);
+			paths[index + row_size * (LENGTH - 1)].pL = pdf(out, paths[index + row_size * LENGTH], in, way);
+			pC = pdf(in, paths[index + row_size * LENGTH], out, way);
 		}	
 
 		//russian roulette
