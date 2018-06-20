@@ -979,7 +979,7 @@ __kernel void trace_paths(__global Path *paths,
 			{
 				spec_dir = 2.0f * dot(in, oriented_normal) * oriented_normal - in;
 				f = 1.0f;
-				spec_mult = 100.0f;
+				spec_mult = SPEC_XMIT;
 			}
 			else if (get_random(&seed0, &seed1) < f) // regular reflection
 			{
@@ -989,7 +989,7 @@ __kernel void trace_paths(__global Path *paths,
 			}
 			else //transmssion
 			{
-				spec_mult = 100.0f;
+				spec_mult = SPEC_XMIT;
 				float coeff = index * c - sqrt(radicand);
 				spec_dir = normalize(coeff * -1.0f * oriented_normal - index * in);
 				f = 1.0f - f;
