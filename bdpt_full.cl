@@ -30,12 +30,16 @@ typedef struct s_path {
 	float3 origin;
 	float3 direction;
 	float3 normal;
+	float3 true_normal;
 	float3 mask;
 	float G;
 	float pC;
 	float pL;
 	int hit_light;
 	int specular;
+	float roughness;
+	float transparency;
+	float refract;
 }				Path;
 
 typedef struct s_material
@@ -153,7 +157,7 @@ static int intersect_box(const float3 origin, const float3 inv_dir, Box b, float
 
 	if (tmin > t)
 		return (0);
-	if (tmin <= 0.0f && tmax <= 0.0f)
+	if (tmin <= 0.0005f && tmax <= 0.0005f)
 		return (0);
 	if (t_out)
 		*t_out = fmax(0.0f, tmin);
@@ -186,7 +190,7 @@ static int intersect_triangle(const float3 origin, const float3 direction, __glo
 	if (this_v < 0.0f || this_u + this_v > 1.0f)
 		return 0;
 	this_t = f * dot(e2, q);
-	if (this_t < *t && this_t > 0.0f)
+	if (this_t < *t && this_t > 0.0005f)
 	{
 		*t = this_t;
 		*u = this_u;
@@ -232,7 +236,7 @@ static float3 diffuse_BRDF_sample(float3 normal, int way, uint *seed0, uint *see
 		return direction_cos_hemisphere(x, y, u1, phi, normal);
 }
 
-static float3 gloss_BRDF_sample(float3 normal, float3 spec_dir, float3 in, float exponent, uint *seed0, uint *seed1)
+static float3 gloss_BRDF_sample(float3 normal, float3 spec_dir, float exponent, uint *seed0, uint *seed1)
 {
 	//pure specular direction
 	float3 x, y;
@@ -335,6 +339,7 @@ __kernel void init_paths(const Camera cam,
 	paths[index].direction = direction;
 	paths[index].mask = mask;
 	paths[index].normal = normal;
+	paths[index].true_normal = normal;
 	paths[index].G = G;
 	paths[index].hit_light = 0;
 	paths[index].pC = pC;
@@ -345,16 +350,6 @@ __kernel void init_paths(const Camera cam,
 	seeds[2 * index + 1] = seed1;
 
 	light_img[index / 2] = BLACK;
-}
-
-
-static inline int inside_box(float3 point, Box box)
-{
-	if (box.min_x <= point.x && point.x <= box.max_x)
-		if (box.min_y <= point.y && point.y <= box.max_y)
-			if (box.min_z <= point.z && point.z <= box.max_z)
-				return 1;
-	return 0;
 }
 
 static inline int visibility_test(float3 origin, float3 direction, float t, __global Box *boxes, __global float3 *V)
@@ -433,10 +428,20 @@ static float geometry_term(const Path a, const Path b)
 	t = native_sqrt(dot(distance, distance));
 	direction = normalize(distance);
 
-	float camera_cos = dot(a.normal, direction);
-	float light_cos = dot(b.normal, -1.0f * direction);
+	float camera_cos = dot(a.true_normal, direction);
+	float light_cos = dot(b.true_normal, -1.0f * direction);
 
 	return fabs(camera_cos * light_cos) / (t * t);
+}
+
+//roll under fresnel, reflect. over, transmit (or TIR)
+static float fresnel(float3 i, float3 n, float ni, float nt)
+{
+	float num = ni - nt;
+	float denom = ni + nt;
+	float r0 = (num * num) / (denom * denom);
+	float cos_term = pow(1.0f - fmax(0.0f, dot(i, n)), 5.0f);
+	return r0 + (1.0f - r0) * cos_term;
 }
 
 static float pdf(float3 in, const Path p, float3 out, int way)
@@ -444,8 +449,44 @@ static float pdf(float3 in, const Path p, float3 out, int way)
 	//in and out should both point away from p.
 	if (p.specular)
 	{
-		float3 spec_dir = 2.0f * dot(in, p.normal) * p.normal - in;
-		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
+		float ni, nt;
+		float3 normal;
+		if (dot(in, p.normal) > 0.0f)
+		{
+			ni = 1.5f;
+			nt = 1.0f;
+			normal = -1.0f * p.normal;
+		}
+		else
+		{
+			ni = 1.0f;
+			nt = 1.5f;
+			normal = p.normal;
+		}
+		float f = fresnel(in, normal, ni, nt);
+		float3 spec_dir;
+		float index = ni / nt;
+		float c = dot(in, normal);
+		float radicand = 1.0f + index * (c * c - 1.0f);
+
+		if (radicand < 0.0f) //TIR
+		{
+			spec_dir = 2.0f * dot(in, normal) * normal - in;
+			f = 1.0f;
+		}
+		else if (dot(out, p.normal) * dot(in, p.normal) > 0.0f) // regular reflection
+		{
+			spec_dir = 2.0f * dot(in, normal) * normal - in;
+			f = f;
+		}
+		else //transmssion
+		{
+			float coeff = index * c - sqrt(radicand);
+			spec_dir = normalize(coeff * -1.0f * normal - index * in);
+			f = 1.0f - f;
+		}
+
+		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI * f);
 	}
 	else
 		if (!way) //NB "way" seems flipped here but that's the point
@@ -568,8 +609,8 @@ __kernel void connect_paths(const Camera cam,
 			float d = native_sqrt(dot(distance, distance));
 			direction = normalize(distance);
 
-			float camera_cos = dot(camera_vertex.normal, direction);
-			float light_cos = dot(light_vertex.normal, -1.0f * direction);
+			float camera_cos = dot(camera_vertex.true_normal, direction);
+			float light_cos = dot(light_vertex.true_normal, -1.0f * direction);
 			if (!camera_vertex.hit_light)
 			{
 				if (camera_cos > 0.0f && light_cos > 0.0f)
@@ -731,7 +772,7 @@ static float3 fetch_tex(	float3 txcrd,
 	return out;
 }
 
-static void fetch_all_tex(__global int *M, __global Material *mats, __global uchar *tex, int ind, float3 txcrd, float3 *diff, float3 *spec, float3 *bump, float3 *trans, float3 *Ke, float *roughness)
+static void fetch_all_tex(__global int *M, __global Material *mats, __global uchar *tex, int ind, float3 txcrd, float3 *diff, float3 *spec, float3 *bump, float3 *trans, float3 *Ke, float *roughness, float *transparency)
 {
 	const Material mat = mats[M[ind / 3]];
 	*trans = mat.t_height ? fetch_tex(txcrd, mat.t_index, mat.t_height, mat.t_width, tex) : BLACK;
@@ -740,6 +781,7 @@ static void fetch_all_tex(__global int *M, __global Material *mats, __global uch
 	*diff = mat.d_height ? fetch_tex(txcrd, mat.d_index, mat.d_height, mat.d_width, tex) : mat.Kd;
 	*Ke = mat.Ke;
 	*roughness = mat.roughness;
+	*transparency = mat.Tr;
 }
 
 static float3 bump_map(__global float3 *TN, __global float3 *BTN, int ind, float3 sample_N, float3 bump)
@@ -846,12 +888,12 @@ __kernel void trace_paths(__global Path *paths,
 		float3 normal, true_normal, txcrd;
 		surface_vectors(V, N, T, direction, ind, u, v, &normal, &true_normal, &txcrd);
 		//update position
-		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
+		origin = origin + direction * t;
 
 		//get all texture-like values
 		float3 diff, spec, bump, trans, Ke;
-		float roughness;
-		fetch_all_tex(M, mats, tex, ind, txcrd, &diff, &spec, &bump, &trans, &Ke, &roughness);
+		float roughness, transparency;
+		fetch_all_tex(M, mats, tex, ind, txcrd, &diff, &spec, &bump, &trans, &Ke, &roughness, &transparency);
 
 		// bump map
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
@@ -873,7 +915,7 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			mask *= spec;
 			spec_dir = 2.0f * dot(-1.0f * direction, normal) * normal + direction;
-			out = gloss_BRDF_sample(normal, spec_dir, direction, SPECULAR, &seed0, &seed1);
+			out = gloss_BRDF_sample(normal, spec_dir, SPECULAR, &seed0, &seed1);
 		}
 		else
 		{
@@ -884,39 +926,29 @@ __kernel void trace_paths(__global Path *paths,
 			specular = 0;
 		}
 
-
 		//write vertex
 		paths[index + row_size * LENGTH].origin = origin;
 		paths[index + row_size * LENGTH].mask = mask;
 		paths[index + row_size * LENGTH].normal = normal;
+		paths[index + row_size * LENGTH].true_normal = true_normal;
 		paths[index + row_size * LENGTH].G = geometry_term(paths[index + LENGTH * row_size], paths[index + (LENGTH - 1) * row_size]);
 		paths[index + row_size * LENGTH].pC = pC;
 		paths[index + row_size * LENGTH].pL = pL;
 		paths[index + row_size * LENGTH].hit_light = hit_light;
 		paths[index + row_size * LENGTH].specular = specular;
 
-		//update back-path probability
-		if (way)
-			paths[index + row_size * (LENGTH - 1)].pC = pdf(out, paths[index + row_size * LENGTH], -1.0f * direction, way);
-		else
-			paths[index + row_size * (LENGTH - 1)].pL = pdf(out, paths[index + row_size * LENGTH], -1.0f * direction, way);
-
-		//new probability values (to do: clean these up with pdf function)
+		//probability updates
 		if (way)
 		{
-			if (specular)
-				pL = (SPECULAR + 2.0f) * pow(dot(out, spec_dir), SPECULAR) / (2.0f * PI);
-			else
-			{
-				mask *= 2.0f; //this might not be necessary idk
-				pL = 1.0f / (2.0f * PI);
-			}
+			paths[index + row_size * (LENGTH - 1)].pC = pdf(out, paths[index + row_size * LENGTH], -1.0f * direction, way);
+			pL = pdf(-1.0f * direction, paths[index + row_size * LENGTH], out, way);
+			mask *= 2.0f * (1 - specular);
 		}
 		else
-			if (specular)
-				pC = (SPECULAR + 2.0f) * pow(dot(out, spec_dir), SPECULAR) / (2.0f * PI);
-			else
-				pC = dot(out, normal) / (PI);
+		{
+			paths[index + row_size * (LENGTH - 1)].pL = pdf(out, paths[index + row_size * LENGTH], -1.0f * direction, way);
+			pC = pdf(-1.0f * direction, paths[index + row_size * LENGTH], out, way);
+		}	
 
 		//russian roulette
 		float p = length <= RR_THRESHOLD ? 1.0f : 1.0f - RR_PROB;

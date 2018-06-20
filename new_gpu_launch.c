@@ -32,12 +32,16 @@ typedef struct s_gpu_path{
 	cl_float3 origin;
 	cl_float3 direction;
 	cl_float3 normal;
+	cl_float3 true_normal;
 	cl_float3 mask;
 	cl_float G;
 	cl_float pC;
 	cl_float pL;
 	cl_int hit_light;
 	cl_int specular;
+	cl_float roughness;
+	cl_float transparency;
+	cl_float refract;
 }				gpu_path;
 
 typedef struct s_gpu_camera {
