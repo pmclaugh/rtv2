@@ -294,7 +294,7 @@ __kernel void init_paths(const Camera cam,
 		direction = diffuse_BRDF_sample(normal, way, &seed0, &seed1);
 
 		float3 Ke = mats[M[light.x / 3]].Ke;
-		mask = Ke * BRIGHTNESS * dot(normal, direction);	
+		mask = Ke * BRIGHTNESS;	
 
 		//pick random point just off of that triangle
 		float r1 = get_random(&seed0, &seed1);
@@ -522,7 +522,6 @@ static float BRDF(float3 in, const Path p, float3 out)
 		float c = dot(in, normal);
 		float radicand = 1.0f + index * (c * c - 1.0f);
 
-
 		float spec_mult;
 		if (radicand < 0.0f) //TIR
 		{
@@ -544,10 +543,10 @@ static float BRDF(float3 in, const Path p, float3 out)
 			spec_mult = SPEC_XMIT;
 		}
 
-		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR * spec_mult) / (2.0f * PI);
+		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR * spec_mult) / (2.0f * PI);
 	}
 	else
-		return fmax(0.0f, dot(p.normal, out)) / PI;
+		return 1.0f / PI;
 }
 
 // #define CAMERA_VERTEX(x) (paths[2 * index + row_size * (x)])
@@ -614,7 +613,7 @@ __kernel void connect_paths(const Camera cam,
 
 	if (t <= camera_length && s <= light_length)
 	{
-		if (t != 0 && s != 0)
+		if (t != 0 && t!= 1 && s != 0)
 		{
 			Path light_vertex = LIGHT_VERTEX(s - 1);
 			Path camera_vertex = CAMERA_VERTEX(t - 1);
@@ -952,8 +951,6 @@ __kernel void trace_paths(__global Path *paths,
 		}
 		else if (specular && spec_roll <= roughness)
 		{
-			mask *= spec;
-
 			float ni, nt;
 			float3 oriented_normal;
 			if (dot(in, normal) > 0.0f)
@@ -961,6 +958,7 @@ __kernel void trace_paths(__global Path *paths,
 				ni = 1.0f;
 				nt = 1.5f;
 				oriented_normal = normal;
+				mask *= spec;
 			}
 			else
 			{
@@ -983,6 +981,7 @@ __kernel void trace_paths(__global Path *paths,
 			}
 			else if (get_random(&seed0, &seed1) < f) // regular reflection
 			{
+				mask *= spec;
 				spec_dir = 2.0f * dot(in, oriented_normal) * oriented_normal - in;
 				f = f;
 				spec_mult = 1.0f;
