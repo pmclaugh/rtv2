@@ -488,7 +488,7 @@ static float pdf(float3 in, const Path p, float3 out, int way)
 			spec_mult = SPEC_XMIT;
 		}
 
-		return f * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR * spec_mult) / (2.0f * PI);
+		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR * spec_mult) / (2.0f * PI);
 	}
 	else
 		if (!way) //NB "way" seems flipped here but that's the point
@@ -497,7 +497,7 @@ static float pdf(float3 in, const Path p, float3 out, int way)
 			return fmax(0.0f, dot(p.normal, out)) / PI;
 }
 
-static float BRDF(float3 in, const Path p, float3 out)
+static float BRDF(float3 in, const Path p, float3 out, int way)
 {
 	//in and out should both point away from p.
 	if (p.specular)
@@ -543,7 +543,7 @@ static float BRDF(float3 in, const Path p, float3 out)
 			spec_mult = SPEC_XMIT;
 		}
 
-		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR * spec_mult) / (2.0f * PI);
+		return (way ? (nt * nt)/(ni * ni) : 1.0f) * (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR * spec_mult) / (2.0f * PI);
 	}
 	else
 		return 1.0f / PI;
@@ -613,7 +613,7 @@ __kernel void connect_paths(const Camera cam,
 
 	if (t <= camera_length && s <= light_length)
 	{
-		if (t != 0 && t!= 1 && s != 0)
+		if (t != 0 && s != 0)
 		{
 			Path light_vertex = LIGHT_VERTEX(s - 1);
 			Path camera_vertex = CAMERA_VERTEX(t - 1);
@@ -672,7 +672,7 @@ __kernel void connect_paths(const Camera cam,
 							light_in = normalize(LIGHT_VERTEX(s - 2).origin - light_vertex.origin);
 							this_pL = pdf(light_in, light_vertex, -1.0f * direction, 0);
 							prev_pC = pdf(-1.0f * direction, light_vertex, light_in, 1); //these 0s and 1s suck and should be fixed
-							BRDF_L = BRDF(light_in, light_vertex, -1.0f * direction);
+							BRDF_L = BRDF(light_in, light_vertex, -1.0f * direction, 1);
 						}
 
 						//the parts based on camera_in
@@ -687,7 +687,7 @@ __kernel void connect_paths(const Camera cam,
 							camera_in = normalize(CAMERA_VERTEX(t - 2).origin - camera_vertex.origin);
 							this_pC = pdf(camera_in, camera_vertex, direction, 1);
 							prev_pL = pdf(direction, camera_vertex, camera_in, 0);
-							BRDF_C = BRDF(camera_in, camera_vertex, direction);
+							BRDF_C = BRDF(camera_in, camera_vertex, direction, 0);
 						}
 
 						float3 contrib = light_vertex.mask * camera_vertex.mask * BRDF_L * BRDF_C * this_geom;
@@ -992,9 +992,11 @@ __kernel void trace_paths(__global Path *paths,
 				float coeff = index * c - sqrt(radicand);
 				spec_dir = normalize(coeff * -1.0f * oriented_normal - index * in);
 				f = 1.0f - f;
-				oriented_normal *= -1.0f;
+				oriented_normal = -1.0f * oriented_normal;
 			}
 			out = gloss_BRDF_sample(oriented_normal, spec_dir, SPECULAR * spec_mult, &seed0, &seed1);
+			if (way)
+				mask *= (nt * nt) / (ni * ni);
 		}
 		else
 		{
@@ -1005,9 +1007,7 @@ __kernel void trace_paths(__global Path *paths,
 			specular = 0;
 		}
 
-		// if (!way)
-		// 	output[index / 2] = mask;//(spec_dir + 1.0f) / 2.0f;
-		// return;
+		//implicitly, mask is multiplied by BRDF and divided by probability, but those cancel and cases where they don't are already handled above
 
 		//write vertex
 		paths[index + row_size * LENGTH].origin = origin;
@@ -1025,8 +1025,6 @@ __kernel void trace_paths(__global Path *paths,
 		{
 			paths[index + row_size * (LENGTH - 1)].pC = pdf(out, paths[index + row_size * LENGTH], in, way);
 			pL = pdf(in, paths[index + row_size * LENGTH], out, way);
-			if (!specular)
-				mask *= 2.0f;
 		}
 		else
 		{
