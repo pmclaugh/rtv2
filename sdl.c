@@ -16,7 +16,7 @@ void	draw_pixels(t_sdl *sdl)
 			r = fmax(0.0, fmin(r, 255.0));
 			g = fmax(0.0, fmin(g, 255.0));
 			b = fmax(0.0, fmin(b, 255.0));
-			pixels[x + (y * sdl->screen->w)] = SDL_MapRGB(sdl->screen->format, r, g, b);
+			pixels[(sdl->screen->w - (x + 1)) + (y * sdl->screen->w)] = SDL_MapRGB(sdl->screen->format, r, g, b);
 		}
 	}
 	SDL_UnlockSurface(sdl->screen);

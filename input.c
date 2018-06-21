@@ -230,13 +230,13 @@ void		handle_input(t_env *env)
 				move_z = sin(env->cam.angle_x - (M_PI / 2)) * move_dist;
 				if (env->key.a)
 				{
-					env->cam.pos.x += move_x;
-					env->cam.pos.z += move_z;
+					env->cam.pos.x -= move_x;
+					env->cam.pos.z -= move_z;
 				}
 				if (env->key.d)
 				{
-					env->cam.pos.x -= move_x;
-					env->cam.pos.z -= move_z;
+					env->cam.pos.x += move_x;
+					env->cam.pos.z += move_z;
 				}
 			}
 		}
@@ -247,9 +247,9 @@ void		handle_input(t_env *env)
 		if (env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
 		{
 			if (env->key.larr)
-				env->cam.dir = vec_rotate_xz(env->cam.dir, TURN_SPEED * interval);
-			if (env->key.rarr)
 				env->cam.dir = vec_rotate_xz(env->cam.dir, -TURN_SPEED * interval);
+			if (env->key.rarr)
+				env->cam.dir = vec_rotate_xz(env->cam.dir, TURN_SPEED * interval);
 			if (env->key.uarr && env->cam.dir.y < 1)
 			{
 				env->cam.dir.y += .1 * interval;
@@ -286,14 +286,14 @@ void		handle_input(t_env *env)
 void	mouse_press(int x, int y, t_env *env)
 {
 	if (env->show_rays)
-		env->ray_display[x + (y * DIM_PT)] = 1;
+		env->ray_display[(DIM_IA - (x + 1)) + (y * DIM_PT)] = 1;
 	env->mouse_x = x;
 	env->mouse_y = y;
 }
 
 void	mouse_wheel(int scroll_dir, t_env *env)
 {
-	int		*ray = &env->ray_display[env->mouse_x + (env->mouse_y * DIM_PT)];
+	int		*ray = &env->ray_display[(DIM_IA - (env->mouse_x + 1)) + (env->mouse_y * DIM_PT)];
 	if (env->show_rays)
 	{
 		if (scroll_dir > 0 && *ray < env->depth - 1)

@@ -29,6 +29,21 @@ void		set_camera(t_camera *cam, float win_dim)
 		cam->angle_x = 3 * M_PI / 2;
 	else
 		cam->angle_x = atan2(cam->dir.z, cam->dir.x);
+	
+	cl_float3 corner_top_left, corner_top_right, corner_bottom_left, corner_bottom_right;
+	corner_top_right = vec_sub(cam->focus, cam->origin);
+	corner_top_left = vec_sub(cam->focus, vec_add(cam->origin, cam->hor_ref));
+	corner_bottom_right = vec_sub(cam->focus, vec_add(cam->origin, cam->vert_ref));
+	corner_bottom_left = vec_sub(cam->focus, vec_add(cam->origin, vec_add(cam->hor_ref, cam->vert_ref)));
+	cam->view_frustrum_top = vec_scale(unit_vec(cross(corner_top_left, corner_top_right)), -1);
+	cam->view_frustrum_bottom = unit_vec(cross(corner_bottom_left, corner_bottom_right));
+	cam->view_frustrum_left = unit_vec(cross(corner_top_left, corner_bottom_left));
+	cam->view_frustrum_right = vec_scale(unit_vec(cross(corner_top_right, corner_bottom_right)), -1);
+	// printf("------------------------------\n");
+	// // print_vec(corner_top_left);
+	// // print_vec(corner_top_right);
+	// print_vec(cam->view_frustrum_left);
+	// print_vec(cam->view_frustrum_right);
 }
 
 t_camera	init_camera(void)

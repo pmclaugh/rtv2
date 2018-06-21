@@ -18,6 +18,23 @@ typedef struct	s_ray
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+static float scalar_project(cl_float3 a, cl_float3 b)
+{
+	//scalar projection of a onto b aka mag(vec_project(a,b))
+	return dot(a, unit_vec(b));
+}
+
+cl_float3	cam_perspective(t_env *env, const cl_float3 a)
+{
+	cl_float3	out;
+
+	out.x = scalar_project(a, env->cam.hor_ref);
+	out.y = scalar_project(a, env->cam.vert_ref);
+	out.z = scalar_project(a, env->cam.dir);
+
+	return out;
+}
+
 static int inside_box(t_ray *ray, AABB *box)
 {
 	if (box->min.x <= ray->origin.x && ray->origin.x <= box->max.x)
@@ -216,15 +233,14 @@ void	trace_scene(AABB *tree, t_ray *ray, int view)
 
 int		plot_line(t_env *env, int x1, int y1, int x2, int y2)
 {
-	// printf("------------------\n");
-	// printf("x1 = %d\ty1 = %d\nx2 = %d\ty2 = %d\n", x1, y1, x2, y2);
-	int		dx, dy, sx, sy, err, err2, i = 0;
+	int		dx, dy, sx, sy, err, err2, i;
 
 	dx = abs(x2 - x1);
 	sx = x1 < x2 ? 1 : -1;
 	dy = abs(y2 - y1);
 	sy = y1 < y2 ? 1 : -1;
 	err = (dx > dy ? dx : -dy) / 2;
+	i = 0;
 	while (x1 != x2)
 	{
 		// if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
@@ -252,67 +268,193 @@ int		plot_line(t_env *env, int x1, int y1, int x2, int y2)
 	return i;
 }
 
-// void	plot_line(t_env *env, int x1, int y1, int x2, int y2, cl_float3 clr)
-// {
-// 	SDL_Renderer	*renderer = SDL_CreateRenderer(env->ia->win, -1, SDL_RENDERER_ACCELERATED);
-// 	SDL_SetRenderDrawColor(renderer, clr.x, clr.y, clr.z, SDL_ALPHA_OPAQUE);
-// 	SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
-// 	SDL_RenderPresent(renderer);
-// 	// SDL_DestroyRenderer(renderer);
-// }
+float	plane_intersect(cl_float3 line_dir, cl_float3 line_origin, cl_float3 plane_N, cl_float3 plane_origin, int *index)
+{
+	float	cost = dot(vec_scale(line_dir, -1), plane_N);
+	if (cost == 0)
+		return -1;
+	else
+	{
+		*index = (cost > 0) ? 2 : 1; //which side of plane was intersected? inside or outside of view frustrum?
+		return dot(vec_sub(line_origin, plane_origin), plane_N) / cost;
+	}
+}
 
-	// dir3 = unit_vec(vec_sub(p2, p1));
-	// cl_float3	hor_ref = unit_vec(cross((cl_float3){dir3.x, 0, dir3.z}, (cl_float3){0, -1, 0}));
-	// cl_float3	vert_ref = unit_vec(cross(dir3, hor_ref));
-	// rot_hor = rotation_matrix(hor_ref, UNIT_X);
-	// rot_vert = rotation_matrix(vert_ref, UNIT_Y);
-	// dir3 = unit_vec(mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir3)));
+void	clip_line(t_env *env, cl_float3 *p1_in, cl_float3 *p2_in, _Bool *p1_clip, _Bool *p2_clip)
+{
+	cl_float3	p1 = *p1_in, p2 = *p2_in, intersection;
+	cl_float3	line = vec_sub(p2, p1);
+	cl_float3	line_dir = unit_vec(line);
+	float		line_mag = vec_mag(line);
+
+	float		t;
+	int			index = 0;
+	t = plane_intersect(line_dir, p1, env->cam.view_frustrum_top, env->cam.focus, &index);
+	if (t > 0 && t < line_mag)
+	{
+		intersection = vec_add(p1, vec_scale(line_dir, t));
+		float	p_x = scalar_project(unit_vec(vec_sub(intersection, env->cam.focus)), env->cam.hor_ref);
+		if (p_x > -sin(H_FOV / 2) && p_x < sin(H_FOV / 2))
+		{
+			if (index == 1)
+			{
+				*p1_in = intersection;
+				*p1_clip = 1;
+			}
+			else if (index == 2)
+			{
+				*p2_in = intersection;
+				*p2_clip = 1;
+			}
+		}
+	}
+	t = plane_intersect(line_dir, p1, env->cam.view_frustrum_bottom, env->cam.focus, &index);
+	if (t > 0 && t < line_mag)
+	{
+		intersection = vec_add(p1, vec_scale(line_dir, t));
+		float	p_x = scalar_project(unit_vec(vec_sub(intersection, env->cam.focus)), env->cam.hor_ref);
+		if (p_x > -sin(H_FOV / 2) && p_x < sin(H_FOV / 2))
+		{
+			if (index == 1)
+			{
+				*p1_in = intersection;
+				*p1_clip = 1;
+			}
+			else if (index == 2)
+			{
+				*p2_in = intersection;
+				*p2_clip = 1;
+			}
+		}
+	}
+	t = plane_intersect(line_dir, p1, env->cam.view_frustrum_left, env->cam.focus, &index);
+	if (t > 0 && t < line_mag)
+	{
+		intersection = vec_add(p1, vec_scale(line_dir, t));
+		float	p_y = scalar_project(unit_vec(vec_sub(intersection, env->cam.focus)), env->cam.vert_ref);
+		if (p_y > -sin(H_FOV / 2) && p_y < sin(H_FOV / 2))
+		{
+			if (index == 1)
+			{
+				*p1_in = intersection;
+				*p1_clip = 1;
+			}
+			else if (index == 2)
+			{
+				*p2_in = intersection;
+				*p2_clip = 1;
+			}
+		}
+	}
+	t = plane_intersect(line_dir, p1, env->cam.view_frustrum_right, env->cam.focus, &index);
+	if (t > 0 && t < line_mag)
+	{
+		intersection = vec_add(p1, vec_scale(line_dir, t));
+		float	p_y = scalar_project(unit_vec(vec_sub(intersection, env->cam.focus)), env->cam.vert_ref);
+		if (p_y > -sin(H_FOV / 2) && p_y < sin(H_FOV / 2))
+		{
+			if (index == 1)
+			{
+				*p1_in = intersection;
+				*p1_clip = 1;
+			}
+			else if (index == 2)
+			{
+				*p2_in = intersection;
+				*p2_clip = 1;
+			}
+		}
+	}
+	// if (index != 0)
+	// 	return ;
+	// t = plane_intersect(line_dir, p1, env->cam.dir, vec_add(env->cam.focus, vec_scale(env->cam.dir, env->cam.dist)), &index);
+	// if (t > 0 && t < line_mag)
+	// {
+	// 	intersection = vec_add(p1, vec_scale(line_dir, t));
+	// 	if (index == 1)
+	// 		*p1_in = intersection;
+	// 	else if (index == 2)
+	// 		*p2_in = intersection;
+		// printf("--------------------------------\n");
+		// print_vec(env->cam.focus);
+		// print_vec(intersection);
+	// }
+}
 
 void	draw_ray(t_env *env, cl_float3 p1, cl_float3 p2, cl_float3 clr, float *t_array)
 {
-	// printf("========================\n");
-	// print_vec(p1);
+	/* Convert points from global space to camera space */
+	//////////////////////////////////////////////////////////////////////////////////
+	cl_float3	cam_to_p1, cam_to_p2, dir_p1, dir_p2, tmp;
+	float		dir_p1_z, dir_p2_z, p1_dist;
+	_Bool		p1_clip = 0, p2_clip = 0;
+
+	cam_to_p1 = vec_sub(p1, env->cam.focus);
+	cam_to_p2 = vec_sub(p2, env->cam.focus);
+	dir_p1 = unit_vec(cam_to_p1);
+	dir_p2 = unit_vec(cam_to_p2);
+	dir_p1_z = scalar_project(dir_p1, env->cam.dir);
+	dir_p2_z = scalar_project(dir_p2, env->cam.dir);
+	if (dir_p1_z <= 0 && dir_p2_z <= 0)
+		return ;
+	if (dir_p1_z < cos(H_FOV / 2) || dir_p2_z < cos(H_FOV / 2))
+		clip_line(env, &p1, &p2, &p1_clip, &p2_clip);
+	
+	cam_to_p1 = vec_sub(p1, env->cam.focus);
+	cam_to_p2 = vec_sub(p2, env->cam.focus);
+	
+	//draw point that is in view first (swap p1 and p2 if only p2 is in view)
+	if (p1_clip && !p2_clip)
+	{
+		dir_p1 = unit_vec(cam_to_p2);
+		dir_p2 = unit_vec(cam_to_p1);
+		tmp = p1;
+		p1 = p2;
+		p2 = tmp;
+	}
+	else
+	{
+		dir_p1 = unit_vec(cam_to_p1);
+		dir_p2 = unit_vec(cam_to_p2);
+	}
+
+	cl_float3	cam_dir_p1 = cam_perspective(env, dir_p1);
+	cl_float3	cam_dir_p2 = cam_perspective(env, dir_p2);
+	//////////////////////////////////////////////////////////////////////////////////
+	/* Compute raster coordinates */
+	//////////////////////////////////////////////////////////////////////////////////
 	int		x1, y1, x2, y2;
 	float	ratio, t;
-	cl_float3	dir1, dir2;
-	float 		dist = (env->cam.width / 2) / tan(H_FOV / 2);
-	t_3x3 		rot_hor = rotation_matrix(env->cam.hor_ref, UNIT_X);
-	t_3x3 		rot_vert = rotation_matrix(env->cam.vert_ref, UNIT_Y);
 
-	dir1 = unit_vec(vec_sub(p1, env->cam.focus));
-	dir1 = mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir1));
-	if (dir1.z > 0)
-		ratio = dist / dir1.z;
-	else if (dir1.z < 0)
-		ratio = 10;
-	else
-		ratio = 1;
-	x1 = ((dir1.x * ratio) * DIM_IA) + (DIM_IA / 2);
-	y1 = ((dir1.y * -ratio) * DIM_IA) + (DIM_IA / 2);
+	if (cam_dir_p1.z <= 0)
+		return ;
+	ratio = env->cam.dist / cam_dir_p1.z;
+	x1 = ((cam_dir_p1.x * ratio) * DIM_IA) + (DIM_IA / 2);
+	y1 = ((cam_dir_p1.y * -ratio) * DIM_IA) + (DIM_IA / 2);
 
-	// printf("------------------------\n");
-	// printf("%f\n", ratio);
-	// print_vec(dir1);
-	// printf("%d\t%d\n", x1, y1);
-
-	dir2 = unit_vec(vec_sub(p2, env->cam.focus));
-	dir2 = mat_vec_mult(rot_hor, mat_vec_mult(rot_vert, dir2));
-	if (dir2.z > 0)
-		ratio = dist / dir2.z;
-	else if (dir2.z < 0)
-		ratio = 10;
-	else
-		ratio = 1;
-	x2 = ((dir2.x * ratio) * DIM_IA) + (DIM_IA / 2);
-	y2 = ((dir2.y * -ratio) * DIM_IA) + (DIM_IA / 2);
-
-	if (dir1.z < .25 && dir2.z < .25)
-		return ; 
-	int		steps = plot_line(env, x1, y1, x2, y2);
-	cl_float3	ray_step = vec_scale(vec_sub(p2, p1), 1 / (float)steps);
-
-	///////////////////// PLOT LINE
-	int		dx, dy, sx, sy, err, err2;
+	if (cam_dir_p2.z <= 0)
+		return ;
+	ratio = env->cam.dist / cam_dir_p2.z;
+	x2 = ((cam_dir_p2.x * ratio) * DIM_IA) + (DIM_IA / 2);
+	y2 = ((cam_dir_p2.y * -ratio) * DIM_IA) + (DIM_IA / 2);
+	//////////////////////////////////////////////////////////////////////////////////
+	/* Pre-plot line for ray-step */
+	//////////////////////////////////////////////////////////////////////////////////
+	// int steps = 0;
+	// _Bool behind = 0;
+	// steps = plot_line(env, x1, y1, x2, y2);
+	cl_float3	line = vec_sub(p2, p1);
+	// float		line_mag = vec_mag(line);
+	// cl_float3	ray_step = vec_scale(line, 1 / (float)steps);
+	cl_float3	ray_dir = unit_vec(line);
+	//////////////////////////////////////////////////////////////////////////////////
+	/* Bresingham's line drawing algorithm */
+	//////////////////////////////////////////////////////////////////////////////////
+	cl_float3	point = p1, d_x, d_y;
+	int			dx, dy, sx, sy, err, err2, tmp_x = x1, tmp_y = y1;
+	float 		a, b, A, B;
+	
+	ratio = scalar_project(cam_to_p1, env->cam.dir) / env->cam.dist;
 
 	dx = abs(x2 - x1);
 	sx = x1 < x2 ? 1 : -1;
@@ -321,20 +463,30 @@ void	draw_ray(t_env *env, cl_float3 p1, cl_float3 p2, cl_float3 clr, float *t_ar
 	err = (dx > dy ? dx : -dy) / 2;
 	if (err > 100000)
 		return ;
-	// printf("---------------------------\n");
-	// printf("p1_t = %f\np2_t = %f\n", vec_mag(vec_sub(p1, env->cam.focus)), vec_mag(vec_sub(p2, env->cam.focus)));
-	// printf("steps = %d\n", steps);
-	// print_vec(p1);
 	while (x1 != x2)
 	{
+		//compute distance to anchor pixel
+		d_x = vec_scale(env->cam.d_x, x1 - tmp_x);
+		d_y = vec_scale(env->cam.d_y, tmp_y - y1);
+		//calculate corresponding horizontal component A
+		A = vec_mag(vec_add(d_x, d_y)) * ratio;
+		cl_float3	pixel_pos = vec_add(env->cam.origin, vec_add(vec_scale(env->cam.d_x, DIM_IA - (x1 + 1)), vec_scale(env->cam.d_y, y1)));
+		cl_float3	point_dir = unit_vec(vec_sub(env->cam.focus, pixel_pos));
+		a = acos(dot(point_dir, ray_dir));
+		if (x1 >= (DIM_IA / 2) - 1)
+			b = acos(dot(env->cam.hor_ref, point_dir));
+		else
+			b = acos(dot(vec_scale(env->cam.hor_ref, -1), point_dir));
+		B = A * sin(b) / sin(a);
+		point = vec_add(p1, vec_scale(ray_dir, B));
+		// point = vec_add(point, ray_step);
+
+		cl_float3 cam_to_point = vec_sub(point, env->cam.focus);
 		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
 		{
-			t = vec_mag(vec_sub(p1, env->cam.focus));
-			// printf("%f\n", t);
+			t = vec_mag(cam_to_point);
 			if (t <= t_array[(DIM_IA - x1) + (y1 * DIM_IA)])
-				env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr; //is the image being flipped horizontally?
-			// else
-			// 	printf("%f\t%f\n", t, t_array[(DIM_IA - x1) + (y1 * DIM_IA)]);
+				env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr;
 		}
 		err2 = err;
 		if (err2 > -dx)
@@ -347,41 +499,57 @@ void	draw_ray(t_env *env, cl_float3 p1, cl_float3 p2, cl_float3 clr, float *t_ar
 			err += dx;
 			y1 += sy;
 		}
-		p1 = vec_add(p1, ray_step);
 	}
 	while (y1 != y2)
 	{
+		d_x = vec_scale(env->cam.d_x, x1 - tmp_x);
+		d_y = vec_scale(env->cam.d_y, tmp_y - y1);
+		A = vec_mag(vec_add(d_x, d_y)) * ratio;
+		cl_float3	pixel_pos = vec_add(env->cam.origin, vec_add(vec_scale(env->cam.d_x, DIM_IA - (x1 + 1)), vec_scale(env->cam.d_y, y1)));
+		cl_float3	point_dir = unit_vec(vec_sub(env->cam.focus, pixel_pos));
+		a = acos(dot(point_dir, ray_dir));
+		if (x1 >= (DIM_IA / 2) - 1)
+			b = acos(dot(env->cam.hor_ref, point_dir));
+		else
+			b = acos(dot(vec_scale(env->cam.hor_ref, -1), point_dir));
+		B = A * sin(b) / sin(a);
+		point = vec_add(p1, vec_scale(ray_dir, B));
+		// point = vec_add(point, ray_step);
+
+		cl_float3 cam_to_point = vec_sub(point, env->cam.focus);
 		if (x1 >= 0 && x1 < DIM_IA && y1 >= 0 && y1 < DIM_IA)
 		{
-			t = vec_mag(vec_sub(p1, env->cam.focus));
+			t = vec_mag(vec_sub(point, env->cam.focus));
 			if (t <= t_array[(DIM_IA - x1) + (y1 * DIM_IA)])
 				env->ia->pixels[(DIM_IA - x1) + (y1 * DIM_IA)] = clr;
 		}
 		y1 += sy;
-		p1 = vec_add(p1, ray_step);
 	}
-	// print_vec(p1);
-	// printf("%f\t", t_array[(DIM_IA - 200) + (200 * DIM_IA)]);
-	// printf("%f\n", t);
-
-	// plot_line(env, x1, y1, x2, y2, clr);
+	// print_vec(vec_sub(pix_pos, env->cam.origin));
+	// print_vec(cam_perspective(env, unit_vec(vec_sub(env->cam.focus, env->cam.origin))));
+	// printf("------------------------------------\n");
+	// // printf("line_mag = %f\n", line_mag);
+	// printf("B = %f * (sin(%f) / sin(%f))\n", A, b * 180.0f / M_PI, a * 180.0f / M_PI);
+	// printf("B = %f\n", B);
+	// print_vec(p2);
+	// print_vec(point);
 }
 
 void	ray_visualizer(t_env *env, float *t_array)
 {
 	// for (int i = 0; i < env->bounce_vis; i++)
 	// {
-		// for (int y = 0; y < DIM_PT; y += env->ray_density)
-		// 	for (int x = 0; x < DIM_PT; x += env->ray_density)
-		// 		env->ray_display[x + (y * DIM_PT)] = 1;
-		// if (clr.y < 1.0)
-		// 	clr.y += clr_delta;
-		// else if (clr.x > 0.0)
-		// 	clr.x -= clr_delta;
-		// else if (clr.z < 1.0)
-		// 	clr.z += clr_delta;
-		// else
-		// 	clr.y -= clr_delta;
+	// 	for (int y = 0; y < DIM_PT; y += env->ray_density)
+	// 		for (int x = 0; x < DIM_PT; x += env->ray_density)
+	// 			env->ray_display[x + (y * DIM_PT)] = 1;
+	// 	if (clr.y < 1.0)
+	// 		clr.y += clr_delta;
+	// 	else if (clr.x > 0.0)
+	// 		clr.x -= clr_delta;
+	// 	else if (clr.z < 1.0)
+	// 		clr.z += clr_delta;
+	// 	else
+	// 		clr.y -= clr_delta;
 	// }
 	cl_float3	clr;
 	double		clr_delta = env->depth / 6;
@@ -389,7 +557,7 @@ void	ray_visualizer(t_env *env, float *t_array)
 	for (int i = 0; i < (DIM_PT * DIM_PT); i++)
 	{
 		clr = (cl_float3){1, 0, 0};
-		// draw_ray(env, (cl_float3){325, 0, 100}, (cl_float3){325, 0, 400}, clr, t_array);
+		// draw_ray(env, (cl_float3){1, -650, -750}, (cl_float3){1, -650, 0}, clr, t_array);
 		for (int bounce = 0; bounce < env->ray_display[i]; bounce++)
 		{
 			draw_ray(env, env->rays[bounce][i].origin, env->rays[bounce + 1][i].origin, clr, t_array);

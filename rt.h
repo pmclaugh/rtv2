@@ -372,6 +372,11 @@ typedef struct	s_camera
 	cl_float3	vert_ref;
 	cl_float3	d_x;
 	cl_float3	d_y;
+
+	cl_float3	view_frustrum_top;
+	cl_float3	view_frustrum_bottom;
+	cl_float3	view_frustrum_left;
+	cl_float3	view_frustrum_right;
 }				t_camera;
 
 typedef struct s_split
