@@ -40,6 +40,9 @@ endif
 
 all: $(NAME)
 
+install:
+	cd SDL2-2.0.8; ./configure; make; sudo make install
+
 $(NAME): $(OBJ)
 	gcc -o $(NAME) $(FLAGS) $(OBJ) $(LIBS) -I -L -lSDL2
 %.o: %.c rt.h
