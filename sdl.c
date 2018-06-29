@@ -55,27 +55,31 @@ void		init_sdl_ia(t_env *env)
 
 void		movie_mode(t_env *env)
 {
-	if (env->key_frame < env->num_key_frames)
+	path_tracer(env);
+	if (env->samples == 0)
 	{
-		Key_frame	key_frame = env->key_frames[env->key_frame];
-		if (env->frame < key_frame.frame_count)
+		if (env->key_frame < env->num_key_frames)
 		{
-			env->cam.pos = vec_add(env->cam.pos, key_frame.translate);
-			env->cam.dir = vec_rotate_xz(env->cam.dir, key_frame.rotate_x);
-			t_3x3		rot_matrix = rotation_matrix(unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}), UNIT_Z);
-			cl_float3	z_aligned = mat_vec_mult(rot_matrix, env->cam.dir);
-			z_aligned = vec_rotate_yz(z_aligned, key_frame.rotate_y);
-			rot_matrix = rotation_matrix(UNIT_Z, unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}));
-			env->cam.dir = mat_vec_mult(rot_matrix, z_aligned);
-			env->frame++;
+			Key_frame	key_frame = env->key_frames[env->key_frame];
+			if (env->frame < key_frame.frame_count)
+			{
+				env->cam.pos = vec_add(env->cam.pos, key_frame.translate);
+				env->cam.dir = vec_rotate_xz(env->cam.dir, key_frame.rotate_x);
+				t_3x3		rot_matrix = rotation_matrix(unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}), UNIT_Z);
+				cl_float3	z_aligned = mat_vec_mult(rot_matrix, env->cam.dir);
+				z_aligned = vec_rotate_yz(z_aligned, key_frame.rotate_y);
+				rot_matrix = rotation_matrix(UNIT_Z, unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}));
+				env->cam.dir = mat_vec_mult(rot_matrix, z_aligned);
+				env->frame++;
+			}
+			if (env->frame >= key_frame.frame_count)
+			{
+				env->frame = 0;
+				env->key_frame++;
+			}
 		}
-		if (env->frame >= key_frame.frame_count)
-		{
-			env->frame = 0;
-			env->key_frame++;
-		}
+		//save_img();
 	}
-	interactive(env);
 }
 
 void		run_sdl(t_env *env)

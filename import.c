@@ -20,7 +20,7 @@ static cl_float3	cam_perspective(const cl_float3 a, const t_camera cam)
 static void		init_key_frames(t_env *env)
 {
 	t_camera	cam = env->cam;
-	set_camera(&cam, DIM_IA);
+	set_camera(&cam, DIM_PT);
 	for (int i = 0; i < env->num_key_frames; i++)
 	{
 		cl_float3	current_pos = env->key_frames[i].position;
