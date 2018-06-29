@@ -36,6 +36,7 @@
 
 #define IA 0
 #define PT 1
+#define MV 2
 
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
 #define RED (cl_float3){1.0, 0.2, 0.2}
@@ -344,6 +345,17 @@ typedef struct s_bin_set
 	cl_float3 span;
 }				Bin_set;
 
+typedef struct s_key_frame
+{
+	cl_float3	position;
+	cl_float3	direction;
+	int			frame_count;
+
+	cl_float3	translate;
+	float		rotate_x;
+	float		rotate_y;
+}				Key_frame;
+
 #define INF (cl_float3){FLT_MAX, FLT_MAX, FLT_MAX}
 #define NEG_INF (cl_float3){-1.0f * FLT_MAX, -1.0f * FLT_MAX, -1.0f * FLT_MAX}
 #define SPLIT_TEST_NUM 256
@@ -405,12 +417,16 @@ typedef struct s_env
 	float		eps;
 	int			min_bounces;
 
+	int			num_key_frames;
+	Key_frame	*key_frames;
+	int			frame;
+	int			key_frame;
+
 	//SDL stuff
 	SDL_Event	event;
 	_Bool		running;
 	Uint32		current_tick;
 	Uint32		previous_tick;
-
 }				t_env;
 
 void sbvh(t_env *env);

@@ -145,6 +145,11 @@ t_env		*init_env(void)
 	env->render = 1;
 	env->eps = 0.00002;
 
+	env->num_key_frames = 0;
+	env->key_frames = NULL;
+	env->frame = 0;
+	env->key_frame = 0;
+
 	env->running = 1;
 	env->current_tick = 0;
 	env->previous_tick = 0;
@@ -154,12 +159,32 @@ t_env		*init_env(void)
 	return env;
 }
 
+void	print_key_frames(t_env *env)
+{
+	Key_frame	*key_frames = env->key_frames;
+	for (int i = 0; i < env->num_key_frames; i++)
+	{
+		printf("--------------------------------\n");
+		printf("frames: %d\n", key_frames[i].frame_count);
+		printf("position:\t");
+		print_vec(key_frames[i].position);
+		printf("direction:\t");
+		print_vec(key_frames[i].direction);
+		printf("translate:\t");
+		print_vec(key_frames[i].translate);
+		printf("rot_x: %f\nrot_y: %f\n", key_frames[i].rotate_x, key_frames[i].rotate_y);
+		printf("--------------------------------\n");
+	}
+}
+
 int 		main(int ac, char **av)
 {
 	srand(time(NULL));
 
 	//Initialize environment with scene and intial configurations, load files
 	t_env	*env = init_env();
+
+	print_key_frames(env);
 
 	//Build BVH
 	sbvh(env);

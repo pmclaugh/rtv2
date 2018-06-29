@@ -215,13 +215,13 @@ void		handle_input(t_env *env)
 				move_z = sin(env->cam.angle_x - (M_PI / 2)) * move_dist;
 				if (env->key.a)
 				{
-					env->cam.pos.x += move_x;
-					env->cam.pos.z += move_z;
+					env->cam.pos.x -= move_x;
+					env->cam.pos.z -= move_z;
 				}
 				if (env->key.d)
 				{
-					env->cam.pos.x -= move_x;
-					env->cam.pos.z -= move_z;
+					env->cam.pos.x += move_x;
+					env->cam.pos.z += move_z;
 				}
 			}
 		}
@@ -232,18 +232,24 @@ void		handle_input(t_env *env)
 		if (env->key.larr || env->key.rarr || env->key.uarr || env->key.darr)
 		{
 			if (env->key.larr)
-				env->cam.dir = vec_rotate_xz(env->cam.dir, TURN_SPEED * interval);
-			if (env->key.rarr)
 				env->cam.dir = vec_rotate_xz(env->cam.dir, -TURN_SPEED * interval);
-			if (env->key.uarr && env->cam.dir.y < 1)
+			if (env->key.rarr)
+				env->cam.dir = vec_rotate_xz(env->cam.dir, TURN_SPEED * interval);
+			if (env->key.uarr)
 			{
-				env->cam.dir.y += .1 * interval;
-				env->cam.dir = unit_vec(env->cam.dir);
+				t_3x3		rot_matrix = rotation_matrix(unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}), UNIT_Z);
+				cl_float3	z_aligned = mat_vec_mult(rot_matrix, env->cam.dir);
+				z_aligned = vec_rotate_yz(z_aligned, -TURN_SPEED * interval);
+				rot_matrix = rotation_matrix(UNIT_Z, unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}));
+				env->cam.dir = mat_vec_mult(rot_matrix, z_aligned);
 			}
-			if (env->key.darr && env->cam.dir.y > -1)
+			if (env->key.darr)
 			{
-				env->cam.dir.y -= .1 * interval;
-				env->cam.dir = unit_vec(env->cam.dir);
+				t_3x3		rot_matrix = rotation_matrix(unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}), UNIT_Z);
+				cl_float3	z_aligned = mat_vec_mult(rot_matrix, env->cam.dir);
+				z_aligned = vec_rotate_yz(z_aligned, TURN_SPEED * interval);
+				rot_matrix = rotation_matrix(UNIT_Z, unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}));
+				env->cam.dir = mat_vec_mult(rot_matrix, z_aligned);
 			}
 			while (env->cam.angle_x < 0)
 				env->cam.angle_x += 2 * M_PI;
@@ -262,8 +268,5 @@ void		handle_input(t_env *env)
 				env->eps /= 1.1;
 		}
 	}
-	if (env->render && env->samples < env->spp)
-		path_tracer(env);
-	else if (env->mode == IA)
-		interactive(env);
+	interactive(env);
 }

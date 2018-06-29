@@ -1,5 +1,48 @@
 #include "rt.h"
 
+static float scalar_project(const cl_float3 a, const cl_float3 b)
+{
+	//scalar projection of a onto b aka mag(vec_project(a,b))
+	return dot(a, unit_vec(b));
+}
+
+static cl_float3	cam_perspective(const cl_float3 a, const t_camera cam)
+{
+	cl_float3	out;
+
+	out.x = scalar_project(a, cam.d_x);
+	out.y = scalar_project(a, cam.d_y);
+	out.z = scalar_project(a, cam.dir);
+
+	return out;
+}
+
+static void		init_key_frames(t_env *env)
+{
+	t_camera	cam = env->cam;
+	set_camera(&cam, DIM_IA);
+	for (int i = 0; i < env->num_key_frames; i++)
+	{
+		cl_float3	current_pos = env->key_frames[i].position;
+		cl_float3	current_dir = env->key_frames[i].direction;
+		float		inv_frame_count = 1.0f / env->key_frames[i].frame_count;
+
+		env->key_frames[i].translate = vec_scale(vec_sub(current_pos, cam.pos), inv_frame_count);
+		cl_float3	relative_dir = cam_perspective(current_dir, cam);
+		cl_float3	current_dir_tmp = unit_vec((cl_float3){current_dir.x, 0.0f, current_dir.z});
+		cl_float3	camera_dir_tmp = unit_vec((cl_float3){cam.dir.x, 0.0f, cam.dir.z});
+		int			flag = (relative_dir.x >= 0) ? 1 : -1;
+		env->key_frames[i].rotate_x = acos(dot(current_dir_tmp, camera_dir_tmp)) * inv_frame_count * flag;
+		flag = (relative_dir.y >= 0) ? -1 : 1;
+		env->key_frames[i].rotate_y = acos(dot(camera_dir_tmp, cam.dir)) * inv_frame_count * flag;
+		cam.pos = current_pos;
+		cam.dir = current_dir;
+		set_camera(&cam, DIM_IA);
+
+		// env->key_frames[i].rotate_y = acos(dot(current_dir_tmp, env->cam.dir)) * inv_frame_count;
+	}
+}
+
 static Scene	*combine_scenes(Scene **S, int num_files)
 {
 	Scene *all = calloc(1, sizeof(Scene));
@@ -40,6 +83,23 @@ static Scene	*combine_scenes(Scene **S, int num_files)
 		free(S[j]->materials);
 	}
 	return all;
+}
+
+static void	key_frame_data(char **line, FILE *fp, Key_frame *key_frame)
+{
+	while (fgets(*line, 512, fp))
+	{
+		if (*line[0] == '#')
+			continue ;
+		else if (strncmp(*line, "camera.position=", 16) == 0)
+			key_frame->position = get_vec(*line);
+		else if (strncmp(*line, "camera.normal=", 14) == 0)
+			key_frame->direction = unit_vec(get_vec(*line));
+		else if (strncmp(*line, "frames=", 7) == 0)
+			key_frame->frame_count = (int)strtoul(strchr(*line, '=') + 1, NULL, 10);
+		else
+			break ;
+	}
 }
 
 static void file_edits(char **line, FILE *fp, File_edits *edit_info)
@@ -101,20 +161,22 @@ static void file_edits(char **line, FILE *fp, File_edits *edit_info)
 		edit_info->transparency = 0.1f;
 }
 
-static int	count_files(FILE *fp)
+static void		count_files(FILE *fp, int *num_files, int *num_key_frames)
 {
+	*num_files = 0;
+	*num_key_frames = 0;
 	char *line = calloc(512, 1);
-	int num_files = 0;
 	while (fgets(line, 512, fp))
 	{
 		if (line[0] == '#')
 			continue ;
-		if (strncmp(line, "import=", 7) == 0)
-			++num_files;
+		else if (strncmp(line, "import=", 7) == 0)
+			*num_files += 1;
+		else if (strncmp(line, "key_frame", 9) == 0)
+			*num_key_frames += 1;
 	}
 	free(line);
 	fseek(fp, 0L, SEEK_SET);
-	return num_files;
 }
 
 void	load_config(t_env *env)
@@ -127,13 +189,16 @@ void	load_config(t_env *env)
 		exit(0);
 	}
 
-	int	num_files = count_files(fp);
+	int	num_files = 0;
+	count_files(fp, &num_files, &env->num_key_frames);
 
 	char *line = calloc(512, 1);
 	char **file_path = calloc(num_files, sizeof(char*));
 	char **dir_path = calloc(num_files, sizeof(char*));
 	char **file = calloc(num_files, sizeof(char*));
 	File_edits *edit_info = calloc(num_files, sizeof(File_edits));
+	env->key_frames = malloc(sizeof(Key_frame) * env->num_key_frames);
+
 	
 	int i = 0;
 	for (; i < num_files; i++)
@@ -142,6 +207,7 @@ void	load_config(t_env *env)
 		dir_path[i] = calloc(512, sizeof(char));
 	}
 	i = 0;
+	int j = 0;
 	while (fgets(line, 512, fp))
 	{
 		if (line[0] == '#')
@@ -152,12 +218,24 @@ void	load_config(t_env *env)
 			sscanf(line, "import= %s\n", file_path[i]);
 			file_edits(&line, fp, &edit_info[i++]);
 		}
-		if (strncmp(line, "mode=", 5) == 0 && strstr(line, "ia"))
+		while (strncmp(line, "key_frame", 9) == 0 && j < env->num_key_frames)
 		{
-			#ifdef __APPLE__
-				env->mode = IA;
+			key_frame_data(&line, fp, &env->key_frames[j++]);
+		}
+		if (strncmp(line, "mode=", 5) == 0)
+		{
+			if (strstr(line, "ia"))
+			{
+				#ifdef __APPLE__
+					env->mode = IA;
+					env->render = 0;
+				#endif
+			}
+			else if (strstr(line, "mv"))
+			{
+				env->mode = MV;
 				env->render = 0;
-			#endif
+			}
 		}
 		else if (strncmp(line, "camera.position=", 16) == 0)
 			env->cam.pos = get_vec(line);
@@ -207,6 +285,8 @@ void	load_config(t_env *env)
 	}
 	Scene *all = combine_scenes(S, num_files);
 	env->scene = all;
+	
+	init_key_frames(env);
 	
 	for (i = 0; i < num_files; i++)
 	{
