@@ -21,14 +21,16 @@ void add_counts(int *total, int *new, int size)
 		total[i] += new[i];
 }
 
-void save_file(t_env *env, int frame_no)
+void		save_file(t_env *env, int frame_no)
 {
 	char *filename;
 	asprintf(&filename, "frame-%d.ppm", frame_no);
 	FILE *f = fopen(filename, "w");
 	fprintf(f, "P3\n%d %d\n%d\n ",DIM_PT,DIM_PT,255);
-	for (int row=0;row<DIM_PT;row++) {
-		for (int col=DIM_PT - 1;col>=0;col--) {
+	for (int row = 0; row < DIM_PT; row++)
+	{
+		for (int col = DIM_PT - 1; col >= 0; col--)
+		{
 			fprintf(f,"%d %d %d ", (int)(env->pt->pixels[col + DIM_PT * row].x * 255.0f), (int)(env->pt->pixels[col + DIM_PT * row].y * 255.0f), (int)(env->pt->pixels[col + DIM_PT * row].z * 255.0f));
 		}
 		fprintf(f, "\n");
@@ -96,9 +98,10 @@ void		path_tracer(t_env *env)
 	free(count);
 	alt_composite(env->pt, DIM_PT * DIM_PT, env->pt->count);
 	draw_pixels(env->pt);
-	// save_file(env, env->samples);
 	if (env->samples >= env->spp)
 	{
+		if (env->mode == MV)
+			save_file(env, env->total_frame);
 		env->samples = 0;
 		env->render = 0;
 		for (int i = 0; i < DIM_PT * DIM_PT; i++)
@@ -149,6 +152,7 @@ t_env		*init_env(void)
 	env->key_frames = NULL;
 	env->frame = 0;
 	env->key_frame = 0;
+	env->total_frame = 0;
 
 	env->running = 1;
 	env->current_tick = 0;

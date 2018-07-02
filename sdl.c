@@ -55,7 +55,7 @@ void		init_sdl_ia(t_env *env)
 
 void		movie_mode(t_env *env)
 {
-	interactive(env);
+	path_tracer(env);
 	if (env->samples == 0)
 	{
 		if (env->key_frame < env->num_key_frames)
@@ -74,6 +74,7 @@ void		movie_mode(t_env *env)
 					env->cam.dir = transposed_mat_vec_mult(rot_matrix, z_aligned);
 				}
 				env->frame++;
+				env->total_frame++;
 			}
 			if (env->frame >= key_frame.frame_count)
 			{
@@ -81,8 +82,9 @@ void		movie_mode(t_env *env)
 				env->key_frame++;
 			}
 		}
-		//save_img();
 	}
+	if (env->key_frame >= env->num_key_frames)
+		exit_hook(env);
 }
 
 void		run_sdl(t_env *env)

@@ -421,6 +421,7 @@ typedef struct s_env
 	Key_frame	*key_frames;
 	int			frame;
 	int			key_frame;
+	int			total_frame;
 
 	//SDL stuff
 	SDL_Event	event;
