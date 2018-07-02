@@ -35,6 +35,9 @@ typedef struct s_path {
 	float pL;
 	int hit_light;
 	int specular;
+	float roughness;
+	float ni; //ni is the material the normal points into.
+	float nt;
 }				Path;
 
 typedef struct s_material
@@ -171,9 +174,6 @@ static int intersect_triangle(const float3 origin, const float3 direction, __glo
 
 	float3 h = cross(direction, e2);
 	float a = dot(h, e1);
-
-	if (a < 0.0001f)
-		return 0;
 
 	float f = 1.0f / a;
 	float3 s = origin - v0;
@@ -501,10 +501,16 @@ static float pdf(float3 in, const Path p, float3 out, int way)
 	//in and out should both point away from p.
 	if (p.specular)
 	{
-		if (dot(in, p.normal) <= 0.0f || dot(out, p.normal) <= 0.0f)
-			return 0.0f;
-		//infer the microfacet normal (needs expanded for xmit)
-		float3 m = normalize(in + out);
+		float3 m;
+		if (dot(in, p.normal) * dot(out, p.normal) > 0.0f) // reflected
+			m = normalize(in + out);
+		else
+		{
+			if (dot(in, p.normal) > 0.0f)
+				m = normalize(-1.0f * (p.ni * in + p.nt * out));
+			else
+				m = normalize(-1.0f * (p.nt * in + p.ni * out));
+		}
 		return dot(m, p.normal) * GGX_D(p.normal, m, 0.1f); //paths need to cache roughness but hardcode is fine for testing
 	}
 	else
@@ -519,10 +525,16 @@ static float BRDF(float3 in, const Path p, float3 out)
 	//in and out should both point away from p.
 	if (p.specular)
 	{
-		if (dot(in, p.normal) <= 0.0f || dot(out, p.normal) <= 0.0f)
-			return 0.0f;
-		//infer m
-		float3 m = normalize(in + out);
+		float3 m;
+		if (dot(in, p.normal) * dot(out, p.normal) > 0.0f) // reflected
+			m = normalize(in + out);
+		else
+		{
+			if (dot(in, p.normal) > 0.0f)
+				m = normalize(-1.0f * (p.ni * in + p.nt * out));
+			else
+				m = normalize(-1.0f * (p.nt * in + p.ni * out));
+		}
 
 		return GGX_G(in, out, m, p.normal, 0.1f) * GGX_D(p.normal, m, 0.1f) / (4.0f * fabs(dot(in, p.normal) * dot(out, p.normal)));
 	}
@@ -632,74 +644,71 @@ __kernel void connect_paths(const Camera cam,
 			float light_cos = dot(light_vertex.normal, -1.0f * direction);
 			if (!camera_vertex.hit_light)
 			{
-				if (camera_cos > 0.0f && light_cos > 0.0f)
+				if (visibility_test(camera_vertex.origin, direction, d, boxes, V))
 				{
-					if (visibility_test(camera_vertex.origin, direction, d, boxes, V))
+					float this_geom = fabs(camera_cos * light_cos) / (d * d);
+
+					// a bunch of variables to populate
+					float this_pL, this_pC, BRDF_L, BRDF_C, prev_pL, prev_pC;
+					float3 light_in, camera_in;
+					
+					//the parts based on light_in
+					if (s == 1)
 					{
-						float this_geom = fabs(camera_cos * light_cos) / (d * d);
+						prev_pC = 1.0f; //placeholder, won't be accessed
+						this_pL = 1.0f / (2.0f * PI);
+						BRDF_L = 1.0f;
+					}
+					else
+					{
+						light_in = normalize(LIGHT_VERTEX(s - 2).origin - light_vertex.origin);
+						this_pL = pdf(light_in, light_vertex, -1.0f * direction, 0);
+						prev_pC = pdf(-1.0f * direction, light_vertex, light_in, 1); //these 0s and 1s suck and should be fixed
+						BRDF_L = BRDF(light_in, light_vertex, -1.0f * direction);
+					}
 
-						// a bunch of variables to populate
-						float this_pL, this_pC, BRDF_L, BRDF_C, prev_pL, prev_pC;
-						float3 light_in, camera_in;
-						
-						//the parts based on light_in
-						if (s == 1)
-						{
-							prev_pC = 1.0f; //placeholder, won't be accessed
-							this_pL = 1.0f / (2.0f * PI);
-							BRDF_L = 1.0f;
-						}
-						else
-						{
-							light_in = normalize(LIGHT_VERTEX(s - 2).origin - light_vertex.origin);
-							this_pL = pdf(light_in, light_vertex, -1.0f * direction, 0);
-							prev_pC = pdf(-1.0f * direction, light_vertex, light_in, 1); //these 0s and 1s suck and should be fixed
-							BRDF_L = BRDF(light_in, light_vertex, -1.0f * direction);
-						}
+					//the parts based on camera_in
+					if (t == 1)
+					{
+						this_pC = 1.0f; // 1 / SA (SA of camera plane is 1x1)
+						prev_pL = 1.0f; //placeholder. won't be accessed
+						BRDF_C = 1.0f;
+					}
+					else
+					{
+						camera_in = normalize(CAMERA_VERTEX(t - 2).origin - camera_vertex.origin);
+						this_pC = pdf(camera_in, camera_vertex, direction, 1);
+						prev_pL = pdf(direction, camera_vertex, camera_in, 0);
+						BRDF_C = BRDF(camera_in, camera_vertex, direction);
+					}
 
-						//the parts based on camera_in
-						if (t == 1)
-						{
-							this_pC = 1.0f; // 1 / SA (SA of camera plane is 1x1)
-							prev_pL = 1.0f; //placeholder. won't be accessed
-							BRDF_C = 1.0f;
-						}
-						else
-						{
-							camera_in = normalize(CAMERA_VERTEX(t - 2).origin - camera_vertex.origin);
-							this_pC = pdf(camera_in, camera_vertex, direction, 1);
-							prev_pL = pdf(direction, camera_vertex, camera_in, 0);
-							BRDF_C = BRDF(camera_in, camera_vertex, direction);
-						}
+					float3 contrib = light_vertex.mask * camera_vertex.mask * BRDF_L * BRDF_C * this_geom;
+					
+					//initialize with ratios
+					for (int k = 0; k < s + t; k++)
+						p[k] = (QL(k) * GEOM(k) * PL(k)) / (QC(k) * GEOM(k + 1) * PC(k));
 
-						float3 contrib = light_vertex.mask * camera_vertex.mask * BRDF_L * BRDF_C * this_geom;
-						
-						//initialize with ratios
-						for (int k = 0; k < s + t; k++)
-							p[k] = (QL(k) * GEOM(k) * PL(k)) / (QC(k) * GEOM(k + 1) * PC(k));
+					//multiply through
+					for (int k = 0; k < s + t; k++)
+						p[k + 1] = p[k + 1] * p[k];
 
-						//multiply through
-						for (int k = 0; k < s + t; k++)
-							p[k + 1] = p[k + 1] * p[k];
+					//pick pivot and append a 1.0f
+					float pivot = p[s - 1];
+					p[s + t] = 1.0f;
 
-						//pick pivot and append a 1.0f
-						float pivot = p[s - 1];
-						p[s + t] = 1.0f;
+					//sum weight ratios
+					float weight = 0.0f;
+					for (int k = 0; k < s + t + 1; k++)
+						weight += p[k] / pivot;
 
-						//sum weight ratios
-						float weight = 0.0f;
-						for (int k = 0; k < s + t + 1; k++)
-							weight += p[k] / pivot;
-
-						//protect against NaNs
-						float test = 1.0f / (weight);
-						if (test == test)
-						{
-							if (t > 1)
-								contributions[thread_id] = contrib * test;
-							else if (light_img_index >= 0 && light_img_index < (1024 * 1024))
-								light_img[light_img_index] += contrib * test;
-						}
+					//protect against NaNs
+					float test = 1.0f / (weight);
+					if (test == test)
+					{
+						if (t > 1)
+							contributions[thread_id] = contrib * test;
+						else if (light_img_index >= 0 && light_img_index < (1024 * 1024))
+							light_img[light_img_index] += contrib * test;
 					}
 				}
 			}
@@ -912,16 +921,23 @@ __kernel void trace_paths(__global Path *paths,
 		float3 diff, spec, bump, trans, Ke;
 		float roughness;
 		fetch_all_tex(M, mats, tex, ind, txcrd, &diff, &spec, &bump, &trans, &Ke, &roughness);
-
 		// bump map
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
 
 		//direction
-		float3 out;
+		float3 in, out;
+		in = -1.0f * direction;
+		float ni, nt;
+		ni = 1.0f;
+		nt = 1.5f;
 		int specular = dot(spec, spec) > 0.0f ? 1 : 0;
 		float3 spec_dir;
 		float spec_roll = get_random(&seed0, &seed1);
 		float3 micro_normal = normal;
+
+
+		int xmit = 0;
+
 		if (dot(Ke, Ke) > 0.0f)
 		{
 			if (way)
@@ -932,23 +948,45 @@ __kernel void trace_paths(__global Path *paths,
 		}
 		else if (specular)
 		{
-			micro_normal = GGX_NDF(normal, roughness, &seed0, &seed1, -1.0f * direction);
-			out = 2.0f * dot(-1.0f * direction, micro_normal) * micro_normal + direction;
-			float weight = fabs(dot(-1.0f * direction, micro_normal)) * GGX_G(-1.0f * direction, out, micro_normal, normal, roughness);
-			weight /= fabs(dot(-1.0f * direction, normal) * dot(micro_normal, normal));
-			mask *= spec * weight;
+			float weight;
+			micro_normal = GGX_NDF(normal, roughness, &seed0, &seed1, in);
+
+			float index = dot(in, normal) > 0.0f ? ni / nt : nt / ni;
+			float c = dot(in, normal);
+			float radicand = 1.0f + index * (c * c - 1.0f);
+
+			if (radicand < 0.0f) //TIR
+			{
+				out = 2.0f * fabs(dot(in, micro_normal)) * micro_normal - in;
+			}
+			else if (spec_roll < GGX_F(in, micro_normal, ni, nt)) //regular reflection
+			{
+				mask *= spec;
+				out = 2.0f * fabs(dot(in, micro_normal)) * micro_normal - in;
+			}
+			else //transmission
+			{
+				mask *= spec;
+				float coeff = index * c - native_sqrt(radicand);
+				out = normalize(coeff * -1.0f * normal - index * in);
+				xmit = 1;
+			}
+			
+			// weight = fabs(dot(in, micro_normal)) * GGX_G(in, out, micro_normal, normal, roughness);
+			// weight /= fabs(dot(in, normal) * dot(micro_normal, normal));
+			// mask *= weight;
 		}
 		else
 		{
 			mask *= diff;
 			if (way)
-				mask *= max(0.0f, dot(-1.0f * direction, normal));
+				mask *= max(0.0f, dot(in, normal));
 			out = diffuse_BRDF_sample(normal, way, &seed0, &seed1);
 			specular = 0;
 		}
 
 		// if (!way)
-		// 	output[index / 2] = dot(out, micro_normal) > 0.0f ? GREEN : RED;
+		// 	output[index / 2] = (out + 1.0f) / 2.0f;
 		// return;
 
 
@@ -961,6 +999,9 @@ __kernel void trace_paths(__global Path *paths,
 		paths[index + row_size * LENGTH].pL = pL;
 		paths[index + row_size * LENGTH].hit_light = hit_light;
 		paths[index + row_size * LENGTH].specular = specular;
+		paths[index + row_size * LENGTH].roughness = roughness;
+		paths[index + row_size * LENGTH].ni = ni;
+		paths[index + row_size * LENGTH].nt = nt;		
 
 		//update back-path probability
 		if (way)
