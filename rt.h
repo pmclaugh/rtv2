@@ -466,6 +466,7 @@ cl_float3 vec_sub(const cl_float3 a, const cl_float3 b);
 cl_float3 vec_add(const cl_float3 a, const cl_float3 b);
 cl_float3 vec_scale(const cl_float3 vec, const float scalar);
 cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
+cl_float3 transposed_mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
 cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec);
 t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b);
 cl_float3	vec_rotate_xy(const cl_float3 a, const float angle);

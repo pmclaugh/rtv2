@@ -6,40 +6,24 @@ static float scalar_project(const cl_float3 a, const cl_float3 b)
 	return dot(a, unit_vec(b));
 }
 
-static cl_float3	cam_perspective(const cl_float3 a, const t_camera cam)
-{
-	cl_float3	out;
-
-	out.x = scalar_project(a, cam.d_x);
-	out.y = scalar_project(a, cam.d_y);
-	out.z = scalar_project(a, cam.dir);
-
-	return out;
-}
-
 static void		init_key_frames(t_env *env)
 {
 	t_camera	cam = env->cam;
-	set_camera(&cam, DIM_PT);
 	for (int i = 0; i < env->num_key_frames; i++)
 	{
-		cl_float3	current_pos = env->key_frames[i].position;
-		cl_float3	current_dir = env->key_frames[i].direction;
+		cl_float3	next_pos = env->key_frames[i].position;
+		cl_float3	next_dir = env->key_frames[i].direction;
 		float		inv_frame_count = 1.0f / env->key_frames[i].frame_count;
 
-		env->key_frames[i].translate = vec_scale(vec_sub(current_pos, cam.pos), inv_frame_count);
-		cl_float3	relative_dir = cam_perspective(current_dir, cam);
-		cl_float3	current_dir_tmp = unit_vec((cl_float3){current_dir.x, 0.0f, current_dir.z});
-		cl_float3	camera_dir_tmp = unit_vec((cl_float3){cam.dir.x, 0.0f, cam.dir.z});
-		int			flag = (relative_dir.x >= 0) ? 1 : -1;
-		env->key_frames[i].rotate_x = acos(dot(current_dir_tmp, camera_dir_tmp)) * inv_frame_count * flag;
-		flag = (relative_dir.y >= 0) ? -1 : 1;
-		env->key_frames[i].rotate_y = acos(dot(camera_dir_tmp, cam.dir)) * inv_frame_count * flag;
-		cam.pos = current_pos;
-		cam.dir = current_dir;
-		set_camera(&cam, DIM_IA);
-
-		// env->key_frames[i].rotate_y = acos(dot(current_dir_tmp, env->cam.dir)) * inv_frame_count;
+		set_camera(&cam, DIM_PT);
+		env->key_frames[i].translate = vec_scale(vec_sub(next_pos, cam.pos), inv_frame_count);
+		cl_float3	next_dir_hor = unit_vec((cl_float3){next_dir.x, 0.0f, next_dir.z});
+		cl_float3	camera_dir_hor = unit_vec((cl_float3){cam.dir.x, 0.0f, cam.dir.z});
+		env->key_frames[i].rotate_x = acos(dot(next_dir_hor, camera_dir_hor)) * inv_frame_count * ((scalar_project(next_dir, cam.d_x) >= 0) ? 1 : -1);
+		camera_dir_hor = vec_rotate_xz(cam.dir, env->key_frames[i].rotate_x * env->key_frames[i].frame_count);
+		env->key_frames[i].rotate_y = acos(dot(next_dir, camera_dir_hor)) * inv_frame_count * ((next_dir.y >= cam.dir.y) ? -1 : 1);
+		cam.pos = next_pos;
+		cam.dir = next_dir;
 	}
 }
 

@@ -75,6 +75,17 @@ cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec)
 	return (cl_float3){dot(mat.row1, vec), dot(mat.row2, vec), dot(mat.row3, vec)};
 }
 
+cl_float3 transposed_mat_vec_mult(const t_3x3 mat, const cl_float3 vec)
+{
+	cl_float3	out;
+
+	out.x = vec.x * mat.row1.x + vec.y * mat.row2.x + vec.z * mat.row3.x;
+	out.y = vec.x * mat.row1.y + vec.y * mat.row2.y + vec.z * mat.row3.y;
+	out.z = vec.x * mat.row1.z + vec.y * mat.row2.z + vec.z * mat.row3.z;
+
+	return out;
+}
+
 cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec)
 {
 	//there may be some issue with this function, it hasn't behaved as expected

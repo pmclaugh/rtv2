@@ -240,16 +240,14 @@ void		handle_input(t_env *env)
 				t_3x3		rot_matrix = rotation_matrix(unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}), UNIT_Z);
 				cl_float3	z_aligned = mat_vec_mult(rot_matrix, env->cam.dir);
 				z_aligned = vec_rotate_yz(z_aligned, -TURN_SPEED * interval);
-				rot_matrix = rotation_matrix(UNIT_Z, unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}));
-				env->cam.dir = mat_vec_mult(rot_matrix, z_aligned);
+				env->cam.dir = transposed_mat_vec_mult(rot_matrix, z_aligned);
 			}
 			if (env->key.darr)
 			{
 				t_3x3		rot_matrix = rotation_matrix(unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}), UNIT_Z);
 				cl_float3	z_aligned = mat_vec_mult(rot_matrix, env->cam.dir);
 				z_aligned = vec_rotate_yz(z_aligned, TURN_SPEED * interval);
-				rot_matrix = rotation_matrix(UNIT_Z, unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}));
-				env->cam.dir = mat_vec_mult(rot_matrix, z_aligned);
+				env->cam.dir = transposed_mat_vec_mult(rot_matrix, z_aligned);
 			}
 			while (env->cam.angle_x < 0)
 				env->cam.angle_x += 2 * M_PI;
