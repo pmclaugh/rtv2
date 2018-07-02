@@ -55,7 +55,10 @@ void		init_sdl_ia(t_env *env)
 
 void		movie_mode(t_env *env)
 {
-	path_tracer(env);
+	if (env->mode == MV)
+		path_tracer(env);
+	else if (env->mode == PV)
+		interactive(env);
 	if (env->samples == 0)
 	{
 		if (env->key_frame < env->num_key_frames)
@@ -91,7 +94,7 @@ void		run_sdl(t_env *env)
 {
 	SDL_Init(SDL_INIT_VIDEO);
 	
-	if (env->mode == IA || env->mode == MV)
+	if (env->mode == IA || env->mode == PV)
 		init_sdl_ia(env);
 
 	while (env->running) //MAIN LOOP
@@ -111,7 +114,7 @@ void		run_sdl(t_env *env)
 			path_tracer(env);
 		else if (env->mode == IA)
 			handle_input(env);
-		else if (env->mode == MV)
+		else if (env->mode == MV || env->mode == PV)
 			movie_mode(env);
 	}
 }

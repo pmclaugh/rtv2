@@ -37,6 +37,7 @@
 #define IA 0
 #define PT 1
 #define MV 2
+#define PV 3
 
 #define BLACK (cl_float3){0.0, 0.0, 0.0}
 #define RED (cl_float3){1.0, 0.2, 0.2}

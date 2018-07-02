@@ -220,6 +220,11 @@ void	load_config(t_env *env)
 				env->mode = MV;
 				env->render = 0;
 			}
+			else if (strstr(line, "pv"))
+			{
+				env->mode = PV;
+				env->render = 0;
+			}
 		}
 		else if (strncmp(line, "camera.position=", 16) == 0)
 			env->cam.pos = get_vec(line);
@@ -270,7 +275,8 @@ void	load_config(t_env *env)
 	Scene *all = combine_scenes(S, num_files);
 	env->scene = all;
 	
-	init_key_frames(env);
+	if (env->mode == MV || env->mode == PV)
+		init_key_frames(env);
 	
 	for (i = 0; i < num_files; i++)
 	{
