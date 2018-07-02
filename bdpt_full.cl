@@ -25,7 +25,6 @@
 
 #define SPECULAR 40.0f
 
-
 typedef struct s_path {
 	float3 origin;
 	float3 direction;
@@ -232,20 +231,75 @@ static float3 diffuse_BRDF_sample(float3 normal, int way, uint *seed0, uint *see
 		return direction_cos_hemisphere(x, y, u1, phi, normal);
 }
 
-static float3 gloss_BRDF_sample(float3 normal, float3 spec_dir, float3 in, float exponent, uint *seed0, uint *seed1)
+static float3 GGX_D(float3 n, float3 m, float roughness)
 {
-	//pure specular direction
+	//B. Walter et al. / Microfacet Models for Refraction
+	//formula 33, page 7
+
+	float cos_theta = dot(m, n);
+	if (cos_theta <= 0.0f)
+		return 0.0f;
+
+	roughness *= roughness;
+	float cos_sq = cos_theta * cos_theta;
+	float tan_theta_sq = (1 - cos_sq) / cos_sq;
+	return roughness / (PI * cos_sq * cos_sq * (roughness + tan_theta_sq) * (roughness + tan_theta_sq));
+}
+
+static float3 GGX_NDF(float3 normal, float roughness, uint *seed0, uint *seed1)
+{
+	//B. Walter et al. / Microfacet Models for Refraction
+	//formulas 35 & 36, page 7
+
+	//return a direction m with pdf = GGX_D(m)|m dot n|
 	float3 x, y;
-	orthonormal(spec_dir, &x, &y);
+	orthonormal(normal, &x, &y);
 	float u1 = get_random(seed0, seed1);
 	float u2 = get_random(seed0, seed1);
 	float phi = 2.0f * PI * u2;
+	float theta = atan(roughness * sqrt(u1) * rsqrt(1.0f - u1));
+	
+	return x * native_sin(theta) * native_cos(phi) + y * native_sin(theta) * native_sin(phi) + normal * native_cos(theta);
+}
 
-	u1 = pow(u1, 1.0f / (exponent + 1.0f));
-	float3 out = normalize(x * (native_sqrt(1.0f - u1 * u1) * native_cos(phi)) + y * (native_sqrt(1.0f - u1 * u1)) * native_sin(phi) + u1 * spec_dir);
-	if (dot(out, normal) <= 0.0f)
-		out = normalize(u1 * spec_dir - x * (native_sqrt(1.0f - u1 * u1) * native_cos(phi)) - y * (native_sqrt(1.0f - u1 * u1)) * native_sin(phi));
-	return out;
+static float GGX_G1(float3 v, float3 m, float3 n, float roughness)
+{
+	//B. Walter et al. / Microfacet Models for Refraction
+	//formula 34, page 7
+	float cos_theta_v = dot(v, n);
+	if (dot(v, m) / cos_theta_v <= 0.0f)
+		return 0.0f;
+	float cos_theta_sq = cos_theta_v * cos_theta_v;
+	float tan_theta_sq = (1 - cos_theta_sq) / cos_theta_sq;
+	return 2.0f / (1.0f + native_sqrt(1 + roughness * roughness * tan_theta_sq));
+}
+
+static float GGX_G(float3 i , float3 o, float3 m, float3 n, float roughness)
+{
+	//B. Walter et al. / Microfacet Models for Refraction
+	//formula 23, page 6
+
+	//G is zero under these conditions, fail early to avoid nans
+	if (dot(i, m) * dot(i, n) <= 0.0f)
+		return 0.0f;
+	if (dot(o, m) * dot(o, n) <= 0.0f)
+		return 0.0f;
+
+	return GGX_G1(i, n, m, roughness) * GGX_G1(o, n, m, roughness);
+}
+
+static float GGX_F(float3 i, float3 m, float ni, float nt)
+{
+	//B. Walter et al. / Microfacet Models for Refraction
+	//formula 22, page 6
+
+	float c = fabs(dot(i,m));
+	float g = native_sqrt((nt * nt) / (ni * ni) - 1.0f + c * c);
+	float outside_parentheses = (g - c) / (g + c);
+	outside_parentheses = 0.5f * outside_parentheses * outside_parentheses;
+	float inside_parentheses = (c * (g + c) - 1.0f) / (c * (g - c) + 1.0f);
+	inside_parentheses = 1.0f + inside_parentheses * inside_parentheses;
+	return outside_parentheses * inside_parentheses;
 }
 
 static float surface_area(int3 triangle, __global float3 *V)
@@ -469,9 +523,6 @@ static float BRDF(float3 in, const Path p, float3 out)
 	else
 		return fmax(0.0f, dot(p.normal, out)) / PI;
 }
-
-// #define CAMERA_VERTEX(x) (paths[2 * index + row_size * (x)])
-// #define LIGHT_VERTEX(x) (paths[(2 * index + 1) + row_size * (x)])
 
 #define CAMERA_VERTEX(x) (vertices[2 * (x)])
 #define LIGHT_VERTEX(x) (vertices[2 * (x) + 1])
@@ -869,11 +920,11 @@ __kernel void trace_paths(__global Path *paths,
 			hit_light = 1;
 			paths[index + row_size * (LENGTH - 1)].pL = 1.0f / (2.0f * PI);
 		}
-		else if (specular && spec_roll <= roughness)
+		else if (specular)
 		{
 			mask *= spec;
-			spec_dir = 2.0f * dot(-1.0f * direction, normal) * normal + direction;
-			out = gloss_BRDF_sample(normal, spec_dir, direction, SPECULAR, &seed0, &seed1);
+			float3 micro_normal = GGX_NDF(normal, roughness, &seed0, &seed1);
+			out = 2.0f * dot(-1.0f * direction, micro_normal) * micro_normal + direction;
 		}
 		else
 		{
