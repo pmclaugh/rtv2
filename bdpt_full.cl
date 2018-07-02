@@ -231,7 +231,7 @@ static float3 diffuse_BRDF_sample(float3 normal, int way, uint *seed0, uint *see
 		return direction_cos_hemisphere(x, y, u1, phi, normal);
 }
 
-static float3 GGX_D(float3 n, float3 m, float roughness)
+static float GGX_D(float3 n, float3 m, float roughness)
 {
 	//B. Walter et al. / Microfacet Models for Refraction
 	//formula 33, page 7
@@ -246,7 +246,7 @@ static float3 GGX_D(float3 n, float3 m, float roughness)
 	return roughness / (PI * cos_sq * cos_sq * (roughness + tan_theta_sq) * (roughness + tan_theta_sq));
 }
 
-static float3 GGX_NDF(float3 normal, float roughness, uint *seed0, uint *seed1)
+static float3 GGX_NDF(float3 normal, float roughness, uint *seed0, uint *seed1, float3 in)
 {
 	//B. Walter et al. / Microfacet Models for Refraction
 	//formulas 35 & 36, page 7
@@ -259,7 +259,10 @@ static float3 GGX_NDF(float3 normal, float roughness, uint *seed0, uint *seed1)
 	float phi = 2.0f * PI * u2;
 	float theta = atan(roughness * sqrt(u1) * rsqrt(1.0f - u1));
 	
-	return x * native_sin(theta) * native_cos(phi) + y * native_sin(theta) * native_sin(phi) + normal * native_cos(theta);
+	float3 m = x * native_sin(theta) * native_cos(phi) + y * native_sin(theta) * native_sin(phi) + normal * native_cos(theta);
+	if (dot(m, in) <= 0.0f)
+		m = normal * native_cos(theta) - x * native_sin(theta) * native_cos(phi) - y * native_sin(theta) * native_sin(phi);
+	return m;
 }
 
 static float GGX_G1(float3 v, float3 m, float3 n, float roughness)
@@ -498,8 +501,11 @@ static float pdf(float3 in, const Path p, float3 out, int way)
 	//in and out should both point away from p.
 	if (p.specular)
 	{
-		float3 spec_dir = 2.0f * dot(in, p.normal) * p.normal - in;
-		return (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
+		if (dot(in, p.normal) <= 0.0f || dot(out, p.normal) <= 0.0f)
+			return 0.0f;
+		//infer the microfacet normal (needs expanded for xmit)
+		float3 m = normalize(in + out);
+		return dot(m, p.normal) * GGX_D(p.normal, m, 0.1f); //paths need to cache roughness but hardcode is fine for testing
 	}
 	else
 		if (!way) //NB "way" seems flipped here but that's the point
@@ -513,12 +519,12 @@ static float BRDF(float3 in, const Path p, float3 out)
 	//in and out should both point away from p.
 	if (p.specular)
 	{
-		float3 spec_dir = 2.0f * dot(in, p.normal) * p.normal - in;
-		float ret = (SPECULAR + 2.0f) * pow(max(0.0f, dot(out, spec_dir)), SPECULAR) / (2.0f * PI);
-		if (ret > 0.0f && ret == ret)
-			return ret;
-		else
+		if (dot(in, p.normal) <= 0.0f || dot(out, p.normal) <= 0.0f)
 			return 0.0f;
+		//infer m
+		float3 m = normalize(in + out);
+
+		return GGX_G(in, out, m, p.normal, 0.1f) * GGX_D(p.normal, m, 0.1f) / (4.0f * fabs(dot(in, p.normal) * dot(out, p.normal)));
 	}
 	else
 		return fmax(0.0f, dot(p.normal, out)) / PI;
@@ -546,6 +552,9 @@ __kernel void connect_paths(const Camera cam,
 							__local Path *vertices,
 							__local float3 *contributions)
 {
+
+	// return;/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	//get our bearings
 	int index = get_group_id(0);
 	int thread_id = get_local_id(0);
@@ -912,6 +921,7 @@ __kernel void trace_paths(__global Path *paths,
 		int specular = dot(spec, spec) > 0.0f ? 1 : 0;
 		float3 spec_dir;
 		float spec_roll = get_random(&seed0, &seed1);
+		float3 micro_normal = normal;
 		if (dot(Ke, Ke) > 0.0f)
 		{
 			if (way)
@@ -922,9 +932,11 @@ __kernel void trace_paths(__global Path *paths,
 		}
 		else if (specular)
 		{
-			mask *= spec;
-			float3 micro_normal = GGX_NDF(normal, roughness, &seed0, &seed1);
+			micro_normal = GGX_NDF(normal, roughness, &seed0, &seed1, -1.0f * direction);
 			out = 2.0f * dot(-1.0f * direction, micro_normal) * micro_normal + direction;
+			float weight = fabs(dot(-1.0f * direction, micro_normal)) * GGX_G(-1.0f * direction, out, micro_normal, normal, roughness);
+			weight /= fabs(dot(-1.0f * direction, normal) * dot(micro_normal, normal));
+			mask *= spec * weight;
 		}
 		else
 		{
@@ -934,6 +946,10 @@ __kernel void trace_paths(__global Path *paths,
 			out = diffuse_BRDF_sample(normal, way, &seed0, &seed1);
 			specular = 0;
 		}
+
+		// if (!way)
+		// 	output[index / 2] = dot(out, micro_normal) > 0.0f ? GREEN : RED;
+		// return;
 
 
 		//write vertex
@@ -956,7 +972,7 @@ __kernel void trace_paths(__global Path *paths,
 		if (way)
 		{
 			if (specular)
-				pL = (SPECULAR + 2.0f) * pow(dot(out, spec_dir), SPECULAR) / (2.0f * PI);
+				pL = GGX_D(normal, micro_normal, roughness) * dot(normal, micro_normal);
 			else
 			{
 				mask *= 2.0f; //this might not be necessary idk
@@ -965,7 +981,7 @@ __kernel void trace_paths(__global Path *paths,
 		}
 		else
 			if (specular)
-				pC = (SPECULAR + 2.0f) * pow(dot(out, spec_dir), SPECULAR) / (2.0f * PI);
+				pC = GGX_D(normal, micro_normal, roughness) * dot(normal, micro_normal);
 			else
 				pC = dot(out, normal) / (PI);
 
