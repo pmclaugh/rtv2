@@ -140,8 +140,6 @@ void		key_press(int key, t_env *env)
 	}
 	if (key == SDLK_p)
 		print_config(env);
-	if (key == SDLK_BACKSPACE)
-		env->show_paths = (!env->show_paths) ? 1 : 0;
 }
 
 void		key_release(int key, t_env *env)
