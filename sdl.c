@@ -53,43 +53,6 @@ void		init_sdl_ia(t_env *env)
 	env->ia->count = NULL;
 }
 
-void		movie_mode(t_env *env)
-{
-	if (env->mode == MV)
-		path_tracer(env);
-	else if (env->mode == PV)
-		interactive(env);
-	if (env->samples == 0)
-	{
-		if (env->key_frame < env->num_key_frames)
-		{
-			Key_frame	key_frame = env->key_frames[env->key_frame];
-			if (env->frame < key_frame.frame_count)
-			{
-				env->cam.pos = vec_add(env->cam.pos, key_frame.translate);
-				if (key_frame.rotate_x != 0)
-					env->cam.dir = vec_rotate_xz(env->cam.dir, key_frame.rotate_x);
-				if (key_frame.rotate_y != 0)
-				{
-					t_3x3		rot_matrix = rotation_matrix(unit_vec((cl_float3){env->cam.dir.x, 0, env->cam.dir.z}), UNIT_Z);
-					cl_float3	z_aligned = mat_vec_mult(rot_matrix, env->cam.dir);
-					z_aligned = vec_rotate_yz(z_aligned, key_frame.rotate_y);
-					env->cam.dir = transposed_mat_vec_mult(rot_matrix, z_aligned);
-				}
-				env->frame++;
-				env->total_frame++;
-			}
-			if (env->frame >= key_frame.frame_count)
-			{
-				env->frame = 0;
-				env->key_frame++;
-			}
-		}
-	}
-	if (env->key_frame >= env->num_key_frames)
-		exit_hook(env);
-}
-
 void		run_sdl(t_env *env)
 {
 	SDL_Init(SDL_INIT_VIDEO);

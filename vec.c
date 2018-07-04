@@ -2,7 +2,7 @@
 
 //various vector functions
 
-cl_float3 get_vec(const char *line)
+cl_float3	get_vec(const char *line)
 {
 	cl_float3 vec = (cl_float3){0, 0, 0};
 
@@ -17,24 +17,24 @@ cl_float3 get_vec(const char *line)
 	return vec;
 }
 
-void print_vec(const cl_float3 vec)
+void		print_vec(const cl_float3 vec)
 {
 	printf("%f %f %f\n", vec.x, vec.y, vec.z);
 }
 
-void print_3x3(const t_3x3 mat)
+void		print_3x3(const t_3x3 mat)
 {
 	print_vec(mat.row1);
 	print_vec(mat.row2);
 	print_vec(mat.row3);
 }
 
-float vec_mag(const cl_float3 vec)
+float		vec_mag(const cl_float3 vec)
 {
 	return sqrt(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z);
 }
 
-cl_float3 unit_vec(const cl_float3 vec)
+cl_float3	unit_vec(const cl_float3 vec)
 {
 	const float mag = vec_mag(vec);
 	if (mag == 0)
@@ -43,39 +43,39 @@ cl_float3 unit_vec(const cl_float3 vec)
 		return (cl_float3){vec.x/mag, vec.y/mag, vec.z/mag};
 }
 
-float dot(const cl_float3 a, const cl_float3 b)
+float		dot(const cl_float3 a, const cl_float3 b)
 {
 	return (a.x * b.x + a.y * b.y + a.z * b.z);
 }
 
-cl_float3 cross(const cl_float3 a, const cl_float3 b)
+cl_float3	cross(const cl_float3 a, const cl_float3 b)
 {
 	return (cl_float3){	a.y * b.z - a.z * b.y,
 						a.z * b.x - a.x * b.z,
 						a.x * b.y - a.y * b.x};
 }
 
-cl_float3 vec_sub(const cl_float3 a, const cl_float3 b)
+cl_float3	vec_sub(const cl_float3 a, const cl_float3 b)
 {
 	return (cl_float3){a.x - b.x, a.y - b.y, a.z - b.z};
 }
 
-cl_float3 vec_add(const cl_float3 a, const cl_float3 b)
+cl_float3	vec_add(const cl_float3 a, const cl_float3 b)
 {
 	return (cl_float3){a.x + b.x, a.y + b.y, a.z + b.z};
 }
 
-cl_float3 vec_scale(const cl_float3 vec, const float scalar)
+cl_float3	vec_scale(const cl_float3 vec, const float scalar)
 {
 	return (cl_float3){vec.x * scalar, vec.y * scalar, vec.z * scalar};
 }
 
-cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec)
+cl_float3	mat_vec_mult(const t_3x3 mat, const cl_float3 vec)
 {
 	return (cl_float3){dot(mat.row1, vec), dot(mat.row2, vec), dot(mat.row3, vec)};
 }
 
-cl_float3 transposed_mat_vec_mult(const t_3x3 mat, const cl_float3 vec)
+cl_float3	transposed_mat_vec_mult(const t_3x3 mat, const cl_float3 vec)
 {
 	cl_float3	out;
 
@@ -86,7 +86,7 @@ cl_float3 transposed_mat_vec_mult(const t_3x3 mat, const cl_float3 vec)
 	return out;
 }
 
-cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec)
+cl_float3	angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec)
 {
 	//there may be some issue with this function, it hasn't behaved as expected
 	//and is currently unused
@@ -97,7 +97,7 @@ cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float
 	return vec_add(a, vec_add(b, c));
 }
 
-t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b)
+t_3x3		rotation_matrix(const cl_float3 a, const cl_float3 b)
 {
 	//returns a matrix that will rotate vector a to be parallel with vector b.
 
@@ -145,12 +145,12 @@ cl_float3	vec_rotate_xz(const cl_float3 a, const float angle)
 	return res;
 }
 
-cl_float3 vec_rev(const cl_float3 v)
+cl_float3 	vec_rev(const cl_float3 v)
 {
 	return (cl_float3){v.x * -1.0, v.y * -1.0, v.z * -1.0};
 }
 
-void vec_rot(const cl_float3 rotate, cl_float3 *V)
+void		vec_rot(const cl_float3 rotate, cl_float3 *V)
 {
 	float	angle;
 	float	tmp[2];
@@ -170,4 +170,10 @@ void vec_rot(const cl_float3 rotate, cl_float3 *V)
 	tmp[1] = V->y * cos(angle) - V->x * sin(angle);
 	V->x = tmp[0];
 	V->y = tmp[1];
+}
+
+float		scalar_project(const cl_float3 a, const cl_float3 b)
+{
+	//scalar projection of a onto b aka mag(vec_project(a,b))
+	return dot(a, unit_vec(b));
 }

@@ -23,7 +23,7 @@
 #define CAMERA_LENGTH 5
 #define LIGHT_LENGTH 5
 
-#define SPECULAR 40.0f
+#define SPECULAR 200.0f
 
 
 typedef struct s_path {

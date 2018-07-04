@@ -1,32 +1,5 @@
 #include "rt.h"
 
-static float scalar_project(const cl_float3 a, const cl_float3 b)
-{
-	//scalar projection of a onto b aka mag(vec_project(a,b))
-	return dot(a, unit_vec(b));
-}
-
-static void		init_key_frames(t_env *env)
-{
-	t_camera	cam = env->cam;
-	for (int i = 0; i < env->num_key_frames; i++)
-	{
-		cl_float3	next_pos = env->key_frames[i].position;
-		cl_float3	next_dir = env->key_frames[i].direction;
-		float		inv_frame_count = 1.0f / env->key_frames[i].frame_count;
-
-		set_camera(&cam, DIM_PT);
-		env->key_frames[i].translate = vec_scale(vec_sub(next_pos, cam.pos), inv_frame_count);
-		cl_float3	next_dir_hor = unit_vec((cl_float3){next_dir.x, 0.0f, next_dir.z});
-		cl_float3	camera_dir_hor = unit_vec((cl_float3){cam.dir.x, 0.0f, cam.dir.z});
-		env->key_frames[i].rotate_x = acos(dot(next_dir_hor, camera_dir_hor)) * inv_frame_count * ((scalar_project(next_dir, cam.d_x) >= 0) ? 1 : -1);
-		camera_dir_hor = vec_rotate_xz(cam.dir, env->key_frames[i].rotate_x * env->key_frames[i].frame_count);
-		env->key_frames[i].rotate_y = acos(dot(next_dir, camera_dir_hor)) * inv_frame_count * ((next_dir.y >= cam.dir.y) ? -1 : 1);
-		cam.pos = next_pos;
-		cam.dir = next_dir;
-	}
-}
-
 static Scene	*combine_scenes(Scene **S, int num_files)
 {
 	Scene *all = calloc(1, sizeof(Scene));

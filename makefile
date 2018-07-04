@@ -1,15 +1,18 @@
 NAME = clive
 
 SRC =	main.c \
+		sdl.c \
+		input.c \
 		vec.c \
+		import.c \
 		obj_import.c \
 		ply_import.c \
 		new_gpu_launch.c \
 		bvh.c \
 		bvh_lab.c \
 		spatial.c \
-		interactive.c \
-		import.c \
+		ia_mode.c \
+		mv_mode.c \
 		str.c \
 		itoa.c \
 		read.c \
@@ -18,9 +21,7 @@ SRC =	main.c \
 		composite.c \
 		bvh_util.c \
 		stl_import.c \
-		get_face.c \
-		sdl.c \
-		input.c
+		get_face.c
 
 OBJ = $(SRC:.c=.o)
 

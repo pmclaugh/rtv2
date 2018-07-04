@@ -460,24 +460,25 @@ uint64_t mortonEncode_magicbits(const unsigned int x, const unsigned int y, cons
 uint64_t morton64(float x, float y, float z);
 
 //vector helpers
-float vec_mag(const cl_float3 vec);
-cl_float3 unit_vec(const cl_float3 vec);
-float dot(const cl_float3 a, const cl_float3 b);
-cl_float3 cross(const cl_float3 a, const cl_float3 b);
-cl_float3 vec_sub(const cl_float3 a, const cl_float3 b);
-cl_float3 vec_add(const cl_float3 a, const cl_float3 b);
-cl_float3 vec_scale(const cl_float3 vec, const float scalar);
-cl_float3 mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
-cl_float3 transposed_mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
-cl_float3 angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec);
-t_3x3 rotation_matrix(const cl_float3 a, const cl_float3 b);
+float		vec_mag(const cl_float3 vec);
+cl_float3	unit_vec(const cl_float3 vec);
+float		dot(const cl_float3 a, const cl_float3 b);
+cl_float3	cross(const cl_float3 a, const cl_float3 b);
+cl_float3	vec_sub(const cl_float3 a, const cl_float3 b);
+cl_float3	vec_add(const cl_float3 a, const cl_float3 b);
+cl_float3	vec_scale(const cl_float3 vec, const float scalar);
+cl_float3	mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
+cl_float3	transposed_mat_vec_mult(const t_3x3 mat, const cl_float3 vec);
+cl_float3	angle_axis_rot(const float angle, const cl_float3 axis, const cl_float3 vec);
+t_3x3		rotation_matrix(const cl_float3 a, const cl_float3 b);
 cl_float3	vec_rotate_xy(const cl_float3 a, const float angle);
 cl_float3	vec_rotate_yz(const cl_float3 a, const float angle);
 cl_float3	vec_rotate_xz(const cl_float3 a, const float angle);
 cl_float3	vec_rotate_xyz(const cl_float3 a, const float angle_x, const float angle_y);
-cl_float3 vec_rev(cl_float3 v);
-void vec_rot(const cl_float3 rotate, cl_float3 *V);
-void	clr_avg(cl_double3 *a, cl_double3 *b, int samples, int size);
+cl_float3	vec_rev(cl_float3 v);
+void		vec_rot(const cl_float3 rotate, cl_float3 *V);
+void		clr_avg(cl_double3 *a, cl_double3 *b, int samples, int size);
+float		scalar_project(const cl_float3 a, const cl_float3 b);
 
 //utility functions
 char *strtrim(char const *s);
@@ -505,26 +506,30 @@ double			read_double(FILE *fp, const int file_endian, const int machine_endian);
 int get_face_elements(char *line, int *va, int *vta, int *vna, int *vb, int *vtb, int *vnb, int *vc, int *vtc, int *vnc, int *vd, int *vtd, int *vnd);
 
 //input.c
-void	exit_hook(t_env *env);
-void	key_press(int key, t_env *env);
-void	key_release(int key, t_env *env);
-void	mouse_press(int x, int y, t_env *env);
-void	mouse_wheel(int scroll_dir, t_env *env);
-void	handle_input(t_env *env);
+void		exit_hook(t_env *env);
+void		key_press(int key, t_env *env);
+void		key_release(int key, t_env *env);
+void		mouse_press(int x, int y, t_env *env);
+void		mouse_wheel(int scroll_dir, t_env *env);
+void		handle_input(t_env *env);
+
+//mv_mode.c
+void		print_key_frames(t_env *env);
+void		init_key_frames(t_env *env);
+void		movie_mode(t_env *env);
+
+//ia_mode.c
+void		interactive(t_env *env);
+
+//camera.c
+void		set_camera(t_camera *cam, float win_dim);
+t_camera	init_camera(void);
 
 //sdl.c
 void		draw_pixels(t_sdl *sdl);
 void		init_sdl_pt(t_env *env);
 void		init_sdl_ia(t_env *env);
 void		run_sdl(t_env *env);
-
-//interactive.c
-void	interactive(t_env *env);
-
-//camera.c
-void		set_camera(t_camera *cam, float win_dim);
-t_camera	init_camera(void);
-
 
 //main.c
 void		path_tracer(t_env *env);

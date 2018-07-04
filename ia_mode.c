@@ -224,6 +224,7 @@ t_ray	generate_ray(t_env *env, float x, float y)
 	ray.inv_dir.y = 1.0f / ray.direction.y;
 	ray.inv_dir.z = 1.0f / ray.direction.z;
 	ray.N = ray.direction;
+	ray.color = BLACK;
 	ray.t = FLT_MAX;
 	ray.poly_edge = 0;
 	ray.eps = env->eps;
@@ -241,7 +242,7 @@ void	interactive(t_env *env)
 		for (int x = 0; x < DIM_IA; x += 2)
 		{
 			//find world co-ordinates from camera and pixel plane (generate ray)
-			t_ray ray = generate_ray(env, x, y);
+			t_ray	ray = generate_ray(env, x, y);
 			if (env->view == 1 || env->view == 2)
 				trace_scene(env->scene->bins, &ray, env->view);
 			else if (env->view == 3)
