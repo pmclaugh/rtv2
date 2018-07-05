@@ -105,6 +105,11 @@ typedef struct s_3x3
 
 #define WIN_DIM 1024.0f
 
+static float3 vec_color(float3 vec)
+{
+	return (1.0f + vec) / 2.0f;
+}
+
 static float get_random(unsigned int *seed0, unsigned int *seed1) {
 
 	/* hash the seeds using bitwise AND operations and bitshifts */
@@ -185,7 +190,7 @@ static int intersect_triangle(const float3 origin, const float3 direction, __glo
 	if (this_v < 0.0f || this_u + this_v > 1.0f)
 		return 0;
 	this_t = f * dot(e2, q);
-	if (this_t < *t && this_t > 0.0f)
+	if (this_t < *t && this_t > 0.001f)
 	{
 		*t = this_t;
 		*u = this_u;
@@ -246,7 +251,7 @@ static float GGX_D(float3 n, float3 m, float roughness)
 	return roughness / (PI * cos_sq * cos_sq * (roughness + tan_theta_sq) * (roughness + tan_theta_sq));
 }
 
-static float3 GGX_NDF(float3 normal, float roughness, uint *seed0, uint *seed1, float3 in)
+static float3 GGX_NDF(float3 normal, float roughness, uint *seed0, uint *seed1)
 {
 	//B. Walter et al. / Microfacet Models for Refraction
 	//formulas 35 & 36, page 7
@@ -260,8 +265,6 @@ static float3 GGX_NDF(float3 normal, float roughness, uint *seed0, uint *seed1, 
 	float theta = atan(roughness * sqrt(u1) * rsqrt(1.0f - u1));
 	
 	float3 m = x * native_sin(theta) * native_cos(phi) + y * native_sin(theta) * native_sin(phi) + normal * native_cos(theta);
-	if (dot(m, in) <= 0.0f)
-		m = normal * native_cos(theta) - x * native_sin(theta) * native_cos(phi) - y * native_sin(theta) * native_sin(phi);
 	return m;
 }
 
@@ -297,7 +300,7 @@ static float GGX_F(float3 i, float3 m, float ni, float nt)
 	//formula 22, page 6
 
 	float c = fabs(dot(i,m));
-	float g = native_sqrt((nt * nt) / (ni * ni) - 1.0f + c * c);
+	float g = native_sqrt(((nt * nt) / (ni * ni)) - 1.0f + c * c);
 	float outside_parentheses = (g - c) / (g + c);
 	outside_parentheses = 0.5f * outside_parentheses * outside_parentheses;
 	float inside_parentheses = (c * (g + c) - 1.0f) / (c * (g - c) + 1.0f);
@@ -416,6 +419,8 @@ static inline int inside_box(float3 point, Box box)
 
 static inline int visibility_test(float3 origin, float3 direction, float t, __global Box *boxes, __global float3 *V)
 {
+
+	//origin += NORMAL_SHIFT * direction;
 	int stack[32];
 	stack[0] = 0;
 	int s_i = 1;
@@ -496,22 +501,45 @@ static float geometry_term(const Path a, const Path b)
 	return fabs(camera_cos * light_cos) / (t * t);
 }
 
+static float3 reconstruct_microfacet_normal(float3 in, float3 out, float3 normal, float ni, float nt, int *xmit)
+{
+	float3 ret;
+	if (dot(in, normal) * dot(out, normal) > 0.0f)
+	{
+		ret = normalize(in + out);
+		*xmit = 0;
+	}
+	else
+	{
+		ret = normalize(-1.0f * (ni * in + nt * out));
+		*xmit = 1;
+	}
+
+
+	if (dot(ret, normal) > 0.0f)
+		return ret;
+	else
+		return -1.0f * ret;
+}
+
 static float pdf(float3 in, const Path p, float3 out, int way)
 {
 	//in and out should both point away from p.
 	if (p.specular)
 	{
-		float3 m;
-		if (dot(in, p.normal) * dot(out, p.normal) > 0.0f) // reflected
-			m = normalize(in + out);
+		int xmit;
+		float3 m = reconstruct_microfacet_normal(in, out, p.normal, p.ni, p.nt, &xmit);
+		float pm = dot(m, p.normal) * GGX_D(p.normal, m, p.roughness);
+		float F = GGX_F(in, m, p.ni, p.nt);
+		if (!xmit)
+			return F * pm / (4.0f * fabs(dot(out, m)));
 		else
 		{
-			if (dot(in, p.normal) > 0.0f)
-				m = normalize(-1.0f * (p.ni * in + p.nt * out));
-			else
-				m = normalize(-1.0f * (p.nt * in + p.ni * out));
+			float im = dot(in,m);
+			float om = dot(out,m);
+			float denom = p.ni * im + p.nt * om;
+			return (1.0f - F) * pm * fabs(dot(out, m)) / (denom * denom);
 		}
-		return dot(m, p.normal) * GGX_D(p.normal, m, 0.1f); //paths need to cache roughness but hardcode is fine for testing
 	}
 	else
 		if (!way) //NB "way" seems flipped here but that's the point
@@ -525,18 +553,23 @@ static float BRDF(float3 in, const Path p, float3 out)
 	//in and out should both point away from p.
 	if (p.specular)
 	{
-		float3 m;
-		if (dot(in, p.normal) * dot(out, p.normal) > 0.0f) // reflected
-			m = normalize(in + out);
-		else
-		{
-			if (dot(in, p.normal) > 0.0f)
-				m = normalize(-1.0f * (p.ni * in + p.nt * out));
-			else
-				m = normalize(-1.0f * (p.nt * in + p.ni * out));
-		}
+		int xmit;
+		float3 m = reconstruct_microfacet_normal(in, out, p.normal, p.ni, p.nt, &xmit);
+		float base = GGX_G(in, out, m, p.normal, p.roughness) * GGX_D(p.normal, m, p.roughness) / (fabs(dot(in, p.normal)) * fabs(dot(out, p.normal)));
+		float F = GGX_F(in, m, p.ni, p.nt);
 
-		return GGX_G(in, out, m, p.normal, 0.1f) * GGX_D(p.normal, m, 0.1f) / (4.0f * fabs(dot(in, p.normal) * dot(out, p.normal)));
+		if (!xmit)
+			return base * F / 4.0f;
+		if (xmit)
+		{
+			float im = dot(in,m);
+			float om = dot(out,m);
+
+			float denom = p.ni * im + p.nt * om;
+			denom = denom * denom;
+
+			return fabs(im * om) * base * (1.0f - F) / denom;
+		}
 	}
 	else
 		return fmax(0.0f, dot(p.normal, out)) / PI;
@@ -703,7 +736,7 @@ __kernel void connect_paths(const Camera cam,
 
 					//protect against NaNs
 					float test = 1.0f / (weight);
-					if (test == test)
+					if (test == test && weight > 0.00001f)
 					{
 						if (t > 1)
 							contributions[thread_id] = contrib * test;
@@ -911,34 +944,32 @@ __kernel void trace_paths(__global Path *paths,
 		if (ind == -1)
 			break ;
 
-		//get normal and texture coordinate
+		float3 in = -1.0f * direction;
+		//get normal and texture coordinates, get orientation
 		float3 normal, true_normal, txcrd;
 		surface_vectors(V, N, T, direction, ind, u, v, &normal, &true_normal, &txcrd);
-		//update position
-		origin = origin + direction * t + true_normal * NORMAL_SHIFT;
+		int inside = dot(in, normal) > 0.0f ? 0 : 1;
+		int xmit = 0;
 
 		//get all texture-like values
 		float3 diff, spec, bump, trans, Ke;
 		float roughness;
 		fetch_all_tex(M, mats, tex, ind, txcrd, &diff, &spec, &bump, &trans, &Ke, &roughness);
+		int specular = dot(spec, spec) > 0.0f ? 1 : 0;
+		float spec_roll = get_random(&seed0, &seed1);
+		
 		// bump map
 		normal = bump_map(TN, BTN, ind / 3, normal, bump);
 
-		//direction
-		float3 in, out;
-		in = -1.0f * direction;
+		//misc.
 		float ni, nt;
 		ni = 1.0f;
 		nt = 1.5f;
-		int specular = dot(spec, spec) > 0.0f ? 1 : 0;
-		float3 spec_dir;
-		float spec_roll = get_random(&seed0, &seed1);
-		float3 micro_normal = normal;
+		float3 micro_normal = GGX_NDF(normal, roughness, &seed0, &seed1);
+		float3 out;
+		float cos_m = dot(in, micro_normal);
 
-
-		int xmit = 0;
-
-		if (dot(Ke, Ke) > 0.0f)
+		if (dot(Ke, Ke) > 0.0f) //hit light
 		{
 			if (way)
 				break;
@@ -946,35 +977,28 @@ __kernel void trace_paths(__global Path *paths,
 			hit_light = 1;
 			paths[index + row_size * (LENGTH - 1)].pL = 1.0f / (2.0f * PI);
 		}
-		else if (specular)
+		else if (specular && ((inside && cos_m < 0.0f) || (!inside && cos_m > 0.0f)))
 		{
-			float weight;
-			micro_normal = GGX_NDF(normal, roughness, &seed0, &seed1, in);
-
-			float index = dot(in, normal) > 0.0f ? ni / nt : nt / ni;
-			float c = dot(in, normal);
-			float radicand = 1.0f + index * (c * c - 1.0f);
-
-			if (radicand < 0.0f) //TIR
-			{
-				out = 2.0f * fabs(dot(in, micro_normal)) * micro_normal - in;
-			}
-			else if (spec_roll < GGX_F(in, micro_normal, ni, nt)) //regular reflection
+			
+			float ratio = ni / nt;
+			float radicand = 1.0f + ratio * (cos_m * cos_m - 1.0f);
+			float fresnel = GGX_F(in, micro_normal, ni, nt);
+			if (radicand < 0.0f)
+				out = 2.0f * cos_m * micro_normal - in; // no fabs needed in reflection, this works on both sides.
+			else if (spec_roll < fresnel)
 			{
 				mask *= spec;
-				out = 2.0f * fabs(dot(in, micro_normal)) * micro_normal - in;
+				out = 2.0f * cos_m * micro_normal - in;
 			}
-			else //transmission
+			else
 			{
 				mask *= spec;
-				float coeff = index * c - native_sqrt(radicand);
-				out = normalize(coeff * -1.0f * normal - index * in);
+				float coefficient = ratio * cos_m + native_sqrt(radicand) * (inside ? 1.0f : -1.0f);
+				out = coefficient * micro_normal - ratio * in;
 				xmit = 1;
 			}
-			
-			// weight = fabs(dot(in, micro_normal)) * GGX_G(in, out, micro_normal, normal, roughness);
-			// weight /= fabs(dot(in, normal) * dot(micro_normal, normal));
-			// mask *= weight;
+
+			mask *= fabs(cos_m) * GGX_G(in, out, micro_normal, normal, roughness) / (fabs(dot(in, normal)) * fabs(dot(micro_normal, normal)));
 		}
 		else
 		{
@@ -982,13 +1006,22 @@ __kernel void trace_paths(__global Path *paths,
 			if (way)
 				mask *= max(0.0f, dot(in, normal));
 			out = diffuse_BRDF_sample(normal, way, &seed0, &seed1);
-			specular = 0;
 		}
 
+		// float3 reconstructed_m = reconstruct_microfacet_normal(in, out, normal, ni, nt);
 		// if (!way)
-		// 	output[index / 2] = (out + 1.0f) / 2.0f;
+		// {
+		// 	float3 color;
+		// 	if (dot(reconstructed_m, micro_normal) > 0.99f)
+		// 		color = GREEN;
+		// 	else
+		// 		color = RED;
+		// 	output[index / 2] = vec_color(reconstructed_m);
+		// }
 		// return;
 
+		//update position
+		origin += direction * t;
 
 		//write vertex
 		paths[index + row_size * LENGTH].origin = origin;
@@ -1001,7 +1034,7 @@ __kernel void trace_paths(__global Path *paths,
 		paths[index + row_size * LENGTH].specular = specular;
 		paths[index + row_size * LENGTH].roughness = roughness;
 		paths[index + row_size * LENGTH].ni = ni;
-		paths[index + row_size * LENGTH].nt = nt;		
+		paths[index + row_size * LENGTH].nt = nt;	
 
 		//update back-path probability
 		if (way)
